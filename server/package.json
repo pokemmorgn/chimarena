@@ -2,10 +2,10 @@
   "name": "chimarena-server",
   "version": "0.1.0",
   "description": "ChimArena Game Server - Clash Royale like multiplayer game",
-  "main": "build/server.js",
+  "main": "build/server.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node build/server.js",
+    "start": "node build/server.ts",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "test": "jest --coverage",
     "seed": "node scripts/seed.ts",
