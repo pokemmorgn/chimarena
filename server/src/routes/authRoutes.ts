@@ -1,170 +1,151 @@
 import { Router, Request, Response } from 'express';
-import { SignJWT } from 'jose';
+import { SignJWT, jwtVerify } from 'jose';
 import User from '../models/User';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const router = Router();
 
-type StarterCard = { cardId: string; level: number; count: number };
+// Helpers enc/vars
+const enc = (s: string) => new TextEncoder().encode(s);
 
-// Token payload compatible JWTPayload
-interface TokenPayload {
-  id: string;
-  username: string;
-  email: string;
-  [key: string]: any;
-}
+const ACCESS_SECRET  = enc(process.env.JWT_ACCESS_SECRET  as string || process.env.JWT_SECRET as string); // fallback si ancien nom
+const REFRESH_SECRET = enc(process.env.JWT_REFRESH_SECRET as string || process.env.REFRESH_TOKEN_SECRET as string);
 
-// Génération sécurisée du token avec jose
-const generateToken = async (user: any): Promise<string> => {
-  const payload: TokenPayload = {
-    id: user._id?.toString?.() ?? user.id,
-    username: user.username,
-    email: user.email,
-  };
+const ACCESS_EXP   = process.env.JWT_ACCESS_EXPIRES_IN   || process.env.JWT_EXPIRES_IN || '15m';
+const REFRESH_EXP  = process.env.JWT_REFRESH_EXPIRES_IN  || process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET as string);
-
-  return await new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime(process.env.JWT_EXPIRES_IN || '7d')
-    .sign(secret);
+// Cookie httpOnly pour refresh
+const refreshCookieOpts = {
+  httpOnly: true,
+  secure: true,           // nécessite HTTPS en prod
+  sameSite: 'strict' as const,
+  path: '/',
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7j (si tu modifies REFRESH_EXP, ajuste si besoin)
 };
 
-// Cartes de départ
-const getStarterCards = (): StarterCard[] => [
-  { cardId: 'knight', level: 1, count: 10 },
-  { cardId: 'archers', level: 1, count: 10 },
-  { cardId: 'giant', level: 1, count: 5 },
-  { cardId: 'fireball', level: 1, count: 5 },
-  { cardId: 'arrows', level: 1, count: 10 },
-  { cardId: 'barbarians', level: 1, count: 8 },
-  { cardId: 'minions', level: 1, count: 10 },
-  { cardId: 'cannon', level: 1, count: 5 },
-];
+// Générateurs de tokens
+const generateAccessToken = async (user: any): Promise<string> => {
+  return await new SignJWT({
+    id: user._id.toString(),
+    username: user.username,
+    email: user.email,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(ACCESS_EXP)
+    .sign(ACCESS_SECRET);
+};
 
-// POST /api/auth/register
+const generateRefreshToken = async (user: any): Promise<string> => {
+  // payload minimal pour limiter l’exposition
+  return await new SignJWT({ id: user._id.toString() })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(REFRESH_EXP)
+    .sign(REFRESH_SECRET);
+};
+
+// --- REGISTER ---
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body as {
-      username?: string;
-      email?: string;
-      password?: string;
-    };
+    const { username, email, password } = req.body as { username?: string; email?: string; password?: string };
+    if (!username || !email || !password) return res.status(400).json({ success: false, message: 'Tous les champs sont requis' });
+    if (username.length < 3 || username.length > 20) return res.status(400).json({ success: false, message: 'Nom d’utilisateur invalide' });
+    if (password.length < 6) return res.status(400).json({ success: false, message: 'Mot de passe trop court' });
 
-    if (!username || !email || !password) {
-      return res.status(400).json({ success: false, message: 'Tous les champs sont requis' });
-    }
-    if (username.length < 3 || username.length > 20) {
-      return res.status(400).json({ success: false, message: 'Nom utilisateur entre 3 et 20 caractères' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: 'Mot de passe >= 6 caractères' });
-    }
-
-    const existingUser = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username }],
-    });
-    if (existingUser) {
+    const existing = await User.findOne({ $or: [{ email: email.toLowerCase() }, { username }] });
+    if (existing) {
       return res.status(400).json({
         success: false,
-        message:
-          existingUser.email === email.toLowerCase()
-            ? 'Cet email est déjà utilisé'
-            : 'Ce nom d’utilisateur est déjà pris',
+        message: existing.email === email.toLowerCase() ? 'Cet email est déjà utilisé' : 'Ce nom d’utilisateur est déjà pris',
       });
     }
 
-    const newUser: any = new User({
+    const user: any = new User({
       username,
       email: email.toLowerCase(),
       password,
-      cards: getStarterCards(),
-      deck: ['knight', 'archers', 'giant', 'fireball', 'arrows', 'barbarians', 'minions', 'cannon'],
+      // cards/deck starter si tu en as besoin
     });
+    await user.save();
 
-    await newUser.save();
-    const token = await generateToken(newUser);
+    const accessToken  = await generateAccessToken(user);
+    const refreshToken = await generateRefreshToken(user);
+    res.cookie('rt', refreshToken, refreshCookieOpts);
 
-    return res.status(201).json({
-      success: true,
-      message: 'Inscription réussie',
-      token,
-      user: newUser.getPublicProfile(),
-    });
-  } catch (error: any) {
-    console.error('Erreur inscription:', error);
-
-    if (error?.name === 'ValidationError') {
-      const errors = Object.values(error.errors || {}).map((e: any) => e.message);
+    return res.status(201).json({ success: true, message: 'Inscription réussie', token: accessToken, user: user.getPublicProfile() });
+  } catch (err: any) {
+    if (err?.name === 'ValidationError') {
+      const errors = Object.values(err.errors || {}).map((e: any) => e.message);
       return res.status(400).json({ success: false, message: 'Données invalides', errors });
     }
-    if (error?.code === 11000) {
-      const field = Object.keys(error.keyPattern || {})[0] || 'champ';
+    if (err?.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || 'champ';
       return res.status(400).json({ success: false, message: `Ce ${field} est déjà utilisé` });
     }
     return res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
 
-// POST /api/auth/login
+// --- LOGIN ---
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email et mot de passe requis' });
-    }
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email et mot de passe requis' });
 
     const user: any = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user) {
-      return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
-    }
+    if (!user) return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
 
     if (user.accountInfo?.isBanned) {
-      return res.status(403).json({
-        success: false,
-        message: user.accountInfo.banExpires && user.accountInfo.banExpires > new Date()
-          ? `Compte banni jusqu'au ${new Date(user.accountInfo.banExpires).toLocaleDateString()}`
-          : 'Compte banni définitivement',
-        reason: user.accountInfo.banReason,
-      });
+      return res.status(403).json({ success: false, message: 'Compte banni', reason: user.accountInfo.banReason });
     }
 
-    const isValidPassword = await user.comparePassword(password);
-    if (!isValidPassword) {
-      return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
-    }
+    const ok = await user.comparePassword(password);
+    if (!ok) return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
 
     user.accountInfo = user.accountInfo || {};
     user.accountInfo.lastLogin = new Date();
     user.accountInfo.loginCount = (user.accountInfo.loginCount || 0) + 1;
     await user.save();
 
-    const token = await generateToken(user);
+    const accessToken  = await generateAccessToken(user);
+    const refreshToken = await generateRefreshToken(user);
+    res.cookie('rt', refreshToken, refreshCookieOpts);
 
-    return res.json({
-      success: true,
-      message: 'Connexion réussie',
-      token,
-      user: user.getPublicProfile(),
-    });
-  } catch (error) {
-    console.error('Erreur connexion:', error);
+    return res.json({ success: true, message: 'Connexion réussie', token: accessToken, user: user.getPublicProfile() });
+  } catch (err) {
     return res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
 
-// GET /api/auth/me
+// --- REFRESH (renvoie un nouveau Access Token à partir du cookie httpOnly "rt") ---
+router.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies?.rt;
+    if (!token) return res.status(401).json({ success: false, message: 'Refresh token manquant' });
+
+    const { payload } = await jwtVerify(token, REFRESH_SECRET);
+    const user = await User.findById(payload.id as string);
+    if (!user) return res.status(401).json({ success: false, message: 'Utilisateur non trouvé' });
+
+    const accessToken = await generateAccessToken(user);
+    return res.json({ success: true, token: accessToken });
+  } catch {
+    return res.status(403).json({ success: false, message: 'Refresh invalide ou expiré' });
+  }
+});
+
+// --- LOGOUT (supprime le cookie "rt") ---
+router.post('/logout', (_req: Request, res: Response) => {
+  res.clearCookie('rt', { ...refreshCookieOpts, maxAge: 0 });
+  return res.json({ success: true, message: 'Déconnecté' });
+});
+
+// --- ME ---
 router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user?.id) {
-      return res.status(401).json({ success: false, message: 'Authentification requise' });
-    }
-
-    const user: any = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
-    }
+    const user: any = await User.findById(req.user!.id);
+    if (!user) return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
 
     return res.json({
       success: true,
@@ -181,8 +162,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         },
       },
     });
-  } catch (error) {
-    console.error('Erreur récupération profil:', error);
+  } catch {
     return res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
