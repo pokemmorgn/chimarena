@@ -12,9 +12,11 @@ const generateToken = (user: any): string => {
   const secret: Secret = process.env.JWT_SECRET as Secret;
   const expiresInRaw = process.env.JWT_EXPIRES_IN || "7d";
 
-  // Cast correct : number si c’est un chiffre, sinon string
+  // Forcer le cast correct
   const expiresIn: SignOptions["expiresIn"] =
-    /^\d+$/.test(expiresInRaw) ? parseInt(expiresInRaw, 10) : expiresInRaw;
+    /^\d+$/.test(expiresInRaw)
+      ? parseInt(expiresInRaw, 10)
+      : (expiresInRaw as jwt.StringValue);
 
   const payload = {
     id: user._id?.toString?.() ?? user.id,
@@ -24,6 +26,7 @@ const generateToken = (user: any): string => {
 
   return jwt.sign(payload, secret, { expiresIn });
 };
+
 
 
 const getStarterCards = (): StarterCard[] => [
