@@ -37,6 +37,8 @@ export interface IUser extends Document {
     loginCount: number;
   };
 
+  isAdmin: boolean; // <-- ajouté
+
   // Virtuels
   winRate: number;
   cardsOwned: number;
@@ -46,75 +48,100 @@ export interface IUser extends Document {
   getPublicProfile(): object;
 }
 
-// Définition du schéma (presque identique à ton JS)
-const userSchema = new mongoose.Schema<IUser>({
-  username: {
-    type: String,
-    required: true,
-    unique: true,
-    minlength: 3,
-    maxlength: 20,
-    match: /^[a-zA-Z0-9_]+$/,
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    validate: [validator.isEmail, "Email invalide"],
-  },
-  password: {
-    type: String,
-    required: true,
-    minlength: 6,
-    select: false,
-  },
-  playerStats: {
-    level: { type: Number, default: 1 },
-    experience: { type: Number, default: 0 },
-    trophies: { type: Number, default: 0 },
-    highestTrophies: { type: Number, default: 0 },
-  },
-  resources: {
-    gold: { type: Number, default: 1000 },
-    gems: { type: Number, default: 50 },
-    elixir: { type: Number, default: 100 },
-  },
-  cards: [
-    {
-      cardId: String,
-      level: { type: Number, default: 1 },
-      count: { type: Number, default: 1 },
+// Schéma
+const userSchema = new mongoose.Schema<IUser>(
+  {
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      minlength: 3,
+      maxlength: 20,
+      match: /^[a-zA-Z0-9_]+$/,
+      trim: true
     },
-  ],
-  deck: {
-    type: [String],
-    default: [],
-    validate: [(deck: string[]) => deck.length <= 8, "Deck max 8 cartes"],
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      validate: [validator.isEmail, "Email invalide"]
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+      select: false
+    },
+    playerStats: {
+      level: { type: Number, default: 1, min: 1 },
+      experience: { type: Number, default: 0, min: 0 },
+      trophies: { type: Number, default: 0, min: 0 },
+      highestTrophies: { type: Number, default: 0, min: 0 }
+    },
+    resources: {
+      gold: { type: Number, default: 1000, min: 0 },
+      gems: { type: Number, default: 50, min: 0 },
+      elixir: { type: Number, default: 100, min: 0 }
+    },
+    cards: [
+      {
+        cardId: { type: String, required: true },
+        level: { type: Number, default: 1, min: 1, max: 14 },
+        count: { type: Number, default: 1, min: 0 }
+      }
+    ],
+    deck: {
+      type: [String],
+      default: [],
+      validate: [(deck: string[]) => deck.length <= 8, "Deck max 8 cartes"]
+    },
+    gameStats: {
+      totalGames: { type: Number, default: 0, min: 0 },
+      wins: { type: Number, default: 0, min: 0 },
+      losses: { type: Number, default: 0, min: 0 },
+      draws: { type: Number, default: 0, min: 0 },
+      winStreak: { type: Number, default: 0, min: 0 },
+      bestWinStreak: { type: Number, default: 0, min: 0 }
+    },
+    accountInfo: {
+      isEmailVerified: { type: Boolean, default: false },
+      isBanned: { type: Boolean, default: false },
+      banReason: { type: String },
+      banExpires: { type: Date },
+      lastLogin: { type: Date, default: Date.now },
+      loginCount: { type: Number, default: 1 }
+    },
+
+    // <-- ajouté
+    isAdmin: { type: Boolean, default: false }
   },
-  gameStats: {
-    totalGames: { type: Number, default: 0 },
-    wins: { type: Number, default: 0 },
-    losses: { type: Number, default: 0 },
-    draws: { type: Number, default: 0 },
-    winStreak: { type: Number, default: 0 },
-    bestWinStreak: { type: Number, default: 0 },
-  },
-  accountInfo: {
-    isEmailVerified: { type: Boolean, default: false },
-    isBanned: { type: Boolean, default: false },
-    banReason: String,
-    banExpires: Date,
-    lastLogin: { type: Date, default: Date.now },
-    loginCount: { type: Number, default: 1 },
-  },
-}, { timestamps: true });
- 
+  { timestamps: true }
+);
+
+// Index utiles
+userSchema.index({ email: 1 });
+userSchema.index({ username: 1 });
+userSchema.index({ "playerStats.trophies": -1 });
+userSchema.index({ "accountInfo.lastLogin": -1 });
+
 // Middleware hash mot de passe
 userSchema.pre<IUser>("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
+});
+
+// Virtuels
+userSchema.virtual("winRate").get(function (this: IUser) {
+  return this.gameStats.totalGames === 0
+    ? 0
+    : Math.round((this.gameStats.wins / this.gameStats.totalGames) * 100);
+});
+
+userSchema.virtual("cardsOwned").get(function (this: IUser) {
+  return this.cards.length;
 });
 
 // Méthodes
@@ -129,20 +156,10 @@ userSchema.methods.getPublicProfile = function () {
     playerStats: this.playerStats,
     gameStats: this.gameStats,
     winRate: this.winRate,
-    createdAt: this.createdAt,
+    cardsOwned: this.cardsOwned,
+    createdAt: this.createdAt
   };
 };
-
-// Virtuels
-userSchema.virtual("winRate").get(function (this: IUser) {
-  return this.gameStats.totalGames === 0
-    ? 0
-    : Math.round((this.gameStats.wins / this.gameStats.totalGames) * 100);
-});
-
-userSchema.virtual("cardsOwned").get(function (this: IUser) {
-  return this.cards.length;
-});
 
 // Export
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
