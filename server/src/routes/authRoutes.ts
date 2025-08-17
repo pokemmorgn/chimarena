@@ -9,14 +9,12 @@ const router = Router();
 type StarterCard = { cardId: string; level: number; count: number };
 
 const generateToken = (user: any): string => {
-  const secret: Secret = process.env.JWT_SECRET as Secret;
+  const secret: jwt.Secret = process.env.JWT_SECRET as jwt.Secret;
   const expiresInRaw = process.env.JWT_EXPIRES_IN || "7d";
 
-  // Forcer le cast correct
+  // Conversion compatible avec toutes les versions de @types/jsonwebtoken
   const expiresIn: SignOptions["expiresIn"] =
-    /^\d+$/.test(expiresInRaw)
-      ? parseInt(expiresInRaw, 10)
-      : (expiresInRaw as jwt.StringValue);
+    /^\d+$/.test(expiresInRaw) ? parseInt(expiresInRaw, 10) : (expiresInRaw as unknown as SignOptions["expiresIn"]);
 
   const payload = {
     id: user._id?.toString?.() ?? user.id,
@@ -26,6 +24,7 @@ const generateToken = (user: any): string => {
 
   return jwt.sign(payload, secret, { expiresIn });
 };
+
 
 
 
