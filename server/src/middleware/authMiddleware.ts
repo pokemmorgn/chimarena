@@ -1,51 +1,38 @@
 import { Request, Response, NextFunction } from 'express';
-import { jwtVerify, JWTPayload } from 'jose';
+import { jwtVerify } from 'jose';
 import User from '../models/User';
 
-// On étend l'interface Request pour ajouter "user"
+// Étend la Request pour ajouter user
 export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    username: string;
-    email: string;
-  } | null;
+  user?: { id: string; username: string; email: string } | null;
 }
 
-// Vérifier le token JWT
+// Prépare la clé pour vérifier l'ACCESS token
+const enc = (s: string) => new TextEncoder().encode(s);
+const ACCESS_SECRET = enc(
+  (process.env.JWT_ACCESS_SECRET as string)  // nouveau modèle
+  || (process.env.JWT_SECRET as string)      // fallback si ancien .env
+);
+
+// Auth obligatoire
 export const authenticateToken = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const auth = req.headers.authorization || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Token d'accès requis",
-      });
+      return res.status(401).json({ success: false, message: "Token d'accès requis" });
     }
 
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET as string);
-
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, ACCESS_SECRET);
 
     const user = await User.findById(payload.id as string);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Utilisateur non trouvé',
-      });
-    }
-
-    if (user.accountInfo?.isBanned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Compte banni',
-      });
-    }
+    if (!user) return res.status(401).json({ success: false, message: 'Utilisateur non trouvé' });
+    if (user.accountInfo?.isBanned) return res.status(403).json({ success: false, message: 'Compte banni' });
 
     req.user = {
       id: payload.id as string,
@@ -54,40 +41,26 @@ export const authenticateToken = async (
     };
 
     next();
-  } catch (error: any) {
-    console.error('Erreur authentification:', error);
-
-    if (error.code === 'ERR_JWT_EXPIRED') {
-      return res.status(403).json({
-        success: false,
-        message: 'Token expiré',
-      });
+  } catch (e: any) {
+    if (e.code === 'ERR_JWT_EXPIRED') {
+      return res.status(403).json({ success: false, message: 'Token expiré' });
     }
-
-    return res.status(403).json({
-      success: false,
-      message: 'Token invalide',
-    });
+    return res.status(403).json({ success: false, message: 'Token invalide' });
   }
 };
 
-// Auth optionnelle (routes publiques mais peuvent reconnaître un user connecté)
+// Auth optionnelle
 export const optionalAuth = async (
   req: AuthenticatedRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ) => {
   try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const auth = req.headers.authorization || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) { req.user = null; return next(); }
 
-    if (!token) {
-      req.user = null;
-      return next();
-    }
-
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET as string);
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, ACCESS_SECRET);
 
     const user = await User.findById(payload.id as string);
     if (user && !user.accountInfo?.isBanned) {
@@ -99,7 +72,6 @@ export const optionalAuth = async (
     } else {
       req.user = null;
     }
-
     next();
   } catch {
     req.user = null;
@@ -107,35 +79,23 @@ export const optionalAuth = async (
   }
 };
 
-// Vérifier si admin
+// Vérifier admin (nécessite un champ isAdmin dans le modèle User)
 export const requireAdmin = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentification requise',
-      });
-    }
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentification requise' });
 
     const user = await User.findById(req.user.id);
-
-    if (!user || !user.isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Permissions administrateur requises',
-      });
+    if (!user || !(user as any).isAdmin) {
+      return res.status(403).json({ success: false, message: 'Permissions administrateur requises' });
     }
 
     next();
   } catch (error) {
     console.error('Erreur vérification admin:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur interne du serveur',
-    });
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 };
