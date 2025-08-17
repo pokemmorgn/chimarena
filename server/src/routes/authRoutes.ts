@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { Secret } from 'jsonwebtoken';
 import User from '../models/User';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
 
@@ -13,9 +13,9 @@ interface TokenPayload {
   email: string;
 }
 
-// ✅ Génération sécurisée du token
+// Génération sécurisée du token
 const generateToken = (user: any): string => {
-  const secret = process.env.JWT_SECRET as string;
+  const secret: Secret = process.env.JWT_SECRET as Secret;
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
 
   return jwt.sign(
@@ -27,7 +27,7 @@ const generateToken = (user: any): string => {
     secret,
     {
       expiresIn,
-      algorithm: 'HS256', // 🔒 forcer l’algo
+      algorithm: 'HS256',
     }
   );
 };
@@ -55,9 +55,11 @@ router.post('/register', async (req: Request, res: Response) => {
     if (!username || !email || !password) {
       return res.status(400).json({ success: false, message: 'Tous les champs sont requis' });
     }
+
     if (username.length < 3 || username.length > 20) {
       return res.status(400).json({ success: false, message: 'Le nom d’utilisateur doit contenir entre 3 et 20 caractères' });
     }
+
     if (password.length < 6) {
       return res.status(400).json({ success: false, message: 'Le mot de passe doit contenir au moins 6 caractères' });
     }
@@ -65,6 +67,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const existingUser = await User.findOne({
       $or: [{ email: email.toLowerCase() }, { username }],
     });
+
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -80,10 +83,11 @@ router.post('/register', async (req: Request, res: Response) => {
       email: email.toLowerCase(),
       password,
       cards: getStarterCards(),
-      deck: ['knight', 'archers', 'giant', 'fireball', 'arrows', 'barbarians', 'minions', 'cannon'],
+      deck: ['knight','archers','giant','fireball','arrows','barbarians','minions','cannon'],
     });
 
     await newUser.save();
+
     const token = generateToken(newUser);
 
     return res.status(201).json({
@@ -99,10 +103,12 @@ router.post('/register', async (req: Request, res: Response) => {
       const errors = Object.values(error.errors || {}).map((e: any) => e.message);
       return res.status(400).json({ success: false, message: 'Données invalides', errors });
     }
+
     if (error?.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || 'champ';
       return res.status(400).json({ success: false, message: `Ce ${field} est déjà utilisé` });
     }
+
     return res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -111,11 +117,13 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as { email?: string; password?: string };
+
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Email et mot de passe requis' });
     }
 
     const user: any = await User.findOne({ email: email.toLowerCase() }).select('+password');
+
     if (!user) {
       return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
     }
