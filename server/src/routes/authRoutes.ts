@@ -10,7 +10,11 @@ type StarterCard = { cardId: string; level: number; count: number };
 
 const generateToken = (user: any): string => {
   const secret: Secret = process.env.JWT_SECRET as Secret;
-  const expiresIn: string | number = process.env.JWT_EXPIRES_IN || "7d";
+  const expiresInRaw = process.env.JWT_EXPIRES_IN || "7d";
+
+  // Cast correct : number si c’est un chiffre, sinon string
+  const expiresIn: SignOptions["expiresIn"] =
+    /^\d+$/.test(expiresInRaw) ? parseInt(expiresInRaw, 10) : expiresInRaw;
 
   const payload = {
     id: user._id?.toString?.() ?? user.id,
@@ -18,10 +22,9 @@ const generateToken = (user: any): string => {
     email: user.email,
   };
 
-  const options: SignOptions = { expiresIn };
-
-  return jwt.sign(payload, secret, options);
+  return jwt.sign(payload, secret, { expiresIn });
 };
+
 
 const getStarterCards = (): StarterCard[] => [
   { cardId: "knight", level: 1, count: 10 },
