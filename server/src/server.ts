@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 setupMiddlewares(app);
 connectDatabase();
+app.set('trust proxy', 1);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
