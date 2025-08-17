@@ -303,7 +303,7 @@ export default class AuthScene extends Phaser.Scene {
     try {
       let res;
       if (this.isLoginMode) {
-        res = await login({ email: this.formData.email, password: this.formData.password });
+res = await login(this.formData.email, this.formData.password);
       } else {
         res = await register({
           email: this.formData.email,
