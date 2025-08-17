@@ -128,32 +128,33 @@ export default class AuthScene extends Phaser.Scene {
         }
     }
 
-    createTitle() {
-        const { width } = this.scale;
-        
-        // Logo principal
-        this.titleLogo = this.add.text(width / 2, 120, 'ChimArena', {
-            fontSize: '48px',
-            fontFamily: 'Orbitron, sans-serif',
-            fontWeight: 'bold',
-            fill: '#ffffff',
-            stroke: '#2c3e50',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-        
-        // Sous-titre dynamique
-        this.titleSubtext = this.add.text(width / 2, 170, 'Connexion', {
-            fontSize: '24px',
-            fontFamily: 'Roboto, sans-serif',
-            fill: '#ecf0f1'
-        }).setOrigin(0.5);
-        
-        // Version
-        this.add.text(width - 10, height - 10, `v${window.GameConfig.VERSION}`, {
-            fontSize: '12px',
-            fill: '#bdc3c7'
-        }).setOrigin(1, 1);
-    }
+   createTitle() {
+    const { width, height } = this.scale;
+
+    // Logo principal
+    this.titleLogo = this.add.text(width / 2, 120, 'ChimArena', {
+        fontSize: '48px',
+        fontFamily: 'Orbitron, sans-serif',
+        fontWeight: 'bold',
+        fill: '#ffffff',
+        stroke: '#2c3e50',
+        strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // Sous-titre (selon le mode actuel)
+    this.titleSubtext = this.add.text(width / 2, 170, this.isLoginMode ? 'Connexion' : 'Inscription', {
+        fontSize: '24px',
+        fontFamily: 'Roboto, sans-serif',
+        fill: '#ecf0f1'
+    }).setOrigin(0.5);
+
+    // Version (sécurisé si GameConfig absent)
+    const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
+    this.add.text(width - 10, height - 10, version, {
+        fontSize: '12px',
+        fill: '#bdc3c7'
+    }).setOrigin(1, 1);
+}
 
     createForm() {
         const { width } = this.scale;
