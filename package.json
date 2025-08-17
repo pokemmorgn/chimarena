@@ -1,0 +1,31 @@
+{
+  "name": "chimarena",
+  "version": "0.1.0",
+  "description": "ChimArena - Jeu de stratégie en temps réel",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "db:start": "docker-compose up -d mongodb",
+    "db:stop": "docker-compose down",
+    "test": "cd server && npm test && cd ../client && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/votre-username/chimarena.git"
+  },
+  "keywords": [
+    "game",
+    "phaser",
+    "colyseus",
+    "realtime",
+    "strategy"
+  ],
+  "author": "ChimArena Team",
+  "license": "MIT"
+}
