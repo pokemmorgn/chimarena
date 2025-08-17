@@ -1,26 +1,29 @@
 import { Router, Request, Response } from 'express';
+import { SignJWT } from 'jose';
 import User from '../models/User';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { SignJWT } from 'jose';
 
 const router = Router();
 
 type StarterCard = { cardId: string; level: number; count: number };
 
+// Token payload compatible JWTPayload
 interface TokenPayload {
   id: string;
   username: string;
   email: string;
+  [key: string]: any;
 }
 
-// 🔒 Génération sécurisée du token avec jose (JWT v9)
+// Génération sécurisée du token avec jose
 const generateToken = async (user: any): Promise<string> => {
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET as string);
   const payload: TokenPayload = {
     id: user._id?.toString?.() ?? user.id,
     username: user.username,
     email: user.email,
   };
+
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET as string);
 
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
@@ -43,25 +46,32 @@ const getStarterCards = (): StarterCard[] => [
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body as { username?: string; email?: string; password?: string };
+    const { username, email, password } = req.body as {
+      username?: string;
+      email?: string;
+      password?: string;
+    };
 
     if (!username || !email || !password) {
       return res.status(400).json({ success: false, message: 'Tous les champs sont requis' });
     }
     if (username.length < 3 || username.length > 20) {
-      return res.status(400).json({ success: false, message: 'Nom d’utilisateur entre 3 et 20 caractères' });
+      return res.status(400).json({ success: false, message: 'Nom utilisateur entre 3 et 20 caractères' });
     }
     if (password.length < 6) {
-      return res.status(400).json({ success: false, message: 'Mot de passe min 6 caractères' });
+      return res.status(400).json({ success: false, message: 'Mot de passe >= 6 caractères' });
     }
 
-    const existingUser = await User.findOne({ $or: [{ email: email.toLowerCase() }, { username }] });
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username }],
+    });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email.toLowerCase()
-          ? 'Cet email est déjà utilisé'
-          : 'Ce nom d’utilisateur est déjà pris',
+        message:
+          existingUser.email === email.toLowerCase()
+            ? 'Cet email est déjà utilisé'
+            : 'Ce nom d’utilisateur est déjà pris',
       });
     }
 
@@ -70,7 +80,7 @@ router.post('/register', async (req: Request, res: Response) => {
       email: email.toLowerCase(),
       password,
       cards: getStarterCards(),
-      deck: ['knight','archers','giant','fireball','arrows','barbarians','minions','cannon'],
+      deck: ['knight', 'archers', 'giant', 'fireball', 'arrows', 'barbarians', 'minions', 'cannon'],
     });
 
     await newUser.save();
@@ -84,6 +94,7 @@ router.post('/register', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Erreur inscription:', error);
+
     if (error?.name === 'ValidationError') {
       const errors = Object.values(error.errors || {}).map((e: any) => e.message);
       return res.status(400).json({ success: false, message: 'Données invalides', errors });
@@ -100,10 +111,14 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) return res.status(400).json({ success: false, message: 'Email et mot de passe requis' });
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email et mot de passe requis' });
+    }
 
     const user: any = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user) return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
+    }
 
     if (user.accountInfo?.isBanned) {
       return res.status(403).json({
@@ -116,7 +131,9 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const isValidPassword = await user.comparePassword(password);
-    if (!isValidPassword) return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
+    if (!isValidPassword) {
+      return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
+    }
 
     user.accountInfo = user.accountInfo || {};
     user.accountInfo.lastLogin = new Date();
@@ -125,7 +142,12 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const token = await generateToken(user);
 
-    return res.json({ success: true, message: 'Connexion réussie', token, user: user.getPublicProfile() });
+    return res.json({
+      success: true,
+      message: 'Connexion réussie',
+      token,
+      user: user.getPublicProfile(),
+    });
   } catch (error) {
     console.error('Erreur connexion:', error);
     return res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
@@ -135,10 +157,14 @@ router.post('/login', async (req: Request, res: Response) => {
 // GET /api/auth/me
 router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.user?.id) return res.status(401).json({ success: false, message: 'Authentification requise' });
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, message: 'Authentification requise' });
+    }
 
     const user: any = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
+    }
 
     return res.json({
       success: true,
