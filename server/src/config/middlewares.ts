@@ -196,8 +196,8 @@ app.use(express.json({
   // 🚫 RATE LIMITING ADAPTÉ CRYPTO-GRADE
   const rateLimits = securityManager.getConfig().rateLimits;
   
-  // Rate limiting intelligent basé sur l'endpoint
- const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
+ // REMPLACER la fonction createLimiter par :
+const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
   rateLimit({
     windowMs,
     max,
@@ -209,7 +209,10 @@ app.use(express.json({
       const ua = req.headers['user-agent'] || '';
       return securityManager.hashSensitiveData(ip + ua);
     },
-    skip: (req) => req.path === '/api/health',
+    skip: (req) => {
+      // EXCLURE les routes de santé ET refresh
+      return req.path === '/api/health' || req.path.includes('/refresh');
+    },
     skipSuccessfulRequests: skipSuccessful,
   });
 
