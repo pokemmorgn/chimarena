@@ -1,6 +1,6 @@
 // client/src/scenes/AuthScene.js
 import Phaser from 'phaser';
-import { login, register } from '../api';
+import { auth } from '../api';
 
 export default class AuthScene extends Phaser.Scene {
   constructor() {
@@ -23,10 +23,11 @@ export default class AuthScene extends Phaser.Scene {
   create() {
     this.gameInstance = this.registry.get('gameInstance');
 
-    if (this.gameInstance?.isAuthenticated?.()) {
-      this.scene.start('MenuScene');
-      return;
-    }
+if (auth.isAuthenticated()) {
+  console.log('✅ Utilisateur déjà authentifié');
+  this.scene.start('MenuScene');
+  return;
+}
 
     this.createBackground();
     this.createTitle();
@@ -34,10 +35,31 @@ export default class AuthScene extends Phaser.Scene {
     this.createButtons();
     this.createToggleLink();
     this.createFooter();
+    this.setupSecurityHooks();
+
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
   }
 
+  // Nouvelle méthode à ajouter
+setupSecurityHooks() {
+  // Hook pour déconnexion automatique
+  auth.config.onAuthenticationLost((reason) => {
+    console.warn('🚨 Authentification perdue:', reason);
+    this.gameInstance?.clearAuthData();
+    window.NotificationManager.error(`Session expirée: ${reason}`);
+    
+    if (this.scene.key !== 'AuthScene') {
+      this.scene.start('AuthScene');
+    }
+  });
+
+  // Hook pour refresh automatique
+  auth.config.onTokenRefreshed(() => {
+    console.log('🔄 Token rafraîchi automatiquement');
+  });
+}
+  
   // ---------- UI base ----------
 
   createUITextures() {
@@ -94,6 +116,10 @@ export default class AuthScene extends Phaser.Scene {
       fontSize: '24px', fontFamily: 'Roboto, sans-serif', fill: '#ecf0f1'
     }).setOrigin(0.5);
 
+    this.securityIndicator = this.add.text(width/2, 190, '🔐 Sécurité crypto-grade activée', {
+  fontSize: '12px', fontFamily: 'Roboto, sans-serif', fill: '#2ecc71'
+}).setOrigin(0.5);
+    
     const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
     this.add.text(width - 10, height - 10, version, { fontSize: '12px', fill: '#bdc3c7' }).setOrigin(1,1);
   }
@@ -290,41 +316,74 @@ export default class AuthScene extends Phaser.Scene {
   // ---------- Submit ----------
 
   async handleSubmit() {
-    if (this.isLoading) return;
+  if (this.isLoading) return;
 
-    this.updateFormData();
-    const v = this.validateForm();
-    if (!v.isValid) {
-      this.showMessage(v.message, 'error');
-      return;
-    }
-
-    this.setLoading(true);
-    try {
-      let res;
-      if (this.isLoginMode) {
-res = await login(this.formData.email, this.formData.password);
-      } else {
-        res = await register({
-          email: this.formData.email,
-          password: this.formData.password,
-          username: this.formData.username
-        });
-      }
-
-      this.gameInstance.setAuthToken(res.token);
-      this.gameInstance.setCurrentUser(res.user);
-      this.showMessage(this.isLoginMode ? 'Connexion réussie !' : 'Inscription réussie !', 'success');
-
-      setTimeout(() => this.scene.start('MenuScene'), 800);
-    } catch (err) {
-      console.error('Auth error:', err);
-      this.showMessage(err.message || 'Une erreur est survenue', 'error');
-    } finally {
-      this.setLoading(false);
-    }
+  this.updateFormData();
+  const v = this.validateForm();
+  if (!v.isValid) {
+    this.showMessage(v.message, 'error');
+    return;
   }
 
+  this.setLoading(true);
+  
+  try {
+    let response;
+    
+    if (this.isLoginMode) {
+      console.log('🔐 Tentative de connexion sécurisée...');
+      response = await auth.login(this.formData.email, this.formData.password);
+    } else {
+      console.log('🔐 Tentative d\'inscription sécurisée...');
+      response = await auth.register({
+        email: this.formData.email,
+        password: this.formData.password,
+        username: this.formData.username
+      });
+    }
+
+    if (response.success) {
+      console.log('✅ Authentification réussie');
+      
+      if (response.user) {
+        this.gameInstance.setCurrentUser(response.user);
+      }
+
+      // Récupérer les données complètes
+      try {
+        const userData = await auth.getMe();
+        if (userData.success && userData.user) {
+          this.gameInstance.setCurrentUser(userData.user);
+        }
+      } catch (error) {
+        console.warn('⚠️ Impossible de récupérer les données utilisateur:', error);
+      }
+
+      this.showMessage(
+        this.isLoginMode ? 'Connexion sécurisée réussie !' : 'Inscription sécurisée réussie !', 
+        'success'
+      );
+
+      setTimeout(() => this.scene.start('MenuScene'), 800);
+    } else {
+      throw new Error(response.message || 'Échec de l\'authentification');
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur authentification:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('réseau') || error.message.includes('Network')) {
+      errorMessage = 'Problème de connexion réseau';
+    } else if (error.status === 429) {
+      errorMessage = 'Trop de tentatives, attendez quelques minutes';
+    }
+    
+    this.showMessage(errorMessage, 'error');
+  } finally {
+    this.setLoading(false);
+  }
+}
   validateForm() {
     const { email, password, username } = this.formData;
 
@@ -381,4 +440,11 @@ res = await login(this.formData.email, this.formData.password);
   }
 
   update() {}
+
+  destroy() {
+  // Nettoyage des hooks lors de la destruction de la scène
+  auth.config.onAuthenticationLost(null);
+  auth.config.onTokenRefreshed(null);
+  super.destroy();
+}
 }
