@@ -478,13 +478,10 @@ export default class WelcomeScene extends Phaser.Scene {
             
             if (result?.success) {
                 // Mettre à jour l'utilisateur local avec les infos renvoyées par le serveur
-                this.currentUser.cryptoWallet = result.walletInfo || null;
-                this.gameInstance?.setCurrentUser(this.currentUser);
-                this.registry.set('currentUser', this.currentUser);
+this.updateWalletUI(result.walletInfo || null);
+this.gameInstance?.setCurrentUser(this.currentUser);
+this.registry.set('currentUser', this.currentUser);
 
-                // Recréer l'interface wallet
-                this.walletSection.removeAll(true);
-                this.createMetaMaskInterface();
 
                 window.NotificationManager?.success('MetaMask connecté avec succès !');
                 console.log('✅ MetaMask connecté et validé côté serveur');
