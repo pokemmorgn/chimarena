@@ -1,51 +1,69 @@
+// server/src/middleware/authMiddleware.ts - VERSION ALLÉGÉE
 import { Request, Response, NextFunction } from 'express';
-import { jwtVerify } from 'jose';
+import jwt from 'jsonwebtoken';
 import User from '../models/User';
 
-// Étend la Request pour ajouter user
 export interface AuthenticatedRequest extends Request {
   user?: { id: string; username: string; email: string } | null;
 }
 
-// Prépare la clé pour vérifier l'ACCESS token
-const enc = (s: string) => new TextEncoder().encode(s);
-const ACCESS_SECRET = enc(
-  (process.env.JWT_ACCESS_SECRET as string)  // nouveau modèle
-  || (process.env.JWT_SECRET as string)      // fallback si ancien .env
-);
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
-// Auth obligatoire
+// Auth obligatoire (simplifié)
 export const authenticateToken = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
     if (!token) {
-      return res.status(401).json({ success: false, message: "Token d'accès requis" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Token d'accès requis" 
+      });
     }
 
-    const { payload } = await jwtVerify(token, ACCESS_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // Vérifier que l'utilisateur existe toujours
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Utilisateur non trouvé' 
+      });
+    }
 
-    const user = await User.findById(payload.id as string);
-    if (!user) return res.status(401).json({ success: false, message: 'Utilisateur non trouvé' });
-    if (user.accountInfo?.isBanned) return res.status(403).json({ success: false, message: 'Compte banni' });
+    // Vérifier si l'utilisateur est banni
+    if (user.accountInfo?.isBanned) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Compte banni' 
+      });
+    }
 
     req.user = {
-      id: payload.id as string,
-      username: payload.username as string,
-      email: payload.email as string,
+      id: decoded.id,
+      username: decoded.username,
+      email: decoded.email,
     };
 
     next();
-  } catch (e: any) {
-    if (e.code === 'ERR_JWT_EXPIRED') {
-      return res.status(403).json({ success: false, message: 'Token expiré' });
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Token expiré' 
+      });
     }
-    return res.status(403).json({ success: false, message: 'Token invalide' });
+    
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Token invalide' 
+    });
   }
 };
 
@@ -56,22 +74,27 @@ export const optionalAuth = async (
   next: NextFunction
 ) => {
   try {
-    const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    if (!token) { req.user = null; return next(); }
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    
+    if (!token) {
+      req.user = null;
+      return next();
+    }
 
-    const { payload } = await jwtVerify(token, ACCESS_SECRET);
-
-    const user = await User.findById(payload.id as string);
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const user = await User.findById(decoded.id);
+    
     if (user && !user.accountInfo?.isBanned) {
       req.user = {
-        id: payload.id as string,
-        username: payload.username as string,
-        email: payload.email as string,
+        id: decoded.id,
+        username: decoded.username,
+        email: decoded.email,
       };
     } else {
       req.user = null;
     }
+    
     next();
   } catch {
     req.user = null;
@@ -79,23 +102,28 @@ export const optionalAuth = async (
   }
 };
 
-// Vérifier admin (nécessite un champ isAdmin dans le modèle User)
-export const requireAdmin = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    if (!req.user) return res.status(401).json({ success: false, message: 'Authentification requise' });
+// Génération de tokens simplifiée
+export const generateAccessToken = (user: any): string => {
+  return jwt.sign(
+    {
+      id: user._id.toString(),
+      username: user.username,
+      email: user.email,
+    },
+    JWT_SECRET,
+    { expiresIn: '15m' } // 15 minutes
+  );
+};
 
-    const user = await User.findById(req.user.id);
-    if (!user || !(user as any).isAdmin) {
-      return res.status(403).json({ success: false, message: 'Permissions administrateur requises' });
-    }
+export const generateRefreshToken = (user: any): string => {
+  return jwt.sign(
+    { id: user._id.toString() },
+    JWT_SECRET,
+    { expiresIn: '7d' } // 7 jours
+  );
+};
 
-    next();
-  } catch (error) {
-    console.error('Erreur vérification admin:', error);
-    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
-  }
+// Vérification refresh token
+export const verifyRefreshToken = (token: string): any => {
+  return jwt.verify(token, JWT_SECRET);
 };
