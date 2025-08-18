@@ -123,17 +123,26 @@ export const setupMiddlewares = (app: Application) => {
   app.use(cookieParser());
 
   // Body parsing avec validation de taille
-  app.use(express.json({ 
-    limit: '1mb', // Limite stricte
-    verify: (req, res, buf) => {
-      // Vérification additionnelle du contenu JSON
+  // Body parsing avec validation allégée
+app.use(express.json({ 
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    // Skip validation pour routes spéciales
+    const skipRoutes = ['/refresh', '/health'];
+    if (skipRoutes.some(route => req.url?.includes(route))) {
+      return;
+    }
+    
+    // Validation JSON seulement si il y a du contenu
+    if (buf.length > 0) {
       try {
         JSON.parse(buf.toString());
       } catch (e) {
         throw new Error('JSON malformé');
       }
     }
-  }));
+  }
+}));
   
   app.use(express.urlencoded({ 
     extended: true, 
