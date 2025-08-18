@@ -1,7 +1,7 @@
 {
   "name": "chimarena-server",
   "version": "0.1.0",
-  "description": "ChimArena Game Server - Clash Royale like multiplayer game",
+  "description": "ChimArena Game Server - Clash Royale like multiplayer game with crypto features",
   "main": "build/server.js",
   "scripts": {
     "build": "tsc",
@@ -11,6 +11,19 @@
     "seed": "ts-node scripts/seed.ts",
     "lint": "eslint src/ --ext .ts"
   },
+  "keywords": [
+    "phaser",
+    "game",
+    "client",
+    "clash-royale",
+    "realtime",
+    "crypto",
+    "ethereum",
+    "metamask",
+    "blockchain"
+  ],
+  "author": "ChimArena Team",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
@@ -24,8 +37,11 @@
     "validator": "^13.11.0",
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
-    "cookie-parser": "^1.4.6"
- },
+    "cookie-parser": "^1.4.6",
+    "ethers": "^6.8.0",
+    "crypto": "^1.0.1",
+    "node-fetch": "^3.3.2"
+  },
   "devDependencies": {
     "typescript": "^5.3.3",
     "ts-node": "^10.9.2",
@@ -42,7 +58,6 @@
     "jest": "^29.7.0",
     "eslint": "^8.55.0",
     "@types/cookie-parser": "^1.4.4"
-
   },
   "engines": {
     "node": ">=16.0.0"
