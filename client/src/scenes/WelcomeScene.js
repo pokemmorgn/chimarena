@@ -510,12 +510,11 @@ export default class WelcomeScene extends Phaser.Scene {
             
             if (response.success) {
                 // Mettre à jour l'utilisateur local
-                this.currentUser.cryptoWallet = null;
-                this.gameInstance.setCurrentUser(this.currentUser);
-                
-                // Recréer l'interface wallet
-                this.walletSection.removeAll(true);
-                this.createMetaMaskInterface();
+               this.currentUser.cryptoWallet = serverResponse.walletInfo;
+this.gameInstance.setCurrentUser(this.currentUser);
+
+// Mettre à jour l’UI et l’indicateur
+this.updateWalletUI(serverResponse.walletInfo);
                 
                 // Mettre à jour l'indicateur
                 this.securityIndicators.wallet.setText('💰 Wallet: Non connecté');
@@ -533,6 +532,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
+    
     async checkWalletStatus() {
         // Vérifier l'état du wallet au chargement
         if (this.currentUser?.cryptoWallet?.address && window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
@@ -554,6 +554,22 @@ export default class WelcomeScene extends Phaser.Scene {
 
     // === AUTRES MÉTHODES ===
 
+    updateWalletUI(walletInfo) {
+    if (walletInfo) {
+        this.currentUser.cryptoWallet = walletInfo;
+        this.securityIndicators.wallet.setText('💰 Wallet: Connecté');
+        this.securityIndicators.wallet.setFill('#2ecc71');
+    } else {
+        this.currentUser.cryptoWallet = null;
+        this.securityIndicators.wallet.setText('💰 Wallet: Non connecté');
+        this.securityIndicators.wallet.setFill('#95a5a6');
+    }
+
+    this.walletSection.removeAll(true);
+    this.createMetaMaskInterface();
+}
+
+    
     setupKeyboardControls() {
         this.input.keyboard.on('keydown-ENTER', () => {
             this.scene.start('MenuScene');
