@@ -508,17 +508,8 @@ export default class WelcomeScene extends Phaser.Scene {
             
             const response = await crypto.disconnectWallet();
             
-            if (response.success) {
-                // Mettre à jour l'utilisateur local
-               this.currentUser.cryptoWallet = serverResponse.walletInfo;
-this.gameInstance.setCurrentUser(this.currentUser);
-
-// Mettre à jour l’UI et l’indicateur
-this.updateWalletUI(serverResponse.walletInfo);
-                
-                // Mettre à jour l'indicateur
-                this.securityIndicators.wallet.setText('💰 Wallet: Non connecté');
-                this.securityIndicators.wallet.setFill('#95a5a6');
+           if (response.success) {
+    this.updateWalletUI(null);
                 
                 window.NotificationManager.success('Wallet déconnecté');
                 console.log('✅ Wallet déconnecté');
