@@ -194,13 +194,14 @@ app.use(express.json({
   );
 
   // 🚫 RATE LIMITING ADAPTÉ CRYPTO-GRADE
-  const rateLimits = securityManager.getConfig().rateLimits;
+const rateLimits = securityManager.getConfig().rateLimits;
+const isDev = process.env.NODE_ENV === 'development';
   
  // REMPLACER la fonction createLimiter par :
 const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
   rateLimit({
     windowMs,
-    max,
+    max: isDev ? max * 10 : max, // 10x plus permissif en dev
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: message, retryAfter: Math.ceil(windowMs / 1000) },
@@ -210,67 +211,66 @@ const createLimiter = (windowMs: number, max: number, message: string, skipSucce
       return securityManager.hashSensitiveData(ip + ua);
     },
     skip: (req) => {
-      // EXCLURE les routes de santé ET refresh
-      return req.path === '/api/health' || req.path.includes('/refresh');
+      // Routes toujours exemptées
+      const exemptRoutes = ['/api/health', '/api/auth/refresh'];
+      return exemptRoutes.some(route => req.path === route);
     },
     skipSuccessfulRequests: skipSuccessful,
   });
 
-// AJOUTER après la déclaration createLimiter :
+// Logging des dépassements
 const logRateLimit = (req: Request, max: number, windowMs: number) => {
-  auditLogger.logEvent(
-    'SECURITY_RATE_LIMIT',
-    'Rate limit dépassé',
-    {
-      ip: req.ip || 'unknown',
-      userAgent: req.headers['user-agent'],
-      success: false,
-      details: {
-        path: req.path,
-        method: req.method,
-        limit: max,
-        window: windowMs,
-      },
-      severity: 'MEDIUM',
-    }
-  );
+  if (!isDev) { // Pas de spam en dev
+    auditLogger.logEvent(
+      'SECURITY_RATE_LIMIT',
+      'Rate limit dépassé',
+      {
+        ip: req.ip || 'unknown',
+        userAgent: req.headers['user-agent'],
+        success: false,
+        details: { path: req.path, method: req.method, limit: max, window: windowMs },
+        severity: 'MEDIUM',
+      }
+    );
+  }
 };
 
-  // Auth routes : 5 tentatives / 15 min
-  app.use('/api/auth/login', createLimiter(
-    rateLimits.login.window, 
-    rateLimits.login.max, 
-    'Trop de tentatives de connexion, réessayez dans 15 minutes'
-  ));
-  
-  // Register : 3 / heure
-  app.use('/api/auth/register', createLimiter(
-    60 * 60 * 1000, 
-    3, 
-    'Trop d\'inscriptions, réessayez dans 1 heure'
-  ));
 
-  // Routes crypto futures (très strict)
-  app.use('/api/crypto/', createLimiter(
-    rateLimits.crypto.window,
-    rateLimits.crypto.max,
-    'Limite crypto dépassée, réessayez plus tard'
-  ));
+// 1. Auth login : 5 en prod, 50 en dev
+app.use('/api/auth/login', createLimiter(
+  rateLimits.login.window, 
+  rateLimits.login.max, 
+  'Trop de tentatives de connexion'
+));
 
-  // Routes gaming (permissif)
-  app.use('/api/game/', createLimiter(
-    rateLimits.gaming.window,
-    rateLimits.gaming.max,
-    'Ralentissez vos actions de jeu',
-    true // Skip successful requests pour gaming
-  ));
+// 2. Auth register : 3 en prod, 30 en dev  
+app.use('/api/auth/register', createLimiter(
+  60 * 60 * 1000, 
+  3, 
+  'Trop d\'inscriptions'
+));
 
-  // API globale : 100 / 15 min
-  app.use('/api/', createLimiter(
-    15 * 60 * 1000, 
-    100, 
-    'Trop de requêtes API, réessayez plus tard'
-  ));
+// 3. Routes crypto futures (très strict même en dev)
+app.use('/api/crypto/', createLimiter(
+  rateLimits.crypto.window,
+  isDev ? rateLimits.crypto.max * 2 : rateLimits.crypto.max, // Seulement 2x en dev
+  'Limite crypto dépassée'
+));
+
+// 4. Routes gaming (permissif, encore plus en dev)
+app.use('/api/game/', createLimiter(
+  rateLimits.gaming.window,
+  rateLimits.gaming.max,
+  'Ralentissez vos actions de jeu',
+  true
+));
+
+// 5. API globale EN DERNIER : 100 en prod, 1000 en dev
+app.use('/api/', createLimiter(
+  15 * 60 * 1000, 
+  100, 
+  'Trop de requêtes API'
+));
 
   // 🕐 MARQUAGE TEMPOREL ET TRACKING
   app.use((req, _res, next) => {
