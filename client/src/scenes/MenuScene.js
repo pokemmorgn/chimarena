@@ -388,19 +388,29 @@ if (tokenInfo) {
     }
 
     setupSecurityHooks() {
+    // Vérifier que auth et config sont disponibles
+    if (!auth || !auth.config) {
+        console.warn('⚠️ Client API non encore initialisé dans MenuScene');
+        return;
+    }
+
     // Hook pour déconnexion automatique
-    auth.config.onAuthenticationLost((reason) => {
-        console.warn('🚨 Authentification perdue dans MenuScene:', reason);
-        this.cleanup();
-        window.NotificationManager.error(`Session expirée: ${reason}`);
-        this.scene.start('AuthScene');
-    });
+    if (auth.config.onAuthenticationLost) {
+        auth.config.onAuthenticationLost((reason) => {
+            console.warn('🚨 Authentification perdue dans MenuScene:', reason);
+            this.cleanup();
+            window.NotificationManager.error(`Session expirée: ${reason}`);
+            this.scene.start('AuthScene');
+        });
+    }
 
     // Hook pour refresh automatique transparent
-    auth.config.onTokenRefreshed(() => {
-        console.log('🔄 Token rafraîchi automatiquement dans MenuScene');
-        this.refreshUserDataSecurely();
-    });
+    if (auth.config.onTokenRefreshed) {
+        auth.config.onTokenRefreshed(() => {
+            console.log('🔄 Token rafraîchi automatiquement dans MenuScene');
+            this.refreshUserDataSecurely();
+        });
+    }
 }
     
     setupKeyboardControls() {
