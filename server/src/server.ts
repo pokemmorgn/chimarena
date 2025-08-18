@@ -1,4 +1,4 @@
-// server/src/server.ts - Version Production avec HTTPS
+// server/src/server.ts - Version Production avec HTTPS et ordre middlewares corrigé
 import express, { Request, Response, NextFunction } from 'express';
 import https from 'https';
 import http from 'http';
@@ -64,9 +64,6 @@ console.log('✅ Configuration sécurité validée');
 app.use(require('cors')(corsOptions));
 setupMiddlewares(app);
 
-// 🛡️ MIDDLEWARES DE SÉCURITÉ GLOBAUX
-app.use(combinedSecurityMiddleware);
-
 // Middleware de redirection HTTPS en production
 function forceHTTPS(req: Request, res: Response, next: NextFunction) {
   if (!req.secure && 
@@ -105,10 +102,15 @@ auditLogger.logEvent(
   }
 );
 
-// 🔐 ROUTES AVEC PROTECTION ANTI-BOT
+// 💰 ROUTES CRYPTO AVEC SÉCURITÉ SPÉCIALISÉE (AVANT sécurité globale)
+app.use('/api/crypto', cryptoSecurityMiddleware, antiBotCryptoMiddleware, cryptoRoutes);
+
+// 🛡️ SÉCURITÉ GLOBALE pour les autres routes
+app.use(combinedSecurityMiddleware);
+
+// 🔐 AUTRES ROUTES avec sécurité globale
 app.use('/api/auth', antiBotMiddleware, authRoutes);
 app.use('/api/user', antiBotMiddleware, userRoutes);
-app.use('/api/crypto', cryptoSecurityMiddleware, antiBotCryptoMiddleware, cryptoRoutes);
 
 // Health check (accessible sans HTTPS pour monitoring)
 app.get('/health', (_req: Request, res: Response) => {
@@ -291,6 +293,7 @@ async function startServers() {
     console.log(`📊 Audit trail: ✅ ${securityManager.getAuditConfig().enableFullLogging ? 'COMPLET' : 'PARTIEL'}`);
     console.log(`🤖 Protection anti-bot: ✅ MULTI-NIVEAUX`);
     console.log(`🛡️ Validation XSS/Injection: ✅ ACTIVE`);
+    console.log(`💰 Crypto Security: ✅ MIDDLEWARE SPÉCIALISÉ`);
     
   } catch (error) {
     console.error('❌ Erreur démarrage serveur:', error);
