@@ -1,18 +1,18 @@
-// client/src/main.js - MODIFIÉ POUR CLIENT SÉCURISÉ
+// client/src/main.js - MODIFIÉ POUR WELCOMESCENE
 import Phaser from 'phaser';
 import AuthScene from './scenes/AuthScene';
-import WelcomeScene from './scenes/WelcomeScene';
+import WelcomeScene from './scenes/WelcomeScene'; // NOUVEAU
 import MenuScene from './scenes/MenuScene';
-import { auth, config } from './api'; // Nouveau client sécurisé
+import { auth, config } from './api';
 
-// Configuration Phaser
+// Configuration Phaser MISE À JOUR
 const gameConfig = {
     type: Phaser.AUTO,
     width: 800,
     height: 600,
     parent: 'game-container',
     backgroundColor: '#2c3e50',
-    scene: [AuthScene, WelcomeScene, MenuScene],
+    scene: [AuthScene, WelcomeScene, MenuScene], // WELCOMESCENE AJOUTÉE
     render: { antialias: true, pixelArt: false, roundPixels: true },
     input: { keyboard: true, mouse: true, touch: true, gamepad: false },
     audio: { disableWebAudio: false },
@@ -147,8 +147,8 @@ class ChimArenaGame {
         }
 
         // Vérifier l'état global
-        if (!debugInfo.isAuthenticated && this.game.scene.isActive('MenuScene')) {
-            console.error('❌ État incohérent: MenuScene active mais non authentifié');
+        if (!debugInfo.isAuthenticated && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('MenuScene'))) {
+            console.error('❌ État incohérent: Scène authentifiée active mais non authentifié');
             this.handleAuthenticationLoss('État de session incohérent');
         }
     }
@@ -178,7 +178,7 @@ class ChimArenaGame {
         }
         
         // Rediriger vers AuthScene si pas déjà fait
-        if (this.game && this.game.scene.isActive('MenuScene')) {
+        if (this.game && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('MenuScene'))) {
             this.game.scene.start('AuthScene');
         }
         
@@ -192,7 +192,9 @@ class ChimArenaGame {
             graphics: { quality: 'high', particles: true, animations: true, shadows: true },
             gameplay: { autoSelectCards: false, fastMode: false, showDamageNumbers: true, confirmActions: true },
             interface: { language: 'fr', theme: 'default', showTooltips: true, compactMode: false },
-            security: { autoLockMinutes: 60, requireConfirmForSensitiveActions: true, enableSecurityNotifications: true }
+            security: { autoLockMinutes: 60, requireConfirmForSensitiveActions: true, enableSecurityNotifications: true },
+            // 💰 NOUVEAUX PARAMÈTRES CRYPTO
+            crypto: { showWalletWarnings: true, confirmTransactions: true, maxDailyWithdrawals: 5 }
         };
     }
 
@@ -219,7 +221,7 @@ class ChimArenaGame {
             this.game.registry.set('currentUser', this.currentUser);
             this.game.registry.set('settings', this.settings);
             
-            console.log('🎮 Jeu Phaser créé avec sécurité intégrée');
+            console.log('🎮 Jeu Phaser créé avec sécurité intégrée + WelcomeScene');
             this.simulateLoading();
         } catch (err) {
             console.error('❌ Erreur création jeu:', err);
@@ -340,6 +342,20 @@ class ChimArenaGame {
         return auth.isAuthenticated();
     }
 
+    // 🆕 MÉTHODES POUR WELCOMESCENE
+    getUserWalletInfo() {
+        // Récupérer les infos wallet de l'utilisateur actuel
+        return this.currentUser?.cryptoWallet || null;
+    }
+
+    updateUserWalletInfo(walletInfo) {
+        // Mettre à jour les infos wallet
+        if (this.currentUser) {
+            this.currentUser.cryptoWallet = walletInfo;
+            this.game?.registry.set('currentUser', this.currentUser);
+        }
+    }
+
     // Méthode pour obtenir les infos de debug (développement)
     getSecurityDebugInfo() {
         if (window.GameConfig?.DEBUG) {
@@ -366,6 +382,8 @@ class ChimArenaGame {
                 throw new Error('Utilisez les méthodes auth.* pour l\'authentification');
             } else if (endpoint.startsWith('/user/')) {
                 throw new Error('Utilisez les méthodes user.* pour les données utilisateur');
+            } else if (endpoint.startsWith('/crypto/')) {
+                throw new Error('Utilisez les méthodes crypto.* pour les actions crypto');
             }
             
             throw new Error('Endpoint non supporté par la méthode dépréciée');
@@ -387,7 +405,7 @@ class ChimArenaGame {
     }
 }
 
-// --- Utils globaux (inchangés mais améliorés) ---
+// --- Utils globaux (étendus pour crypto) ---
 window.GameUtils = {
     formatNumber: (n) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toString(),
     formatTime: (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`,
@@ -402,6 +420,21 @@ window.GameUtils = {
     
     validateUsername: (username) => {
         return /^[a-zA-Z0-9_]{3,20}$/.test(username);
+    },
+
+    // 💰 NOUVELLES MÉTHODES CRYPTO
+    isValidEthereumAddress: (address) => {
+        return /^0x[a-fA-F0-9]{40}$/.test(address);
+    },
+
+    formatEthereumAddress: (address) => {
+        if (!address || address.length < 10) return address;
+        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    },
+
+    formatCryptoAmount: (amount, decimals = 4) => {
+        if (!amount || isNaN(amount)) return '0';
+        return parseFloat(amount).toFixed(decimals);
     }
 };
 
@@ -416,6 +449,19 @@ window.GameConstants = {
         TOKEN_REFRESH_THRESHOLD: 2 * 60 * 1000, // 2 minutes
         MAX_IDLE_TIME: 60 * 60 * 1000, // 1 heure
         SESSION_CHECK_INTERVAL: 30 * 1000, // 30 secondes
+    },
+
+    // 💰 NOUVELLES CONSTANTES CRYPTO
+    CRYPTO: {
+        SIGNATURE_VALIDITY: 5 * 60 * 1000, // 5 minutes
+        MAX_WALLET_CONNECTIONS_PER_HOUR: 3,
+        MAX_CRYPTO_ACTIONS_PER_HOUR: 5,
+        WITHDRAWAL_COOLDOWN: 24 * 60 * 60 * 1000, // 24 heures
+        SUPPORTED_NETWORKS: {
+            ETHEREUM: 1,
+            POLYGON: 137,
+            BSC: 56
+        }
     }
 };
 
@@ -429,13 +475,23 @@ document.addEventListener('DOMContentLoaded', () => {
         window.LoadingManager?.showError('Navigateur non compatible avec les fonctionnalités de sécurité');
         return;
     }
+
+    // 💰 VÉRIFIER DISPONIBILITÉ METAMASK (optionnel)
+    if (typeof window.ethereum !== 'undefined') {
+        console.log('🦊 MetaMask détecté');
+        window.GameConstants.CRYPTO.METAMASK_AVAILABLE = true;
+    } else {
+        console.log('⚠️ MetaMask non détecté - Fonctionnalités crypto limitées');
+        window.GameConstants.CRYPTO.METAMASK_AVAILABLE = false;
+    }
     
     // Créer l'instance de jeu sécurisée
     window.ChimArenaInstance = new ChimArenaGame();
     
-    console.log('✅ ChimArena sécurisé initialisé');
+    console.log('✅ ChimArena sécurisé initialisé avec WelcomeScene');
     console.log('🔐 Tokens stockés UNIQUEMENT en mémoire');
     console.log('🛡️ Monitoring de sécurité actif');
+    console.log('💰 Support crypto: ' + (window.GameConstants.CRYPTO.METAMASK_AVAILABLE ? 'ACTIVÉ' : 'LIMITÉ'));
     
     // Debug en développement
     if (window.GameConfig?.DEBUG) {
