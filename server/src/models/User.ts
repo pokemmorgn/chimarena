@@ -47,17 +47,38 @@ export interface IUser extends Document {
     lastKnownIPs: string[];
     deviceFingerprints: string[];
   };
+
+  // 💰 NOUVELLES MÉTHODES CRYPTO
+connectWallet(address: string, network: number, ip: string): Promise<void>;
+disconnectWallet(): Promise<void>;
+isWalletConnected(): boolean;
+addUsedNonce(nonce: string): Promise<void>;
+isNonceUsed(nonce: string): boolean;
+incrementCryptoSuspicion(amount?: number): Promise<void>;
+banWallet(reason: string): Promise<void>;
   
-  // 💰 CHAMPS CRYPTO (pour plus tard)
-  cryptoWallet?: {
-    address: string;
-    encryptedPrivateKey: string;
-    balance: number;
-    lastWithdrawal?: Date;
-    withdrawalCount: number;
-    kycStatus: 'NONE' | 'PENDING' | 'VERIFIED' | 'REJECTED';
-    kycLevel: number;
-  };
+cryptoWallet: {
+  address: { type: String },
+  connectedAt: { type: Date },
+  lastActivity: { type: Date },
+  connectionCount: { type: Number, default: 0, min: 0 },
+  network: { type: Number }, // Chain ID
+  balance: { type: Number, default: 0, min: 0 },
+  lastWithdrawal: { type: Date },
+  withdrawalCount: { type: Number, default: 0, min: 0 },
+  kycStatus: { 
+    type: String, 
+    enum: ['NONE', 'PENDING', 'VERIFIED', 'REJECTED'], 
+    default: 'NONE' 
+  },
+  kycLevel: { type: Number, default: 0, min: 0, max: 3 },
+  lastSignatureTimestamp: { type: Date },
+  usedNonces: { type: [String], default: [], maxlength: 100 },
+  suspiciousCryptoActivity: { type: Number, default: 0, min: 0, max: 100 },
+  lastKnownIP: { type: String },
+  isWalletBanned: { type: Boolean, default: false },
+  banReason: { type: String },
+},
 
   isAdmin: boolean;
 
@@ -196,6 +217,9 @@ userSchema.index({ "accountInfo.isBanned": 1 });
 userSchema.index({ "accountInfo.failedLoginAttempts": 1 });
 userSchema.index({ "accountInfo.accountLockedUntil": 1 });
 userSchema.index({ "accountInfo.securityLevel": 1 });
+userSchema.index({ "cryptoWallet.address": 1 });
+userSchema.index({ "cryptoWallet.isWalletBanned": 1 });
+userSchema.index({ "cryptoWallet.suspiciousCryptoActivity": 1 });
 
 // 🔐 MIDDLEWARE HASH MOT DE PASSE (inchangé)
 userSchema.pre<IUser>("save", async function (next) {
@@ -410,4 +434,69 @@ userSchema.post('save', function(doc) {
 
 // Export du modèle
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
+/ 💰 MÉTHODES CRYPTO SÉCURISÉES
+userSchema.methods.connectWallet = async function (address: string, network: number, ip: string) {
+  this.cryptoWallet = {
+    ...this.cryptoWallet,
+    address: address.toLowerCase(),
+    connectedAt: new Date(),
+    lastActivity: new Date(),
+    connectionCount: (this.cryptoWallet?.connectionCount || 0) + 1,
+    network,
+    lastKnownIP: ip,
+  };
+  await this.save();
+};
+
+userSchema.methods.disconnectWallet = async function () {
+  if (this.cryptoWallet) {
+    this.cryptoWallet.lastActivity = new Date();
+  }
+  this.cryptoWallet = undefined;
+  await this.save();
+};
+
+userSchema.methods.isWalletConnected = function (): boolean {
+  return !!(this.cryptoWallet?.address && !this.cryptoWallet?.isWalletBanned);
+};
+
+userSchema.methods.addUsedNonce = async function (nonce: string) {
+  if (!this.cryptoWallet) return;
+  
+  this.cryptoWallet.usedNonces = this.cryptoWallet.usedNonces || [];
+  this.cryptoWallet.usedNonces.unshift(nonce);
+  
+  // Garder seulement les 100 derniers nonces
+  this.cryptoWallet.usedNonces = this.cryptoWallet.usedNonces.slice(0, 100);
+  await this.save();
+};
+
+userSchema.methods.isNonceUsed = function (nonce: string): boolean {
+  return this.cryptoWallet?.usedNonces?.includes(nonce) || false;
+};
+
+userSchema.methods.incrementCryptoSuspicion = async function (amount: number = 10) {
+  if (!this.cryptoWallet) return;
+  
+  this.cryptoWallet.suspiciousCryptoActivity = Math.min(
+    (this.cryptoWallet.suspiciousCryptoActivity || 0) + amount, 
+    100
+  );
+  
+  // Auto-ban si score trop élevé
+  if (this.cryptoWallet.suspiciousCryptoActivity >= 80) {
+    await this.banWallet('Activité crypto suspecte automatique');
+  }
+  
+  await this.save();
+};
+
+userSchema.methods.banWallet = async function (reason: string) {
+  if (!this.cryptoWallet) return;
+  
+  this.cryptoWallet.isWalletBanned = true;
+  this.cryptoWallet.banReason = reason;
+  this.cryptoWallet.suspiciousCryptoActivity = 100;
+  await this.save();
+};
 export default User;
