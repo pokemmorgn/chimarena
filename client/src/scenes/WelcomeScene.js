@@ -1,4 +1,8 @@
-// client/src/scenes/WelcomeScene.js - VERSION COMPLÈTE AVEC METAMASK
+// client/src/scenes/WelcomeScene.js - VERSION COMPLÈTE AVEC METAMASK (corrigée: un seul appel API)
+
+// NOTE: Cette version supprime l'appel direct à crypto.connectWallet() depuis la scène,
+// pour éviter les connexions multiples. Le helper MetaMask gère désormais tout le flow.
+
 import Phaser from 'phaser';
 import { auth, user, crypto, config } from '../api';
 import metaMaskHelper from '../utils/metamask';
@@ -39,7 +43,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
         
         // Initialiser MetaMask Helper
-this.metaMaskHelper = metaMaskHelper;
+        this.metaMaskHelper = metaMaskHelper;
         
         // Créer l'interface
         this.createBackground();
@@ -256,7 +260,7 @@ this.metaMaskHelper = metaMaskHelper;
         this.walletSection.add([walletBg, walletTitle]);
         
         // Vérifier la disponibilité de MetaMask
-        if (window.GameConstants.CRYPTO.METAMASK_AVAILABLE) {
+        if (window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
             this.createMetaMaskInterface();
         } else {
             this.createNoMetaMaskMessage();
@@ -460,49 +464,39 @@ this.metaMaskHelper = metaMaskHelper;
 
     async connectWallet() {
         if (this.isConnectingWallet) return;
-        
         this.isConnectingWallet = true;
-        this.connectWalletButton.setText('🔄 Connexion...');
+
+        if (this.connectWalletButton?.setText) {
+            this.connectWalletButton.setText('🔄 Connexion...');
+        }
         
         try {
             console.log('🦊 Tentative de connexion MetaMask...');
             
-            // Connecter via helper
-const result = await this.metaMaskHelper.connectWallet();
+            // Utiliser uniquement le helper (il gère: accounts, challenge, signature, POST /connect-wallet)
+            const result = await this.metaMaskHelper.connectWallet();
             
-            if (result.success) {
-                // Envoyer au serveur pour validation et stockage
-                const serverResponse = await crypto.connectWallet({
-                    address: result.address,
-                    signature: result.signature,
-                    message: result.message,
-                    timestamp: result.timestamp
-                });
-                
-                if (serverResponse.success) {
-                    // Mettre à jour l'utilisateur local
-                    this.currentUser.cryptoWallet = serverResponse.walletInfo;
-                    this.gameInstance.setCurrentUser(this.currentUser);
-                    
-                    // Recréer l'interface wallet
-                    this.walletSection.removeAll(true);
-                    this.createMetaMaskInterface();
-                    
-                    window.NotificationManager.success('MetaMask connecté avec succès !');
-                    console.log('✅ MetaMask connecté et validé côté serveur');
-                } else {
-                    throw new Error(serverResponse.message || 'Échec validation serveur');
-                }
+            if (result?.success) {
+                // Mettre à jour l'utilisateur local avec les infos renvoyées par le serveur
+                this.currentUser.cryptoWallet = result.walletInfo || null;
+                this.gameInstance?.setCurrentUser(this.currentUser);
+                this.registry.set('currentUser', this.currentUser);
+
+                // Recréer l'interface wallet
+                this.walletSection.removeAll(true);
+                this.createMetaMaskInterface();
+
+                window.NotificationManager?.success('MetaMask connecté avec succès !');
+                console.log('✅ MetaMask connecté et validé côté serveur');
             } else {
-                throw new Error(result.error || 'Échec connexion MetaMask');
+                throw new Error(result?.message || 'Échec validation serveur');
             }
-            
         } catch (error) {
             console.error('❌ Erreur connexion wallet:', error);
-            window.NotificationManager.error(error.message || 'Erreur connexion wallet');
-            
-            // Restaurer le bouton
-            this.connectWalletButton.setText('🦊 Connecter MetaMask');
+            window.NotificationManager?.error(error.message || 'Erreur connexion wallet');
+            if (this.connectWalletButton?.setText) {
+                this.connectWalletButton.setText('🦊 Connecter MetaMask');
+            }
         } finally {
             this.isConnectingWallet = false;
         }
@@ -541,14 +535,14 @@ const result = await this.metaMaskHelper.connectWallet();
 
     async checkWalletStatus() {
         // Vérifier l'état du wallet au chargement
-        if (this.currentUser?.cryptoWallet?.address && window.GameConstants.CRYPTO.METAMASK_AVAILABLE) {
+        if (this.currentUser?.cryptoWallet?.address && window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
             try {
                 // Vérifier si MetaMask est toujours connecté à la même adresse
-const status = this.metaMaskHelper.getStatus();
-const accounts = status.isConnected ? [status.currentAccount] : [];
+                const status = this.metaMaskHelper.getStatus();
+                const accounts = status.isConnected && status.currentAccount ? [status.currentAccount.toLowerCase()] : [];
                 const currentAddress = this.currentUser.cryptoWallet.address.toLowerCase();
                 
-                if (!accounts.includes(currentAddress)) {
+                if (accounts.length && !accounts.includes(currentAddress)) {
                     console.warn('⚠️ Adresse MetaMask changée, déconnexion automatique');
                     await this.disconnectWallet();
                 }
@@ -571,7 +565,8 @@ const accounts = status.isConnected ? [status.currentAccount] : [];
         
         this.input.keyboard.on('keydown-TAB', (event) => {
             event.preventDefault();
-            if (window.GameConstants.CRYPTO.METAMASK_AVAILABLE) {
+            if (this.isConnectingWallet) return; // éviter multi-déclenchements
+            if (window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
                 if (!this.currentUser?.cryptoWallet?.address) {
                     this.connectWallet();
                 }
@@ -584,7 +579,7 @@ const accounts = status.isConnected ? [status.currentAccount] : [];
         config.onAuthenticationLost((reason) => {
             console.warn('🚨 Authentification perdue:', reason);
             this.cleanup();
-            window.NotificationManager.error(`Session expirée: ${reason}`);
+            window.NotificationManager?.error(`Session expirée: ${reason}`);
             this.scene.start('AuthScene');
         });
         
@@ -628,7 +623,7 @@ const accounts = status.isConnected ? [status.currentAccount] : [];
         } catch (error) {
             console.error('❌ Erreur refresh utilisateur:', error);
             
-            if (error.message.includes('session') || error.message.includes('token')) {
+            if (error.message?.toLowerCase().includes('session') || error.message?.toLowerCase().includes('token')) {
                 this.scene.start('AuthScene');
             }
         }
@@ -678,7 +673,7 @@ const accounts = status.isConnected ? [status.currentAccount] : [];
             await auth.logout();
             this.gameInstance?.clearAuthData();
             
-            window.NotificationManager.success('Déconnexion sécurisée réussie');
+            window.NotificationManager?.success('Déconnexion sécurisée réussie');
             this.scene.start('AuthScene');
             
         } catch (error) {
@@ -687,7 +682,7 @@ const accounts = status.isConnected ? [status.currentAccount] : [];
             this.cleanup();
             this.gameInstance?.clearAuthData();
             
-            window.NotificationManager.show('Déconnexion locale effectuée', 'info');
+            window.NotificationManager?.show('Déconnexion locale effectuée', 'info');
             this.scene.start('AuthScene');
         }
     }
