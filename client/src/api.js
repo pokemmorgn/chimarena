@@ -110,45 +110,52 @@ class RefreshManager {
     }
   }
 
-  async doRefresh() {
+ // Dans api.js, méthode doRefresh(), AJOUTER des logs :
+async doRefresh() {
     try {
-      const response = await fetch(`${API_URL}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include', // CRITIQUE : Envoie le cookie httpOnly
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Refresh failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success && data.token) {
-        tokenManager.setToken(data.token);
+        console.log('🔄 Envoi requête refresh...');
         
-        if (tokenManager.onTokenRefreshed) {
-          tokenManager.onTokenRefreshed(data.token);
+        const response = await fetch(`${API_URL}/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        console.log('📡 Réponse refresh:', response.status, response.statusText);
+
+        if (!response.ok) {
+            console.log('❌ Refresh échoué - Status:', response.status);
+            throw new Error(`Refresh failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('📦 Data refresh:', data);
+        
+        if (data.success && data.token) {
+            tokenManager.setToken(data.token);
+            console.log('✅ Token refresh stocké en mémoire');
+            
+            if (tokenManager.onTokenRefreshed) {
+                tokenManager.onTokenRefreshed(data.token);
+            }
+            
+            return data.token;
+        } else {
+            throw new Error('Refresh response invalid');
+        }
+    } catch (error) {
+        console.log('❌ Erreur complète refresh:', error);
+        tokenManager.clearToken();
+        
+        if (tokenManager.onAuthenticationLost) {
+            tokenManager.onAuthenticationLost('Session expirée');
         }
         
-        return data.token;
-      } else {
-        throw new Error('Refresh response invalid');
-      }
-    } catch (error) {
-      console.warn('🔄 Refresh token failed:', error.message);
-      tokenManager.clearToken();
-      
-      if (tokenManager.onAuthenticationLost) {
-        tokenManager.onAuthenticationLost('Session expirée');
-      }
-      
-      throw error;
+        throw error;
     }
-  }
-
+}
   // Refresh automatique si nécessaire
   async ensureValidToken() {
     if (!tokenManager.isAuthenticated) {
