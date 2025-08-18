@@ -257,7 +257,7 @@ if (userWalletAddress && (userWalletAddress as string).toLowerCase() !== req.cry
         'Tentative d\'utilisation d\'adresse wallet non autorisée',
         {
           ...requestInfo,
-          userId: user._id.toString(),
+userId: (user as any)._id.toString(),
           username: user.username,
           success: false,
           details: { 
@@ -379,7 +379,7 @@ export const detectSuspiciousCryptoActivity = async (req: Request, res: Response
     const suspiciousIndicators = [];
 
     // 1. Nouveau compte tentant des actions crypto
-    const accountAge = Date.now() - new Date(user.createdAt).getTime();
+const accountAge = Date.now() - new Date((user as any).createdAt).getTime();
     if (accountAge < 24 * 60 * 60 * 1000) { // Moins de 24h
       suspiciousIndicators.push('account_too_new');
     }
@@ -409,7 +409,7 @@ export const detectSuspiciousCryptoActivity = async (req: Request, res: Response
         'Activité crypto suspecte détectée',
         {
           ...requestInfo,
-          userId: user._id.toString(),
+userId: (user as any)._id.toString(),
           username: user.username,
           success: false,
           details: { 
