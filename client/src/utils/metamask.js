@@ -74,11 +74,22 @@ class MetaMaskHelper {
             this.currentNetwork = chainId;
             this.isConnected = true;
 
-            // Générer et signer un message de vérification
-            const verificationData = await this.generateVerificationSignature(account);
+          // Générer et signer un message de vérification
+const verificationData = await this.generateVerificationSignature(account);
 
-            // Envoyer au serveur pour validation
-            const result = await crypto.connectWallet(verificationData);
+// Renommer les champs pour correspondre à l'API
+const walletData = {
+    address: verificationData.account,
+    signature: verificationData.signature,
+    message: verificationData.message,
+    timestamp: verificationData.timestamp,
+    nonce: verificationData.nonce
+};
+
+console.log('📤 Envoi des données wallet:', walletData);
+
+// Envoyer au serveur pour validation
+const result = await crypto.connectWallet(walletData);
 
             if (result.success) {
                 console.log('✅ Wallet connecté et vérifié côté serveur');
