@@ -32,7 +32,7 @@ const statsQueryLimiter = rateLimit({
 const getRequestInfo = (req: Request) => ({
   ip: req.ip || 'unknown',
   userAgent: req.headers['user-agent'] || '',
-  sessionId: req.sessionID || securityManager.generateSecureToken(16),
+sessionId: (req as any).sessionID || securityManager.generateSecureToken(16),
 });
 
 // GET /api/user/profile - Obtenir le profil complet (avec audit léger)
