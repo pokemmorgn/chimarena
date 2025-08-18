@@ -145,10 +145,10 @@ class EthersHelper {
       }
 
       // 5. Récupérer l'adresse à partir de la signature
-const recoveredAddress = ethers.verifyMessage(message, signature);
+      const recoveredAddress = ethers.verifyMessage(message, signature);
       
       // 6. Vérifier le format de l'adresse
-if (!ethers.isAddress(recoveredAddress)) {
+      if (!ethers.isAddress(recoveredAddress)) {
         return {
           isValid: false,
           error: 'Adresse récupérée invalide'
@@ -187,7 +187,7 @@ if (!ethers.isAddress(recoveredAddress)) {
    */
   public isValidAddress(address: string): boolean {
     try {
-typescriptreturn ethers.isAddress(address);
+      return ethers.isAddress(address);
     } catch {
       return false;
     }
@@ -198,7 +198,7 @@ typescriptreturn ethers.isAddress(address);
    */
   public normalizeAddress(address: string): string {
     try {
-typescriptreturn ethers.getAddress(address);
+      return ethers.getAddress(address);
     } catch {
       return address.toLowerCase();
     }
