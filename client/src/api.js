@@ -1,4 +1,4 @@
-// client/src/api.js - CLIENT ULTRA-SÉCURISÉ CRYPTO-GRADE
+// client/src/api.js - CLIENT ULTRA-SÉCURISÉ CRYPTO-GRADE + MODULE CRYPTO
 
 const API_URL = (typeof window !== 'undefined' && window.GameConfig?.API_URL)
   ? window.GameConfig.API_URL
@@ -110,8 +110,7 @@ class RefreshManager {
     }
   }
 
- // Dans api.js, méthode doRefresh(), AJOUTER des logs :
-async doRefresh() {
+  async doRefresh() {
     try {
         console.log('🔄 Envoi requête refresh...');
         
@@ -155,7 +154,8 @@ async doRefresh() {
         
         throw error;
     }
-}
+  }
+
   // Refresh automatique si nécessaire
   async ensureValidToken() {
     if (!tokenManager.isAuthenticated) {
@@ -424,17 +424,78 @@ export const game = {
   }
 };
 
-// 💰 API CRYPTO (futures - ultra-sécurisées)
+// 💰 API CRYPTO - NOUVELLEMENT IMPLÉMENTÉE
 export const crypto = {
-  // TODO: Implémenter avec sécurité renforcée
-  async getWallet() {
-    return apiClient.authenticatedRequest('/crypto/wallet');
+  // Connecter un wallet MetaMask
+  async connectWallet(walletData) {
+    if (!walletData || !walletData.address || !walletData.signature) {
+      throw new Error('Données wallet invalides');
+    }
+
+    // Validation côté client basique
+    if (!window.GameUtils?.isValidEthereumAddress(walletData.address)) {
+      throw new Error('Adresse Ethereum invalide');
+    }
+
+    return apiClient.authenticatedRequest('/crypto/connect-wallet', {
+      method: 'POST',
+      body: JSON.stringify(walletData),
+    });
   },
 
-  async withdraw(amount, address) {
+  // Déconnecter le wallet
+  async disconnectWallet() {
+    return apiClient.authenticatedRequest('/crypto/disconnect-wallet', {
+      method: 'POST',
+    });
+  },
+
+  // Obtenir les informations du wallet connecté
+  async getWalletInfo() {
+    return apiClient.authenticatedRequest('/crypto/wallet-info');
+  },
+
+  // Vérifier une signature (utilitaire)
+  async verifySignature(signatureData) {
+    return apiClient.authenticatedRequest('/crypto/verify-signature', {
+      method: 'POST',
+      body: JSON.stringify(signatureData),
+    });
+  },
+
+  // Obtenir le challenge pour signature (sécurité anti-replay)
+  async getSignatureChallenge() {
+    return apiClient.authenticatedRequest('/crypto/challenge');
+  },
+
+  // Actions crypto futures (très sécurisées)
+  async getBalance() {
+    return apiClient.authenticatedRequest('/crypto/balance');
+  },
+
+  async withdraw(amount, address, signature) {
+    if (!amount || !address || !signature) {
+      throw new Error('Paramètres de retrait manquants');
+    }
+
+    if (!window.GameUtils?.isValidEthereumAddress(address)) {
+      throw new Error('Adresse de destination invalide');
+    }
+
+    if (amount <= 0) {
+      throw new Error('Montant invalide');
+    }
+
     return apiClient.authenticatedRequest('/crypto/withdraw', {
       method: 'POST',
-      body: JSON.stringify({ amount, address }),
+      body: JSON.stringify({ amount, address, signature }),
+    });
+  },
+
+  async getTransactionHistory(limit = 20, offset = 0) {
+    return apiClient.authenticatedRequest('/crypto/transactions', {
+      method: 'GET',
+      // Utiliser params pour GET
     });
   }
 };
@@ -470,7 +531,7 @@ export default {
   auth,
   user,
   game,
-  crypto,
+  crypto, // NOUVEAU MODULE CRYPTO
   config,
   
   // Méthodes directes pour compatibilité avec l'ancien code
