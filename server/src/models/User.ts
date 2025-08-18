@@ -434,7 +434,7 @@ userSchema.post('save', function(doc) {
 
 // Export du modèle
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
-/ 💰 MÉTHODES CRYPTO SÉCURISÉES
+// 💰 MÉTHODES CRYPTO SÉCURISÉES
 userSchema.methods.connectWallet = async function (address: string, network: number, ip: string) {
   this.cryptoWallet = {
     ...this.cryptoWallet,
