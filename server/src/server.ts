@@ -13,6 +13,7 @@ import { securityManager } from './config/security';
 import { auditLogger } from './utils/auditLogger';
 import { antiBotMiddleware, antiBotGamingMiddleware, antiBotCryptoMiddleware } from './middleware/antiBotMiddleware';
 import { combinedSecurityMiddleware } from './middleware/securityMiddleware';
+import cryptoRoutes from './routes/cryptoRoutes'; // AJOUTER CETTE LIGNE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,8 +63,9 @@ app.use('/api/user', antiBotMiddleware, userRoutes);
 // app.use('/api/match', antiBotGamingMiddleware, matchRoutes);
 // app.use('/api/deck', antiBotGamingMiddleware, deckRoutes);
 
-// 💰 ROUTES CRYPTO (protection ultra-stricte) - À implémenter  
-// app.use('/api/crypto', antiBotCryptoMiddleware, cryptoRoutes);
+// 💰 ROUTES CRYPTO (protection ultra-stricte) - ACTIVÉ
+app.use('/api/crypto', antiBotCryptoMiddleware, cryptoRoutes);
+
 // app.use('/api/wallet', antiBotCryptoMiddleware, walletRoutes);
 // app.use('/api/withdrawal', antiBotCryptoMiddleware, withdrawalRoutes);
 
