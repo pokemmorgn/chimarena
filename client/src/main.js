@@ -1,6 +1,7 @@
 // client/src/main.js - MODIFIÉ POUR CLIENT SÉCURISÉ
 import Phaser from 'phaser';
 import AuthScene from './scenes/AuthScene';
+import WelcomeScene from './scenes/WelcomeScene';
 import MenuScene from './scenes/MenuScene';
 import { auth, config } from './api'; // Nouveau client sécurisé
 
@@ -11,7 +12,7 @@ const gameConfig = {
     height: 600,
     parent: 'game-container',
     backgroundColor: '#2c3e50',
-    scene: [AuthScene, MenuScene],
+    scene: [AuthScene, WelcomeScene, MenuScene],
     render: { antialias: true, pixelArt: false, roundPixels: true },
     input: { keyboard: true, mouse: true, touch: true, gamepad: false },
     audio: { disableWebAudio: false },
