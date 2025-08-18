@@ -50,24 +50,36 @@ export const cryptoSecurityMiddleware = (req: Request, res: Response, next: Next
       req.body = bodyValidation.sanitizedBody;
     }
 
-    // 3. Validation des headers critiques pour crypto
+    // 3. Validation allégée des headers pour crypto
     const headerValidation = validateCryptoHeaders(req);
     if (!headerValidation.isValid) {
-      auditLogger.logEvent(
-        'SECURITY_SUSPICIOUS_ACTIVITY',
-        'Headers crypto suspects',
-        {
-          ...requestInfo,
-          success: false,
-          details: { errors: headerValidation.errors },
-          severity: 'HIGH',
-        }
+      // Log seulement, ne pas bloquer pour les headers normaux
+      console.warn('⚠️ Headers crypto suspects détectés:', headerValidation.errors);
+      
+      // Bloquer seulement les headers vraiment dangereux
+      const hasDangerousHeaders = headerValidation.errors.some(error => 
+        error.includes('x-forwarded-host') || 
+        error.includes('x-original-url') || 
+        error.includes('x-rewrite-url')
       );
+      
+      if (hasDangerousHeaders) {
+        auditLogger.logEvent(
+          'SECURITY_SUSPICIOUS_ACTIVITY',
+          'Headers crypto dangereux',
+          {
+            ...requestInfo,
+            success: false,
+            details: { errors: headerValidation.errors },
+            severity: 'HIGH',
+          }
+        );
 
-      return res.status(400).json({
-        error: 'Headers de requête suspects',
-        code: 'SUSPICIOUS_CRYPTO_HEADERS'
-      });
+        return res.status(400).json({
+          error: 'Headers de requête dangereux détectés',
+          code: 'DANGEROUS_CRYPTO_HEADERS'
+        });
+      }
     }
 
     // 4. Validation Content-Type pour crypto
@@ -237,32 +249,26 @@ function validateCryptoBody(body: any): CryptoValidationResult {
 function validateCryptoHeaders(req: Request): CryptoValidationResult {
   const errors: string[] = [];
 
-  // Headers suspects pour crypto
-  const suspiciousHeaders = [
+  // Headers VRAIMENT dangereux seulement
+  const dangerousHeaders = [
     'x-forwarded-host',
-    'x-original-url',
-    'x-rewrite-url',
-    'x-real-ip'
+    'x-original-url', 
+    'x-rewrite-url'
   ];
 
-  for (const header of suspiciousHeaders) {
+  for (const header of dangerousHeaders) {
     if (req.headers[header]) {
-      errors.push(`Header suspect détecté: ${header}`);
+      errors.push(`Header dangereux détecté: ${header}`);
     }
   }
 
-  // Vérifier User-Agent pour crypto
+  // User-Agent : warning seulement, ne pas bloquer
   const userAgent = req.headers['user-agent'];
-  if (!userAgent || userAgent.length < 10) {
-    errors.push('User-Agent manquant ou suspect');
+  if (!userAgent) {
+    console.warn('⚠️ User-Agent manquant pour requête crypto');
   }
 
-  // Headers requis pour crypto
-  if (req.method === 'POST') {
-    if (!req.headers['content-type']) {
-      errors.push('Content-Type manquant');
-    }
-  }
+  // Ne pas vérifier Content-Type ici (géré par Express)
 
   return {
     isValid: errors.length === 0,
