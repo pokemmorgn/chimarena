@@ -1,6 +1,6 @@
 // client/src/scenes/WelcomeScene.js - VERSION COMPLÈTE AVEC METAMASK
 import Phaser from 'phaser';
-import { auth, user, crypto } from '../api';
+import { auth, user, crypto, config } from '../api';
 import metaMaskHelper from '../utils/metamask';
 
 export default class WelcomeScene extends Phaser.Scene {
