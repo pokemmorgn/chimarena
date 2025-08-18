@@ -101,6 +101,63 @@ class EthersHelper {
     }
   }
 
+   // À ajouter dans la classe EthersHelper dans ethersHelper.ts
+
+/**
+ * Vérifie une signature (wrapper pour validateSignature)
+ */
+public async verifySignature(address: string, message: string, signature: string): Promise<boolean> {
+  try {
+    const result = await this.validateSignature(message, signature, address);
+    return result.isValid;
+  } catch (error) {
+    console.error('❌ Erreur vérification signature:', error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie si un nonce est déjà utilisé
+ */
+public async isNonceUsed(address: string, nonce: string): Promise<boolean> {
+  const nonceKey = `${address.toLowerCase()}-${nonce}`;
+  return this.usedNonces.has(nonceKey);
+}
+
+/**
+ * Marque un nonce comme utilisé
+ */
+public async markNonceAsUsed(address: string, nonce: string): Promise<void> {
+  const nonceKey = `${address.toLowerCase()}-${nonce}`;
+  this.usedNonces.add(nonceKey);
+}
+
+/**
+ * Formate une adresse Ethereum
+ */
+public formatAddress(address: string): string {
+  try {
+    return ethers.getAddress(address); // Retourne l'adresse avec checksum
+  } catch {
+    return address.toLowerCase();
+  }
+}
+
+/**
+ * Détecte le type de message
+ */
+public detectMessageType(message: string): string {
+  if (message.includes('Withdrawal Request')) {
+    return 'withdrawal';
+  } else if (message.includes('Wallet Connection')) {
+    return 'connection';
+  } else if (message.includes('verify_ownership')) {
+    return 'verification';
+  } else {
+    return 'unknown';
+  }
+}
+  
   /**
    * Valide une signature Ethereum
    */
@@ -327,62 +384,7 @@ class EthersHelper {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
 
-  // À ajouter dans la classe EthersHelper dans ethersHelper.ts
-
-/**
- * Vérifie une signature (wrapper pour validateSignature)
- */
-public async verifySignature(address: string, message: string, signature: string): Promise<boolean> {
-  try {
-    const result = await this.validateSignature(message, signature, address);
-    return result.isValid;
-  } catch (error) {
-    console.error('❌ Erreur vérification signature:', error);
-    return false;
-  }
-}
-
-/**
- * Vérifie si un nonce est déjà utilisé
- */
-public async isNonceUsed(address: string, nonce: string): Promise<boolean> {
-  const nonceKey = `${address.toLowerCase()}-${nonce}`;
-  return this.usedNonces.has(nonceKey);
-}
-
-/**
- * Marque un nonce comme utilisé
- */
-public async markNonceAsUsed(address: string, nonce: string): Promise<void> {
-  const nonceKey = `${address.toLowerCase()}-${nonce}`;
-  this.usedNonces.add(nonceKey);
-}
-
-/**
- * Formate une adresse Ethereum
- */
-public formatAddress(address: string): string {
-  try {
-    return ethers.getAddress(address); // Retourne l'adresse avec checksum
-  } catch {
-    return address.toLowerCase();
-  }
-}
-
-/**
- * Détecte le type de message
- */
-public detectMessageType(message: string): string {
-  if (message.includes('Withdrawal Request')) {
-    return 'withdrawal';
-  } else if (message.includes('Wallet Connection')) {
-    return 'connection';
-  } else if (message.includes('verify_ownership')) {
-    return 'verification';
-  } else {
-    return 'unknown';
-  }
-}
+ 
   
   /**
    * Estime les frais de gas (pour information seulement)
