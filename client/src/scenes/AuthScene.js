@@ -1,4 +1,4 @@
-// client/src/scenes/AuthScene.js
+// client/src/scenes/AuthScene.js - MODIFIÉ POUR WELCOMESCENE
 import Phaser from 'phaser';
 import { auth } from '../api';
 
@@ -25,8 +25,8 @@ export default class AuthScene extends Phaser.Scene {
 
     // 🔐 VÉRIFICATION AUTHENTIFICATION AVEC NOUVEAU CLIENT
     if (auth.isAuthenticated()) {
-        console.log('✅ Utilisateur déjà authentifié');
-        this.scene.start('MenuScene');
+        console.log('✅ Utilisateur déjà authentifié - Redirection vers WelcomeScene');
+        this.scene.start('WelcomeScene'); // MODIFIÉ : WelcomeScene au lieu de MenuScene
         return;
     }
 
@@ -60,8 +60,9 @@ async attemptAutoLogin() {
                 this.gameInstance.setCurrentUser(userData.user);
             }
             
-            // Transition smooth vers le menu
-            this.scene.start('MenuScene');
+            // 🆕 REDIRECTION VERS WELCOMESCENE AU LIEU DE MENUSCENE
+            console.log('🏠 Redirection automatique vers WelcomeScene');
+            this.scene.start('WelcomeScene');
             return;
         }
     } catch (error) {
@@ -169,6 +170,17 @@ setupSecurityHooks() {
 
     const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
     this.add.text(width - 10, height - 10, version, { fontSize: '12px', fill: '#bdc3c7' }).setOrigin(1,1);
+
+    // 💰 NOUVEAU : Indicateur MetaMask
+    const metamaskStatus = window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE;
+    if (metamaskStatus !== undefined) {
+        const metamaskText = metamaskStatus ? '🦊 MetaMask détecté' : '⚠️ MetaMask requis pour crypto';
+        const metamaskColor = metamaskStatus ? '#f6851b' : '#95a5a6';
+        
+        this.add.text(width/2, height - 50, metamaskText, {
+            fontSize: '10px', fontFamily: 'Roboto, sans-serif', fill: metamaskColor
+        }).setOrigin(0.5);
+    }
 }
   // ---------- Form ----------
 
@@ -359,7 +371,7 @@ setupSecurityHooks() {
     this.activeInput = null;
   }
 
-  // ---------- Submit ----------
+  // ---------- Submit MODIFIÉ POUR WELCOMESCENE ----------
 
   async handleSubmit() {
   if (this.isLoading) return;
@@ -410,7 +422,9 @@ setupSecurityHooks() {
         'success'
       );
 
-      setTimeout(() => this.scene.start('MenuScene'), 800);
+      // 🆕 REDIRECTION VERS WELCOMESCENE AU LIEU DE MENUSCENE
+      console.log('🏠 Redirection vers WelcomeScene après authentification');
+      setTimeout(() => this.scene.start('WelcomeScene'), 800);
     } else {
       throw new Error(response.message || 'Échec de l\'authentification');
     }
@@ -439,8 +453,8 @@ setupSecurityHooks() {
     if (password.length < 6) return { isValid:false, message:'Le mot de passe doit contenir au moins 6 caractères' };
 
     if (!this.isLoginMode) {
-      if (!username) return { isValid:false, message:'Le nom d’utilisateur est requis' };
-      if (username.length < 3 || username.length > 20) return { isValid:false, message:'Le nom d’utilisateur doit contenir entre 3 et 20 caractères' };
+      if (!username) return { isValid:false, message:'Le nom d\'utilisateur est requis' };
+      if (username.length < 3 || username.length > 20) return { isValid:false, message:'Le nom d\'utilisateur doit contenir entre 3 et 20 caractères' };
     }
     return { isValid: true };
   }
