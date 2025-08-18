@@ -53,7 +53,7 @@ const generateRefreshToken = async (user: any): Promise<string> => {
 const getRequestInfo = (req: Request) => ({
   ip: req.ip || 'unknown',
   userAgent: req.headers['user-agent'] || '',
-  sessionId: req.sessionID || securityManager.generateSecureToken(16),
+sessionId: (req as any).sessionID || securityManager.generateSecureToken(16),
 });
 
 // --- REGISTER avec audit complet ---
@@ -149,7 +149,7 @@ router.post('/register', async (req: Request, res: Response) => {
       'Inscription réussie',
       {
         ...requestInfo,
-        userId: user._id.toString(),
+userId: (user._id as any).toString(),
         username: user.username,
         success: true,
         details: { email: user.email },
