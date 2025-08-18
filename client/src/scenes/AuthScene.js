@@ -30,12 +30,6 @@ export default class AuthScene extends Phaser.Scene {
         return;
     }
 
-    // 🔄 TENTATIVE DE RÉCUPÉRATION VIA REFRESH TOKEN (AWAIT POUR ASYNC)
-    this.attemptAutoLogin().catch(() => {
-        // Si erreur, continuer normalement vers l'écran de connexion
-        console.log('📋 Affichage écran de connexion');
-    });
-
     this.createBackground();
     this.createTitle();
     this.createForm();
@@ -45,39 +39,36 @@ export default class AuthScene extends Phaser.Scene {
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
     this.setupSecurityHooks();
+
+    // 🔄 ESSAYER LE REFRESH APRÈS L'INITIALISATION
+    this.time.delayedCall(500, () => {
+        this.attemptAutoLogin();
+    });
 }
 
-// MÉTHODE RÉCUPÉRATION AUTO-LOGIN (CORRIGER L'ASYNC)
 async attemptAutoLogin() {
     try {
         console.log('🔄 Tentative de récupération de session...');
         
-        // Essayer de refresh automatiquement
         const token = await auth.refreshToken();
         
-        if (token && this.scene.isActive()) { // AJOUTER VÉRIFICATION SCÈNE ACTIVE
+        if (token) {
             console.log('✅ Session récupérée automatiquement');
             
-            // Récupérer les données utilisateur
             const userData = await auth.getMe();
             if (userData.success && userData.user) {
                 this.gameInstance.setCurrentUser(userData.user);
             }
             
-            // Aller au menu
-            setTimeout(() => this.scene.start('MenuScene'), 100);
+            // Transition smooth vers le menu
+            this.scene.start('MenuScene');
             return;
         }
     } catch (error) {
-        // 403 = pas de cookie refresh ou expiré (NORMAL au F5)
-        if (error.message.includes('403') || error.message.includes('Forbidden')) {
-            console.log('📋 Pas de session sauvegardée - connexion requise');
-        } else {
-            console.log('❌ Erreur de récupération de session:', error.message);
-        }
-        // Continuer vers l'écran de connexion normal (pas d'erreur affichée)
+        console.log('❌ Impossible de récupérer la session:', error.message);
     }
 }
+  
 // MÉTHODE HOOKS SÉCURITÉ (INCHANGÉE)
 setupSecurityHooks() {
     // Vérifier que auth et config sont disponibles
