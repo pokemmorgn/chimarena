@@ -129,38 +129,36 @@ class SecurityManager {
   }
 
   // Chiffrement de données sensibles
-  public encrypt(text: string): { encrypted: string; iv: string; tag: string } {
-    const iv = crypto.randomBytes(this.config.encryption.ivLength);
-    const cipher = crypto.createCipher(this.config.encryption.algorithm, this.config.jwt.encryptionKey);
-    cipher.setAAD(Buffer.from('chimarena-crypto', 'utf8'));
+public encrypt(text: string): { encrypted: string; iv: string; tag: string } {
+  const iv = crypto.randomBytes(this.config.encryption.ivLength);
+  const cipher = crypto.createCipher('aes-256-gcm', this.config.jwt.encryptionKey);
 
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    const tag = (cipher as any).getAuthTag().toString('hex');
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const tag = (cipher as any).getAuthTag().toString('hex');
 
-    return {
-      encrypted,
-      iv: iv.toString('hex'),
-      tag,
-    };
-  }
+  return {
+    encrypted,
+    iv: iv.toString('hex'),
+    tag,
+  };
+}
 
   // Déchiffrement de données sensibles
   public decrypt(encrypted: string, iv: string, tag: string): string {
-    try {
-      const decipher = crypto.createDecipher(this.config.encryption.algorithm, this.config.jwt.encryptionKey);
-      decipher.setAAD(Buffer.from('chimarena-crypto', 'utf8'));
-      (decipher as any).setAuthTag(Buffer.from(tag, 'hex'));
+  try {
+    const decipher = crypto.createDecipher('aes-256-gcm', this.config.jwt.encryptionKey);
+    (decipher as any).setAuthTag(Buffer.from(tag, 'hex'));
 
-      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
-    } catch (error) {
-      throw new Error('Erreur de déchiffrement - données compromises ?');
-    }
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    throw new Error('Erreur de déchiffrement - données compromises ?');
   }
+}
 
   // Hash sécurisé pour IPs et identifiants
   public hashSensitiveData(data: string, salt?: string): string {
