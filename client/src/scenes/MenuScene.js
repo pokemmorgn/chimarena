@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
+import { auth, user } from '../api'; // Nouveau client sécurisé
 
 export default class MenuScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'MenuScene' });
-        
-        this.currentUser = null;
-        this.gameInstance = null;
-        this.menuItems = [];
-        this.selectedIndex = 0;
-    }
+constructor() {
+    super({ key: 'MenuScene' });
+    
+    this.currentUser = null;
+    this.gameInstance = null;
+    this.menuItems = [];
+    this.selectedIndex = 0;
+    this.refreshTimer = null; // AJOUTER CETTE LIGNE
+}
 
     create() {
         console.log('🏠 Scène menu principal créée');
@@ -18,10 +20,11 @@ export default class MenuScene extends Phaser.Scene {
         this.currentUser = this.registry.get('currentUser');
         
         // Vérifier l'authentification
-        if (!this.gameInstance.isAuthenticated()) {
-            this.scene.start('AuthScene');
-            return;
-        }
+if (!auth.isAuthenticated()) {
+    console.warn('❌ Utilisateur non authentifié, redirection vers AuthScene');
+    this.scene.start('AuthScene');
+    return;
+}
         
         // Créer l'interface
         this.createBackground();
@@ -29,6 +32,7 @@ export default class MenuScene extends Phaser.Scene {
         this.createUserInfo();
         this.createMainMenu();
         this.createFooter();
+        this.setupSecurityHooks();
         
         // Configuration des événements
         this.setupKeyboardControls();
@@ -37,7 +41,8 @@ export default class MenuScene extends Phaser.Scene {
         this.playEntranceAnimation();
         
         // Charger les données utilisateur fraîches
-        this.refreshUserData();
+        this.refreshUserDataSecurely();
+        this.startAutoRefresh();
     }
 
     createBackground() {
@@ -90,6 +95,13 @@ export default class MenuScene extends Phaser.Scene {
             stroke: '#2c3e50',
             strokeThickness: 2
         }).setOrigin(0.5);
+
+        // Après la création du logo, AJOUTER
+this.securityIndicator = this.add.text(width / 2, 85, '🔐 Session sécurisée', {
+    fontSize: '12px',
+    fontFamily: 'Roboto, sans-serif',
+    fill: '#2ecc71'
+}).setOrigin(0.5);
         
         // Bouton de déconnexion
         this.createLogoutButton();
@@ -115,7 +127,7 @@ export default class MenuScene extends Phaser.Scene {
             logoutBtn.clearTint();
         })
         .on('pointerdown', () => {
-            this.handleLogout();
+            this.handleSecureLogout();
         });
     }
 
@@ -139,6 +151,25 @@ export default class MenuScene extends Phaser.Scene {
             fontFamily: 'Roboto, sans-serif',
             fontWeight: 'bold'
         });
+
+        // Après la création du nom d'utilisateur, AJOUTER
+const securityLevel = user.accountInfo?.securityLevel || 'BASIC';
+const securityIcon = securityLevel === 'CRYPTO_GRADE' ? '💎' : securityLevel === 'ENHANCED' ? '🛡️' : '🔰';
+
+// MODIFIER la ligne du nom d'utilisateur
+this.add.text(width / 2 - 180, 120, `${securityIcon} ${user.username}`, {
+    fontSize: '18px',
+    fill: '#f39c12',
+    fontFamily: 'Roboto, sans-serif',
+    fontWeight: 'bold'
+});
+
+// AJOUTER après le nom d'utilisateur
+this.add.text(width / 2 - 180, 140, `Sécurité: ${securityLevel}`, {
+    fontSize: '12px',
+    fill: securityLevel === 'CRYPTO_GRADE' ? '#2ecc71' : securityLevel === 'ENHANCED' ? '#3498db' : '#95a5a6',
+    fontFamily: 'Roboto, sans-serif'
+});
         
         // Niveau et trophées
         const level = user.playerStats?.level || 1;
@@ -334,6 +365,18 @@ export default class MenuScene extends Phaser.Scene {
                 fontFamily: 'Roboto, sans-serif'
             }).setOrigin(0.5);
         }
+
+        // Après les statistiques, AJOUTER
+const tokenInfo = auth.getTokenInfo();
+if (tokenInfo) {
+    const timeLeft = Math.max(0, Math.floor((tokenInfo.exp * 1000 - Date.now()) / 1000 / 60));
+    this.add.text(width / 2, height - 40, 
+        `🔐 Session sécurisée • ⏱️ ${timeLeft}min restantes`, {
+        fontSize: '10px',
+        fill: timeLeft > 5 ? '#2ecc71' : '#e74c3c',
+        fontFamily: 'Roboto, sans-serif'
+    }).setOrigin(0.5);
+}
         
         // Contrôles
         this.add.text(width / 2, height - 30, 
@@ -344,6 +387,22 @@ export default class MenuScene extends Phaser.Scene {
         }).setOrigin(0.5);
     }
 
+    setupSecurityHooks() {
+    // Hook pour déconnexion automatique
+    auth.config.onAuthenticationLost((reason) => {
+        console.warn('🚨 Authentification perdue dans MenuScene:', reason);
+        this.cleanup();
+        window.NotificationManager.error(`Session expirée: ${reason}`);
+        this.scene.start('AuthScene');
+    });
+
+    // Hook pour refresh automatique transparent
+    auth.config.onTokenRefreshed(() => {
+        console.log('🔄 Token rafraîchi automatiquement dans MenuScene');
+        this.refreshUserDataSecurely();
+    });
+}
+    
     setupKeyboardControls() {
         // Navigation clavier
         this.input.keyboard.on('keydown-UP', () => {
@@ -361,7 +420,7 @@ export default class MenuScene extends Phaser.Scene {
         });
         
         this.input.keyboard.on('keydown-ESC', () => {
-            this.handleLogout();
+            this.handleSecureLogout();
         });
     }
 
@@ -382,19 +441,40 @@ export default class MenuScene extends Phaser.Scene {
         });
     }
 
-    async refreshUserData() {
-        try {
-            const response = await this.gameInstance.apiCall('/auth/me');
-            this.gameInstance.setCurrentUser(response.user);
+    // RENOMMER ET REMPLACER
+async refreshUserDataSecurely() {
+    try {
+        console.log('🔄 Refresh des données utilisateur...');
+        
+        const response = await user.getProfile();
+        if (response.success && response.user) {
             this.currentUser = response.user;
+            this.gameInstance?.setCurrentUser(response.user);
             this.registry.set('currentUser', response.user);
             
-            console.log('🔄 Données utilisateur mises à jour');
-        } catch (error) {
-            console.error('❌ Erreur mise à jour utilisateur:', error);
+            console.log('✅ Données utilisateur mises à jour');
+        }
+    } catch (error) {
+        console.error('❌ Erreur refresh utilisateur:', error);
+        
+        if (error.message.includes('session') || error.message.includes('token')) {
+            this.scene.start('AuthScene');
         }
     }
-
+}
+    
+startAutoRefresh() {
+    // Refresh automatique des données toutes les 5 minutes
+    this.refreshTimer = this.time.addEvent({
+        delay: 5 * 60 * 1000, // 5 minutes
+        callback: () => {
+            if (auth.isAuthenticated()) {
+                this.refreshUserDataSecurely();
+            }
+        },
+        loop: true
+    });
+}
     // Actions du menu
     startBattle() {
         console.log('🚀 Démarrage d\'un combat...');
@@ -432,16 +512,70 @@ export default class MenuScene extends Phaser.Scene {
         // TODO: Créer l'écran de paramètres
     }
 
-    handleLogout() {
-        const confirmLogout = confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
-        if (confirmLogout) {
-            this.gameInstance.clearAuthData();
-            window.NotificationManager.success('Déconnexion réussie');
-            this.scene.start('AuthScene');
-        }
+    async handleSecureLogout() {
+    const confirmLogout = confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+    if (!confirmLogout) return;
+
+    try {
+        console.log('🚪 Déconnexion sécurisée...');
+        
+        this.cleanup();
+        await auth.logout();
+        this.gameInstance?.clearAuthData();
+        
+        window.NotificationManager.success('Déconnexion sécurisée réussie');
+        this.scene.start('AuthScene');
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la déconnexion:', error);
+        
+        this.cleanup();
+        this.gameInstance?.clearAuthData();
+        
+        window.NotificationManager.show('Déconnexion locale effectuée', 'info');
+        this.scene.start('AuthScene');
     }
+}
 
     update() {
-        // Mise à jour continue si nécessaire
+    // Vérification périodique de l'état d'authentification
+    if (this.scene.isActive() && !auth.isAuthenticated()) {
+        console.warn('⚠️ Perte d\'authentification détectée dans MenuScene');
+        this.cleanup();
+        this.scene.start('AuthScene');
     }
+
+    // Mise à jour de l'indicateur de sécurité
+    if (this.securityIndicator) {
+        const tokenInfo = auth.getTokenInfo();
+        if (tokenInfo) {
+            const timeLeft = Math.max(0, Math.floor((tokenInfo.exp * 1000 - Date.now()) / 1000 / 60));
+            
+            if (timeLeft <= 2) {
+                this.securityIndicator.setFill('#e74c3c');
+                this.securityIndicator.setText('🔐 Session expire bientôt...');
+            } else if (timeLeft <= 5) {
+                this.securityIndicator.setFill('#f39c12');
+                this.securityIndicator.setText('🔐 Session sécurisée');
+            } else {
+                this.securityIndicator.setFill('#2ecc71');
+                this.securityIndicator.setText('🔐 Session sécurisée');
+            }
+        }
+    }
+}
+    
+    cleanup() {
+    if (this.refreshTimer) {
+        this.refreshTimer.destroy();
+        this.refreshTimer = null;
+    }
+    
+    auth.config.onAuthenticationLost(null);
+    auth.config.onTokenRefreshed(null);
+}
+    destroy() {
+    this.cleanup();
+    super.destroy();
+}
 }
