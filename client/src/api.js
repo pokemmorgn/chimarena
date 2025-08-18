@@ -427,21 +427,42 @@ export const game = {
 // 💰 API CRYPTO - NOUVELLEMENT IMPLÉMENTÉE
 export const crypto = {
   // Connecter un wallet MetaMask
-  async connectWallet(walletData) {
-    if (!walletData || !walletData.address || !walletData.signature) {
-      throw new Error('Données wallet invalides');
+ async connectWallet(walletData) {
+    console.log('🔍 Validation wallet data:', walletData);
+    
+    // Validation détaillée
+    if (!walletData) {
+      throw new Error('Aucune donnée wallet fournie');
+    }
+    
+    if (!walletData.address) {
+      throw new Error('Adresse wallet manquante');
+    }
+    
+    if (!walletData.signature) {
+      throw new Error('Signature wallet manquante');
+    }
+    
+    if (!walletData.message) {
+      throw new Error('Message wallet manquant');
+    }
+    
+    if (!walletData.timestamp) {
+      throw new Error('Timestamp wallet manquant');
     }
 
-    // Validation côté client basique
-    if (!window.GameUtils?.isValidEthereumAddress(walletData.address)) {
-      throw new Error('Adresse Ethereum invalide');
+    // Validation format adresse
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletData.address)) {
+      throw new Error('Format d\'adresse Ethereum invalide');
     }
+
+    console.log('✅ Données wallet validées côté client');
 
     return apiClient.authenticatedRequest('/crypto/connect-wallet', {
       method: 'POST',
       body: JSON.stringify(walletData),
     });
-  },
+},
 
   // Déconnecter le wallet
   async disconnectWallet() {
