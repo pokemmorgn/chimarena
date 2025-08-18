@@ -1,248 +1,26 @@
-// server/src/utils/ethersHelper.ts - HELPER ETHEREUM SÉCURISÉ
+// server/src/utils/ethersSimple.ts - HELPER ETHEREUM SIMPLIFIÉ POUR JEU
 import { ethers } from 'ethers';
-import crypto from 'crypto';
-import { auditLogger } from './auditLogger';
 
-export interface SignatureValidationResult {
-  isValid: boolean;
-  address?: string;
-  error?: string;
-  timestamp?: number;
-  nonce?: string;
-}
-
-export interface WalletConnectionMessage {
-  userId: string;
-  timestamp: number;
-  nonce: string;
-  action: 'connect_wallet' | 'disconnect_wallet' | 'verify_ownership';
-  chainId?: number;
-}
-
-export interface WithdrawalMessage {
-  userId: string;
-  amount: string;
-  token: string;
-  recipient: string;
-  timestamp: number;
-  nonce: string;
-  action: 'withdrawal_request';
-}
-
-class EthersHelper {
-  private readonly SIGNATURE_VALIDITY_MS = 5 * 60 * 1000; // 5 minutes
-  private readonly SUPPORTED_CHAIN_IDS = [1, 137, 56]; // Ethereum, Polygon, BSC
+class SimpleEthersHelper {
   private usedNonces: Set<string> = new Set();
   
-  constructor() {
-    // Nettoyage périodique des nonces expirés
-    setInterval(() => this.cleanupExpiredNonces(), 10 * 60 * 1000); // 10 minutes
-  }
-
   /**
-   * Génère un message standardisé pour la signature
+   * Vérifie une signature MetaMask
    */
-  public generateConnectionMessage(userId: string, action: string = 'connect_wallet'): WalletConnectionMessage {
-    const timestamp = Date.now();
-    const nonce = this.generateSecureNonce();
-    
-    return {
-      userId,
-      timestamp,
-      nonce,
-      action: action as any,
-    };
-  }
-
-  /**
-   * Génère un message pour les retraits crypto
-   */
-  public generateWithdrawalMessage(
-    userId: string, 
-    amount: string, 
-    token: string, 
-    recipient: string
-  ): WithdrawalMessage {
-    const timestamp = Date.now();
-    const nonce = this.generateSecureNonce();
-    
-    return {
-      userId,
-      amount,
-      token,
-      recipient,
-      timestamp,
-      nonce,
-      action: 'withdrawal_request',
-    };
-  }
-
-  /**
-   * Convertit un message en string pour signature
-   */
-  public messageToString(message: WalletConnectionMessage | WithdrawalMessage): string {
-    if (message.action === 'withdrawal_request') {
-      const withdrawalMsg = message as WithdrawalMessage;
-      return `ChimArena Withdrawal Request\n\n` +
-             `User: ${withdrawalMsg.userId}\n` +
-             `Amount: ${withdrawalMsg.amount} ${withdrawalMsg.token}\n` +
-             `Recipient: ${withdrawalMsg.recipient}\n` +
-             `Timestamp: ${withdrawalMsg.timestamp}\n` +
-             `Nonce: ${withdrawalMsg.nonce}\n\n` +
-             `By signing this message, you authorize the withdrawal from your ChimArena account.`;
-    } else {
-      const connectionMsg = message as WalletConnectionMessage;
-      return `ChimArena Wallet Connection\n\n` +
-             `User: ${connectionMsg.userId}\n` +
-             `Action: ${connectionMsg.action}\n` +
-             `Timestamp: ${connectionMsg.timestamp}\n` +
-             `Nonce: ${connectionMsg.nonce}\n\n` +
-             `By signing this message, you prove ownership of this wallet address.`;
-    }
-  }
-
-   // À ajouter dans la classe EthersHelper dans ethersHelper.ts
-
-/**
- * Vérifie une signature (wrapper pour validateSignature)
- */
-public async verifySignature(address: string, message: string, signature: string): Promise<boolean> {
-  try {
-    const result = await this.validateSignature(message, signature, address);
-    return result.isValid;
-  } catch (error) {
-    console.error('❌ Erreur vérification signature:', error);
-    return false;
-  }
-}
-
-/**
- * Vérifie si un nonce est déjà utilisé
- */
-public async isNonceUsed(address: string, nonce: string): Promise<boolean> {
-  const nonceKey = `${address.toLowerCase()}-${nonce}`;
-  return this.usedNonces.has(nonceKey);
-}
-
-/**
- * Marque un nonce comme utilisé
- */
-public async markNonceAsUsed(address: string, nonce: string): Promise<void> {
-  const nonceKey = `${address.toLowerCase()}-${nonce}`;
-  this.usedNonces.add(nonceKey);
-}
-
-/**
- * Formate une adresse Ethereum
- */
-public formatAddress(address: string): string {
-  try {
-    return ethers.getAddress(address); // Retourne l'adresse avec checksum
-  } catch {
-    return address.toLowerCase();
-  }
-}
-
-/**
- * Détecte le type de message
- */
-public detectMessageType(message: string): string {
-  if (message.includes('Withdrawal Request')) {
-    return 'withdrawal';
-  } else if (message.includes('Wallet Connection')) {
-    return 'connection';
-  } else if (message.includes('verify_ownership')) {
-    return 'verification';
-  } else {
-    return 'unknown';
-  }
-}
-  
-  /**
-   * Valide une signature Ethereum
-   */
-  public async validateSignature(
-    message: string,
-    signature: string,
-    expectedAddress?: string
-  ): Promise<SignatureValidationResult> {
+  async verifySignature(address: string, message: string, signature: string): Promise<boolean> {
     try {
-      // 1. Vérifier le format de la signature
-      if (!signature || !signature.startsWith('0x') || signature.length !== 132) {
-        return {
-          isValid: false,
-          error: 'Format de signature invalide'
-        };
-      }
-
-      // 2. Parser le message pour extraire les données
-      const messageData = this.parseMessage(message);
-      if (!messageData) {
-        return {
-          isValid: false,
-          error: 'Message invalide ou malformé'
-        };
-      }
-
-      // 3. Vérifier la validité temporelle
-      const now = Date.now();
-      if (now - messageData.timestamp > this.SIGNATURE_VALIDITY_MS) {
-        return {
-          isValid: false,
-          error: 'Signature expirée'
-        };
-      }
-
-      // 4. Vérifier l'unicité du nonce
-      if (this.usedNonces.has(messageData.nonce)) {
-        return {
-          isValid: false,
-          error: 'Nonce déjà utilisé (protection anti-replay)'
-        };
-      }
-
-      // 5. Récupérer l'adresse à partir de la signature
       const recoveredAddress = ethers.verifyMessage(message, signature);
-      
-      // 6. Vérifier le format de l'adresse
-      if (!ethers.isAddress(recoveredAddress)) {
-        return {
-          isValid: false,
-          error: 'Adresse récupérée invalide'
-        };
-      }
-
-      // 7. Vérifier l'adresse attendue si fournie
-      if (expectedAddress && recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
-        return {
-          isValid: false,
-          error: 'Adresse ne correspond pas à celle attendue'
-        };
-      }
-
-      // 8. Marquer le nonce comme utilisé
-      this.usedNonces.add(messageData.nonce);
-
-      return {
-        isValid: true,
-        address: recoveredAddress.toLowerCase(),
-        timestamp: messageData.timestamp,
-        nonce: messageData.nonce
-      };
-
+      return recoveredAddress.toLowerCase() === address.toLowerCase();
     } catch (error) {
-      console.error('❌ Erreur validation signature:', error);
-      return {
-        isValid: false,
-        error: error instanceof Error ? error.message : 'Erreur de validation'
-      };
+      console.error('❌ Erreur vérification signature:', error);
+      return false;
     }
   }
 
   /**
    * Valide une adresse Ethereum
    */
-  public isValidAddress(address: string): boolean {
+  isValidAddress(address: string): boolean {
     try {
       return ethers.isAddress(address);
     } catch {
@@ -251,9 +29,17 @@ public detectMessageType(message: string): string {
   }
 
   /**
-   * Normalise une adresse Ethereum (checksum)
+   * Formate une adresse pour l'affichage
    */
-  public normalizeAddress(address: string): string {
+  formatAddress(address: string): string {
+    if (!address || address.length < 10) return address;
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+
+  /**
+   * Normalise une adresse (checksum)
+   */
+  normalizeAddress(address: string): string {
     try {
       return ethers.getAddress(address);
     } catch {
@@ -262,149 +48,98 @@ public detectMessageType(message: string): string {
   }
 
   /**
-   * Vérifie si un chainId est supporté
+   * Vérifie si un nonce est déjà utilisé (simple)
    */
-  public isSupportedChain(chainId: number): boolean {
-    return this.SUPPORTED_CHAIN_IDS.includes(chainId);
+  isNonceUsed(nonce: string): boolean {
+    return this.usedNonces.has(nonce);
   }
 
   /**
-   * Génère un nonce sécurisé
+   * Marque un nonce comme utilisé
    */
-  private generateSecureNonce(): string {
-    return crypto.randomBytes(32).toString('hex');
+  markNonceAsUsed(nonce: string): void {
+    this.usedNonces.add(nonce);
+    
+    // Nettoyage simple : garder max 1000 nonces
+    if (this.usedNonces.size > 1000) {
+      const nonceArray = Array.from(this.usedNonces);
+      this.usedNonces.clear();
+      // Garder les 500 derniers
+      nonceArray.slice(-500).forEach(n => this.usedNonces.add(n));
+    }
   }
 
   /**
-   * Parse un message pour extraire les données structurées
+   * Génère un message de connexion simple
    */
-  private parseMessage(message: string): { timestamp: number; nonce: string; userId: string } | null {
+  generateConnectionMessage(userId: string): string {
+    const timestamp = Date.now();
+    return `ChimArena - Connexion Wallet\n\n` +
+           `Utilisateur: ${userId}\n` +
+           `Timestamp: ${timestamp}\n\n` +
+           `En signant ce message, vous confirmez être le propriétaire de ce wallet.`;
+  }
+
+  /**
+   * Parse un message pour extraire le timestamp
+   */
+  parseMessageTimestamp(message: string): number | null {
     try {
       const timestampMatch = message.match(/Timestamp: (\d+)/);
-      const nonceMatch = message.match(/Nonce: ([a-f0-9]+)/);
-      const userMatch = message.match(/User: ([a-f0-9-]+)/);
-
-      if (!timestampMatch || !nonceMatch || !userMatch) {
-        return null;
-      }
-
-      return {
-        timestamp: parseInt(timestampMatch[1]),
-        nonce: nonceMatch[1],
-        userId: userMatch[1]
-      };
+      return timestampMatch ? parseInt(timestampMatch[1]) : null;
     } catch {
       return null;
     }
   }
 
   /**
-   * Nettoie les nonces expirés
+   * Vérifie si une signature n'est pas trop ancienne (5 minutes)
    */
-  private cleanupExpiredNonces(): void {
-    // Pour une implémentation simple, on peut vider périodiquement
-    // Dans un environnement de production, il faudrait un système plus sophistiqué
-    if (this.usedNonces.size > 10000) {
-      this.usedNonces.clear();
-      console.log('🧹 Nettoyage des nonces crypto effectué');
-    }
+  isSignatureFresh(message: string): boolean {
+    const timestamp = this.parseMessageTimestamp(message);
+    if (!timestamp) return false;
+    
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000; // 5 minutes
+    
+    return (now - timestamp) <= maxAge;
   }
 
   /**
-   * Audit d'une action crypto
+   * Validation complète pour connexion wallet
    */
-  public async auditCryptoAction(
-    action: string,
-    userId: string,
-    address: string,
-    success: boolean,
-    details: any,
-    ip: string,
-    userAgent?: string
-  ): Promise<void> {
-    await auditLogger.logEvent(
-      success ? 'CRYPTO_DEPOSIT' : 'SECURITY_SUSPICIOUS_ACTIVITY',
-      action,
-      {
-        userId,
-        ip,
-        userAgent,
-        success,
-        details: {
-          walletAddress: address,
-          ...details
-        },
-        severity: success ? 'MEDIUM' : 'HIGH',
-      }
-    );
-  }
-
-  /**
-   * Vérifie si une adresse est potentiellement suspecte
-   */
-  public async checkSuspiciousAddress(address: string): Promise<{
-    isSuspicious: boolean;
-    reasons: string[];
-  }> {
-    const reasons: string[] = [];
-    let isSuspicious = false;
-
-    // 1. Vérifier si c'est une adresse de contrat connue malveillante
-    const suspiciousPatterns = [
-      /^0x0+$/,           // Adresse nulle
-      /^0x1+$/,           // Pattern suspect
-      /^0xdead/i,         // Adresses "dead"
-      /^0x000000000/,     // Trop de zéros
-    ];
-
-    for (const pattern of suspiciousPatterns) {
-      if (pattern.test(address)) {
-        isSuspicious = true;
-        reasons.push(`Pattern d'adresse suspect: ${pattern.source}`);
-      }
+  async validateWalletConnection(
+    address: string, 
+    message: string, 
+    signature: string,
+    userId: string
+  ): Promise<{ isValid: boolean; error?: string }> {
+    
+    // 1. Vérifier l'adresse
+    if (!this.isValidAddress(address)) {
+      return { isValid: false, error: 'Adresse Ethereum invalide' };
     }
 
-    // 2. Vérifier la longueur et le format
-    if (address.length !== 42) {
-      isSuspicious = true;
-      reasons.push('Longueur d\'adresse invalide');
+    // 2. Vérifier que le message contient l'userId
+    if (!message.includes(userId)) {
+      return { isValid: false, error: 'Message ne correspond pas à l\'utilisateur' };
     }
 
-    // 3. TODO: Intégrer avec des API de réputation d'adresses
-    // comme Chainalysis, Elliptic, etc. en production
+    // 3. Vérifier la fraîcheur du message
+    if (!this.isSignatureFresh(message)) {
+      return { isValid: false, error: 'Signature expirée (max 5 minutes)' };
+    }
 
-    return { isSuspicious, reasons };
-  }
+    // 4. Vérifier la signature
+    const isValidSig = await this.verifySignature(address, message, signature);
+    if (!isValidSig) {
+      return { isValid: false, error: 'Signature invalide' };
+    }
 
-  /**
-   * Formate une adresse pour l'affichage
-   */
-  public formatAddressForDisplay(address: string): string {
-    if (!address || address.length < 10) return address;
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  }
-
- 
-  
-  /**
-   * Estime les frais de gas (pour information seulement)
-   */
-  public async estimateGasFees(chainId: number): Promise<{
-    slow: string;
-    standard: string;
-    fast: string;
-  }> {
-    // Valeurs par défaut - en production, utiliser des API comme EthGasStation
-    const defaultFees = {
-      1: { slow: '20', standard: '25', fast: '30' }, // Ethereum
-      137: { slow: '1', standard: '2', fast: '3' },   // Polygon
-      56: { slow: '5', standard: '7', fast: '10' },   // BSC
-    };
-
-    return defaultFees[chainId as keyof typeof defaultFees] || defaultFees[1];
+    return { isValid: true };
   }
 }
 
 // Export singleton
-export const ethersHelper = new EthersHelper();
+export const ethersHelper = new SimpleEthersHelper();
 export default ethersHelper;
