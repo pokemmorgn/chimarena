@@ -23,11 +23,15 @@ export default class AuthScene extends Phaser.Scene {
   create() {
     this.gameInstance = this.registry.get('gameInstance');
 
-if (auth.isAuthenticated()) {
-  console.log('✅ Utilisateur déjà authentifié');
-  this.scene.start('MenuScene');
-  return;
-}
+    // 🔐 VÉRIFICATION AUTHENTIFICATION AVEC NOUVEAU CLIENT
+    if (auth.isAuthenticated()) {
+        console.log('✅ Utilisateur déjà authentifié');
+        this.scene.start('MenuScene');
+        return;
+    }
+
+    // 🔄 TENTATIVE DE RÉCUPÉRATION VIA REFRESH TOKEN (AJOUTER CETTE LIGNE)
+    this.attemptAutoLogin();
 
     this.createBackground();
     this.createTitle();
@@ -35,38 +39,67 @@ if (auth.isAuthenticated()) {
     this.createButtons();
     this.createToggleLink();
     this.createFooter();
-
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
-  }
 
-  // Nouvelle méthode à ajouter
+    // 🔧 CONFIGURATION DES HOOKS SÉCURITÉ (AJOUTER CETTE LIGNE)
+    this.setupSecurityHooks();
+}
+
+// MÉTHODE RÉCUPÉRATION AUTO-LOGIN (CORRIGER L'ASYNC)
+async attemptAutoLogin() {
+    try {
+        console.log('🔄 Tentative de récupération de session...');
+        
+        // Essayer de refresh automatiquement
+        const token = await auth.refreshToken();
+        
+        if (token) {
+            console.log('✅ Session récupérée automatiquement');
+            
+            // Récupérer les données utilisateur
+            const userData = await auth.getMe();
+            if (userData.success && userData.user) {
+                this.gameInstance.setCurrentUser(userData.user);
+            }
+            
+            // Aller au menu
+            setTimeout(() => this.scene.start('MenuScene'), 100);
+            return;
+        }
+    } catch (error) {
+        console.log('❌ Impossible de récupérer la session:', error.message);
+        // Continuer vers l'écran de connexion normal
+    }
+}
+
+// MÉTHODE HOOKS SÉCURITÉ (INCHANGÉE)
 setupSecurityHooks() {
-  // Vérifier que auth et config sont disponibles
-  if (!auth || !auth.config) {
-    console.warn('⚠️ Client API non encore initialisé');
-    return;
-  }
-
-  // Hook pour déconnexion automatique
-  if (auth.config.onAuthenticationLost) {
-    auth.config.onAuthenticationLost((reason) => {
-      console.warn('🚨 Authentification perdue:', reason);
-      this.gameInstance?.clearAuthData();
-      window.NotificationManager.error(`Session expirée: ${reason}`);
-      
-      if (this.scene.key !== 'AuthScene') {
-        this.scene.start('AuthScene');
-      }
-    });
-  }
-
-  // Hook pour refresh automatique
-  if (auth.config.onTokenRefreshed) {
-    auth.config.onTokenRefreshed(() => {
-      console.log('🔄 Token rafraîchi automatiquement');
-    });
-  }
+    // Vérifier que auth et config sont disponibles
+    if (!auth || !auth.config) {
+        console.warn('⚠️ Client API non encore initialisé');
+        return;
+    }
+    
+    // Hook pour déconnexion automatique
+    if (auth.config.onAuthenticationLost) {
+        auth.config.onAuthenticationLost((reason) => {
+            console.warn('🚨 Authentification perdue:', reason);
+            this.gameInstance?.clearAuthData();
+            window.NotificationManager.error(`Session expirée: ${reason}`);
+            
+            if (this.scene.key !== 'AuthScene') {
+                this.scene.start('AuthScene');
+            }
+        });
+    }
+    
+    // Hook pour refresh automatique
+    if (auth.config.onTokenRefreshed) {
+        auth.config.onTokenRefreshed(() => {
+            console.log('🔄 Token rafraîchi automatiquement');
+        });
+    }
 }
   
   // ---------- UI base ----------
@@ -117,22 +150,30 @@ setupSecurityHooks() {
     const { width, height } = this.scale;
 
     this.titleLogo = this.add.text(width/2, 120, 'ChimArena', {
-      fontSize: '48px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold',
-      fill: '#ffffff', stroke: '#2c3e50', strokeThickness: 4
+        fontSize: '48px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold',
+        fill: '#ffffff', stroke: '#2c3e50', strokeThickness: 4
     }).setOrigin(0.5);
 
-    this.titleSubtext = this.add.text(width/2, 170, this.isLoginMode ? 'Connexion' : 'Inscription', {
-      fontSize: '24px', fontFamily: 'Roboto, sans-serif', fill: '#ecf0f1'
+    this.titleSubtext = this.add.text(width/2, 170, this.isLoginMode ? 'Connexion Sécurisée' : 'Inscription Sécurisée', {
+        fontSize: '24px', fontFamily: 'Roboto, sans-serif', fill: '#ecf0f1'
     }).setOrigin(0.5);
 
-    this.securityIndicator = this.add.text(width/2, 190, '🔐 Sécurité crypto-grade activée', {
-  fontSize: '12px', fontFamily: 'Roboto, sans-serif', fill: '#2ecc71'
-}).setOrigin(0.5);
-    
+    // 🔐 Indicateur de sécurité avec état
+    this.securityIndicator = this.add.text(width/2, 190, '🔄 Vérification de session...', {
+        fontSize: '12px', fontFamily: 'Roboto, sans-serif', fill: '#f39c12'
+    }).setOrigin(0.5);
+
+    // Mettre à jour après tentative de récupération
+    this.time.delayedCall(1000, () => {
+        if (this.securityIndicator) {
+            this.securityIndicator.setText('🔐 Sécurité crypto-grade activée');
+            this.securityIndicator.setFill('#2ecc71');
+        }
+    });
+
     const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
     this.add.text(width - 10, height - 10, version, { fontSize: '12px', fill: '#bdc3c7' }).setOrigin(1,1);
-  }
-
+}
   // ---------- Form ----------
 
   createForm() {
