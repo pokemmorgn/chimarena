@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { SignJWT, jwtVerify } from 'jose';
 import User from '../models/User';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
+import mongoose from 'mongoose';
 
 // 🔐 NOUVEAUX IMPORTS SÉCURITÉ
 import { securityManager } from '../config/security';
@@ -235,7 +236,7 @@ router.post('/login', async (req: Request, res: Response) => {
         'Tentative de connexion d\'un compte banni',
         {
           ...requestInfo,
-          userId: user._id.toString(),
+userId: (user._id as mongoose.Types.ObjectId).toString(),
           username: user.username,
           success: false,
           details: { 
