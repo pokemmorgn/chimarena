@@ -491,10 +491,17 @@ setupSecurityHooks() {
 
   update() {}
 
-  destroy() {
-  // Nettoyage des hooks lors de la destruction de la scène
-  auth.config.onAuthenticationLost(null);
-  auth.config.onTokenRefreshed(null);
-  super.destroy();
+destroy() {
+    // Nettoyage des hooks lors de la destruction de la scène (AVEC VÉRIFICATION)
+    if (auth && auth.config) {
+        if (auth.config.onAuthenticationLost) {
+            auth.config.onAuthenticationLost(null);
+        }
+        if (auth.config.onTokenRefreshed) {
+            auth.config.onTokenRefreshed(null);
+        }
+    }
+    super.destroy();
 }
+  
 }
