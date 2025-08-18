@@ -188,8 +188,7 @@ export const setupMiddlewares = (app: Application) => {
   const rateLimits = securityManager.getConfig().rateLimits;
   
   // Rate limiting intelligent basé sur l'endpoint
-  // Dans la fonction createLimiter, REMPLACER tout le bloc onLimitReached par :
-const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
+ const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
   rateLimit({
     windowMs,
     max,
@@ -201,31 +200,29 @@ const createLimiter = (windowMs: number, max: number, message: string, skipSucce
       const ua = req.headers['user-agent'] || '';
       return securityManager.hashSensitiveData(ip + ua);
     },
-    skip: (req) => {
-      return req.path === '/api/health';
-    },
+    skip: (req) => req.path === '/api/health',
     skipSuccessfulRequests: skipSuccessful,
-    // Logging manuel des dépassements
-    handler: (req: Request, res: Response) => {
-      auditLogger.logEvent(
-        'SECURITY_RATE_LIMIT',
-        'Rate limit dépassé',
-        {
-          ip: req.ip || 'unknown',
-          userAgent: req.headers['user-agent'],
-          success: false,
-          details: {
-            path: req.path,
-            method: req.method,
-            limit: max,
-            window: windowMs,
-          },
-          severity: 'MEDIUM',
-        }
-      );
-      res.status(429).json({ error: message, retryAfter: Math.ceil(windowMs / 1000) });
-    },
   });
+
+// AJOUTER après la déclaration createLimiter :
+const logRateLimit = (req: Request, max: number, windowMs: number) => {
+  auditLogger.logEvent(
+    'SECURITY_RATE_LIMIT',
+    'Rate limit dépassé',
+    {
+      ip: req.ip || 'unknown',
+      userAgent: req.headers['user-agent'],
+      success: false,
+      details: {
+        path: req.path,
+        method: req.method,
+        limit: max,
+        window: windowMs,
+      },
+      severity: 'MEDIUM',
+    }
+  );
+};
 
   // Auth routes : 5 tentatives / 15 min
   app.use('/api/auth/login', createLimiter(
