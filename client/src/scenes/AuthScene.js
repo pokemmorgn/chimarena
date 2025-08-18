@@ -35,7 +35,6 @@ if (auth.isAuthenticated()) {
     this.createButtons();
     this.createToggleLink();
     this.createFooter();
-    this.setupSecurityHooks();
 
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
@@ -43,21 +42,31 @@ if (auth.isAuthenticated()) {
 
   // Nouvelle méthode à ajouter
 setupSecurityHooks() {
+  // Vérifier que auth et config sont disponibles
+  if (!auth || !auth.config) {
+    console.warn('⚠️ Client API non encore initialisé');
+    return;
+  }
+
   // Hook pour déconnexion automatique
-  auth.config.onAuthenticationLost((reason) => {
-    console.warn('🚨 Authentification perdue:', reason);
-    this.gameInstance?.clearAuthData();
-    window.NotificationManager.error(`Session expirée: ${reason}`);
-    
-    if (this.scene.key !== 'AuthScene') {
-      this.scene.start('AuthScene');
-    }
-  });
+  if (auth.config.onAuthenticationLost) {
+    auth.config.onAuthenticationLost((reason) => {
+      console.warn('🚨 Authentification perdue:', reason);
+      this.gameInstance?.clearAuthData();
+      window.NotificationManager.error(`Session expirée: ${reason}`);
+      
+      if (this.scene.key !== 'AuthScene') {
+        this.scene.start('AuthScene');
+      }
+    });
+  }
 
   // Hook pour refresh automatique
-  auth.config.onTokenRefreshed(() => {
-    console.log('🔄 Token rafraîchi automatiquement');
-  });
+  if (auth.config.onTokenRefreshed) {
+    auth.config.onTokenRefreshed(() => {
+      console.log('🔄 Token rafraîchi automatiquement');
+    });
+  }
 }
   
   // ---------- UI base ----------
