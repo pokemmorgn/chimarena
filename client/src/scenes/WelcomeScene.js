@@ -476,18 +476,29 @@ export default class WelcomeScene extends Phaser.Scene {
             // Utiliser uniquement le helper (il gère: accounts, challenge, signature, POST /connect-wallet)
             const result = await this.metaMaskHelper.connectWallet();
             
-            if (result?.success) {
-                // Mettre à jour l'utilisateur local avec les infos renvoyées par le serveur
-this.updateWalletUI(result.walletInfo || null);
-this.gameInstance?.setCurrentUser(this.currentUser);
-this.registry.set('currentUser', this.currentUser);
+           if (result?.success) {
+  // Harmoniser le payload (accepte walletInfo OU wallet)
+  const w = result.walletInfo || result.wallet || result.data?.wallet;
+  if (!w || !(w.address)) throw new Error('Réponse serveur invalide (wallet manquant)');
 
+  // Normalisation
+  const wallet = {
+    address: (w.fullAddress || w.address).toLowerCase(),
+    connectedAt: w.connectedAt || new Date().toISOString(),
+    connectionCount: w.connectionCount ?? 1,
+  };
 
-                window.NotificationManager?.success('MetaMask connecté avec succès !');
-                console.log('✅ MetaMask connecté et validé côté serveur');
-            } else {
-                throw new Error(result?.message || 'Échec validation serveur');
-            }
+  // Mise à jour UI + état
+  this.updateWalletUI(wallet);
+  this.gameInstance?.setCurrentUser(this.currentUser);
+  this.registry.set('currentUser', this.currentUser);
+
+  window.NotificationManager?.success('MetaMask connecté avec succès !');
+  console.log('✅ MetaMask connecté et validé côté serveur');
+} else {
+  throw new Error(result?.message || 'Échec validation serveur');
+}
+
         } catch (error) {
             console.error('❌ Erreur connexion wallet:', error);
             window.NotificationManager?.error(error.message || 'Erreur connexion wallet');
