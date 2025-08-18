@@ -18,6 +18,7 @@ import { securityManager } from './config/security';
 import { auditLogger } from './utils/auditLogger';
 import { antiBotMiddleware, antiBotGamingMiddleware, antiBotCryptoMiddleware } from './middleware/antiBotMiddleware';
 import { combinedSecurityMiddleware } from './middleware/securityMiddleware';
+import { cryptoSecurityMiddleware } from './middleware/cryptoSecurityMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -107,7 +108,7 @@ auditLogger.logEvent(
 // 🔐 ROUTES AVEC PROTECTION ANTI-BOT
 app.use('/api/auth', antiBotMiddleware, authRoutes);
 app.use('/api/user', antiBotMiddleware, userRoutes);
-app.use('/api/crypto', antiBotCryptoMiddleware, cryptoRoutes);
+app.use('/api/crypto', cryptoSecurityMiddleware, antiBotCryptoMiddleware, cryptoRoutes);
 
 // Health check (accessible sans HTTPS pour monitoring)
 app.get('/health', (_req: Request, res: Response) => {
