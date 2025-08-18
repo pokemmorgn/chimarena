@@ -1,4 +1,4 @@
-// server/src/middleware/antiBotMiddleware.ts
+// server/src/middleware/antiBotMiddleware.ts - VERSION CORRIGÉE
 import { Request, Response, NextFunction } from 'express';
 import { securityManager } from '../config/security';
 import { auditLogger } from '../utils/auditLogger';
@@ -34,9 +34,14 @@ class AntiBotDetector {
   private config = securityManager.getAntiBotConfig();
 
   constructor() {
-    // IPs whitelistées (localhost pour dev, etc.)
+    // IPs whitelistées (localhost pour dev seulement)
     this.whitelistedIPs.add('127.0.0.1');
     this.whitelistedIPs.add('::1');
+    
+    // En développement seulement, ajouter l'IP de test
+    if (process.env.NODE_ENV === 'development') {
+      this.whitelistedIPs.add('5.51.41.59');
+    }
     
     // Nettoyage périodique des patterns anciens
     setInterval(() => this.cleanupOldPatterns(), 10 * 60 * 1000); // 10 minutes
@@ -78,38 +83,37 @@ class AntiBotDetector {
 
     if (!userAgent) {
       reasons.push('User-Agent manquant');
-      return { score: 80, reasons };
+      return { score: 40, reasons }; // Réduit de 80 à 40
     }
 
-    // Patterns suspects dans User-Agent
+    // Patterns vraiment suspects (pas les navigateurs normaux)
     const suspiciousPatterns = [
       /bot|crawler|spider|scraper/i,
       /python|curl|wget|http/i,
       /automation|selenium|puppeteer/i,
-      /^Mozilla\/5\.0$/,  // UA trop basique
       /HeadlessChrome/i,
     ];
 
     for (const pattern of suspiciousPatterns) {
       if (pattern.test(userAgent)) {
-        score += 30;
+        score += 40; // Augmenté car vraiment suspect
         reasons.push(`Pattern suspect dans User-Agent: ${pattern.source}`);
       }
     }
 
-    // UA trop ancien (> 5 ans)
+    // UA trop ancien mais plus tolérant (navigateurs mobiles anciens)
     const versionMatch = userAgent.match(/Chrome\/(\d+)/);
     if (versionMatch) {
       const version = parseInt(versionMatch[1]);
-      if (version < 80) { // Chrome < 80 (2020)
-        score += 20;
+      if (version < 60) { // Seulement vraiment ancien
+        score += 10; // Réduit
         reasons.push('Navigateur très ancien');
       }
     }
 
-    // UA trop long ou trop court
-    if (userAgent.length < 20 || userAgent.length > 500) {
-      score += 15;
+    // Taille plus tolérante
+    if (userAgent.length < 10 || userAgent.length > 1000) {
+      score += 10; // Réduit
       reasons.push('User-Agent anormal (taille)');
     }
 
@@ -120,33 +124,25 @@ class AntiBotDetector {
     const reasons: string[] = [];
     let score = 0;
 
-    // Headers suspects ou manquants
-    const expectedHeaders = ['accept', 'accept-language', 'accept-encoding'];
-    for (const header of expectedHeaders) {
+    // Headers vraiment manquants (plus tolérant)
+    const criticalHeaders = ['accept']; // Seulement accept vraiment critique
+    for (const header of criticalHeaders) {
       if (!req.headers[header]) {
-        score += 10;
-        reasons.push(`Header manquant: ${header}`);
+        score += 5; // Réduit de 10 à 5
+        reasons.push(`Header critique manquant: ${header}`);
       }
     }
 
-    // Ordre des headers suspect (bots ont souvent un ordre différent)
-    const headerKeys = Object.keys(req.headers);
-    if (headerKeys.length < 5) {
-      score += 15;
-      reasons.push('Trop peu de headers');
-    }
-
-    // Headers de bots connus
-    const botHeaders = [
-      'x-forwarded-for',
-      'x-real-ip',
+    // Headers vraiment suspects seulement
+    const dangerousHeaders = [
       'x-crawler',
       'x-bot',
+      'x-automated'
     ];
 
-    for (const header of botHeaders) {
+    for (const header of dangerousHeaders) {
       if (req.headers[header]) {
-        score += 25;
+        score += 50; // Vraiment suspect
         reasons.push(`Header de bot détecté: ${header}`);
       }
     }
@@ -183,10 +179,12 @@ class AntiBotDetector {
       pattern.actions = pattern.actions.slice(-50);
     }
 
-    // 1. Analyser la fréquence des actions
+    // 1. Analyser la fréquence des actions (plus tolérant pour crypto)
     const recentActions = pattern.actions.filter(time => now - time < 60000); // 1 minute
-    if (recentActions.length > this.config.maxActionsPerSecond * 60) {
-      score += 40;
+    const maxActionsPerMinute = req.path.includes('/crypto/') ? 20 : this.config.maxActionsPerSecond * 60;
+    
+    if (recentActions.length > maxActionsPerMinute) {
+      score += 30; // Réduit de 40 à 30
       reasons.push(`Trop d'actions par minute: ${recentActions.length}`);
     }
 
@@ -434,15 +432,15 @@ export const antiBotGamingMiddleware = (req: Request, res: Response, next: NextF
   next();
 };
 
-// Middleware spécifique pour les actions crypto (très strict)
+// Middleware spécifique pour les actions crypto (VERSION PRODUCTION - très permissif)
 export const antiBotCryptoMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const detection = antiBotDetector.detectBot(req);
   
-  // Pour la crypto, on bloque dès 40% de confiance
-  if (detection.confidence > 40) {
+  // Pour la crypto en production, on est très tolérant : bloquer seulement si EXTRÊMEMENT suspect (90%+)
+  if (detection.confidence > 90) {
     auditLogger.logEvent(
       'SECURITY_BOT_DETECTED',
-      'Tentative d\'accès crypto par bot suspect',
+      'Bot crypto extrêmement suspect',
       {
         ip: req.ip || 'unknown',
         userAgent: req.headers['user-agent'],
@@ -457,9 +455,31 @@ export const antiBotCryptoMiddleware = (req: Request, res: Response, next: NextF
     );
 
     return res.status(403).json({
-      error: 'Accès refusé - Vérification de sécurité requise',
-      code: 'SECURITY_CHECK_REQUIRED',
+      error: 'Activité automatisée détectée',
+      code: 'AUTOMATED_ACCESS_DETECTED',
+      message: 'Si vous êtes un utilisateur réel, veuillez réessayer dans quelques minutes'
     });
+  }
+
+  // Log les activités suspectes mais laisser passer (même pour 70-90%)
+  if (detection.confidence > 60) {
+    console.warn(`⚠️ Activité crypto moyennement suspecte autorisée: ${detection.confidence}% - ${req.ip}`);
+    auditLogger.logEvent(
+      'SECURITY_SUSPICIOUS_ACTIVITY',
+      'Activité crypto suspecte mais autorisée (production)',
+      {
+        ip: req.ip || 'unknown',
+        userAgent: req.headers['user-agent'],
+        success: true, // Autorisé
+        details: {
+          confidence: detection.confidence,
+          reason: detection.reason,
+          endpoint: req.path,
+          note: 'Tolérant pour utilisateurs légitimes'
+        },
+        severity: 'LOW',
+      }
+    );
   }
 
   (req as any).botDetection = detection;
