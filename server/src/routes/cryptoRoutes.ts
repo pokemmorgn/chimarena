@@ -191,7 +191,7 @@ router.post('/connect-wallet',
             success: false,
             details: { 
               address, 
-              existingUserId: existingUser._id.toString(),
+existingUserId: (existingUser._id as any).toString(),
               existingUsername: existingUser.username 
             },
             severity: 'CRITICAL',
