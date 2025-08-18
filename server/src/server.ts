@@ -13,12 +13,6 @@ import userRoutes from './routes/userRoutes';
 import cryptoRoutes from './routes/cryptoRoutes';
 import { setupMiddlewares } from './config/middlewares';
 
-// 🔐 IMPORTS SÉCURITÉ
-import { securityManager } from './config/security';
-import { auditLogger } from './utils/auditLogger';
-import { antiBotMiddleware, antiBotGamingMiddleware, antiBotCryptoMiddleware } from './middleware/antiBotMiddleware';
-import { combinedSecurityMiddleware } from './middleware/securityMiddleware';
-import { cryptoSecurityMiddleware } from './middleware/cryptoSecurityMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
