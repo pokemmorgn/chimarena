@@ -1,30 +1,93 @@
-// server/src/server.ts
+// server/src/server.ts - Version Production avec HTTPS
 import express, { Request, Response, NextFunction } from 'express';
+import https from 'https';
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
 import { connectDatabase } from './config/database';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
+import cryptoRoutes from './routes/cryptoRoutes';
 import { setupMiddlewares } from './config/middlewares';
 
-// 🔐 NOUVEAUX IMPORTS SÉCURITÉ
+// 🔐 IMPORTS SÉCURITÉ
 import { securityManager } from './config/security';
 import { auditLogger } from './utils/auditLogger';
 import { antiBotMiddleware, antiBotGamingMiddleware, antiBotCryptoMiddleware } from './middleware/antiBotMiddleware';
 import { combinedSecurityMiddleware } from './middleware/securityMiddleware';
-import cryptoRoutes from './routes/cryptoRoutes'; // AJOUTER CETTE LIGNE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// 🔐 Configuration CORS adaptative
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    const allowedOrigins = [
+      'https://chimarena.cloud',
+      'https://www.chimarena.cloud',
+      'https://app.chimarena.cloud',
+      ...(NODE_ENV === 'development' ? [
+        'http://localhost:8080', 
+        'http://localhost:3000',
+        'http://127.0.0.1:8080',
+        'http://127.0.0.1:3000'
+      ] : [])
+    ];
+    
+    // Permettre les requêtes sans origin (Postman, apps mobiles)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('🚫 CORS blocked:', origin);
+      callback(new Error('Not allowed by CORS'), false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
+  optionsSuccessStatus: 200
+};
 
 // 🚀 INITIALISATION SÉCURITÉ
 console.log('🔐 Initialisation du système de sécurité...');
-
-// Vérification de la configuration sécurité (auto-validé dans securityManager)
 console.log('✅ Configuration sécurité validée');
 
-// Log du démarrage du serveur
+// Configuration middlewares avec CORS adaptatif
+app.use(require('cors')(corsOptions));
+setupMiddlewares(app);
+
+// 🛡️ MIDDLEWARES DE SÉCURITÉ GLOBAUX
+app.use(combinedSecurityMiddleware);
+
+// Middleware de redirection HTTPS en production
+function forceHTTPS(req: Request, res: Response, next: NextFunction) {
+  if (!req.secure && 
+      req.get('x-forwarded-proto') !== 'https' && 
+      NODE_ENV === 'production' &&
+      !req.path.startsWith('/health')) {
+    const httpsUrl = `https://${req.get('host')}${req.url}`;
+    console.log(`🔒 Redirection HTTPS: ${req.url} -> ${httpsUrl}`);
+    return res.redirect(301, httpsUrl);
+  }
+  next();
+}
+
+if (NODE_ENV === 'production') {
+  app.use(forceHTTPS);
+}
+
+// Connexion base de données
+connectDatabase();
+app.set('trust proxy', 1);
+
+// Log du démarrage
 auditLogger.logEvent(
   'SYSTEM_STARTUP',
   'Démarrage du serveur ChimArena',
@@ -33,64 +96,77 @@ auditLogger.logEvent(
     success: true,
     details: {
       port: PORT,
-      nodeEnv: process.env.NODE_ENV || 'development',
+      httpsPort: HTTPS_PORT,
+      nodeEnv: NODE_ENV,
       timestamp: new Date().toISOString(),
     },
     severity: 'MEDIUM',
   }
 );
 
-// Configuration middlewares de base
-setupMiddlewares(app);
-
-// 🛡️ MIDDLEWARES DE SÉCURITÉ GLOBAUX
-app.use(combinedSecurityMiddleware);
-
-// Connexion base de données
-connectDatabase();
-app.set('trust proxy', 1);
-
-// 🔐 ROUTES AVEC PROTECTION ANTI-BOT ADAPTÉE
-
-// Routes d'authentification (protection standard)
+// 🔐 ROUTES AVEC PROTECTION ANTI-BOT
 app.use('/api/auth', antiBotMiddleware, authRoutes);
-
-// Routes utilisateur standard (protection standard)  
 app.use('/api/user', antiBotMiddleware, userRoutes);
-
-// 🎮 ROUTES GAMING (protection gaming-friendly) - À implémenter
-// app.use('/api/game', antiBotGamingMiddleware, gameRoutes);
-// app.use('/api/match', antiBotGamingMiddleware, matchRoutes);
-// app.use('/api/deck', antiBotGamingMiddleware, deckRoutes);
-
-// 💰 ROUTES CRYPTO (protection ultra-stricte) - ACTIVÉ
 app.use('/api/crypto', antiBotCryptoMiddleware, cryptoRoutes);
 
-// app.use('/api/wallet', antiBotCryptoMiddleware, walletRoutes);
-// app.use('/api/withdrawal', antiBotCryptoMiddleware, withdrawalRoutes);
+// Health check (accessible sans HTTPS pour monitoring)
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(), 
+    service: 'ChimArena API', 
+    version: '1.0.0',
+    environment: NODE_ENV,
+    security: 'CRYPTO_GRADE_ENABLED',
+    https: NODE_ENV === 'production'
+  });
+});
 
-// 👑 ROUTES ADMIN (protection renforcée) - À implémenter
-// app.use('/api/admin', antiBotMiddleware, adminRoutes);
-
-// Health check (sans protection pour monitoring)
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(), 
     service: 'ChimArena API', 
-    version: '0.1.0',
+    version: '1.0.0',
+    environment: NODE_ENV,
     security: 'CRYPTO_GRADE_ENABLED' 
   });
 });
 
-// Route de test sécurité (development seulement)
-if (process.env.NODE_ENV === 'development') {
+// Servir les fichiers statiques en production
+if (NODE_ENV === 'production') {
+  const clientPath = path.join(__dirname, '../../client/dist');
+  
+  // Vérifier que le dossier client existe
+  if (fs.existsSync(clientPath)) {
+    console.log('📁 Serving static files from:', clientPath);
+    app.use(express.static(clientPath, {
+      maxAge: '1y',
+      etag: true,
+      lastModified: true
+    }));
+    
+    // Fallback pour SPA (Single Page Application)
+    app.get('*', (req: Request, res: Response) => {
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(clientPath, 'index.html'));
+      }
+    });
+  } else {
+    console.warn('⚠️ Client build directory not found:', clientPath);
+  }
+}
+
+// Test sécurité (development seulement)
+if (NODE_ENV === 'development') {
   app.get('/api/security-test', (req: Request, res: Response) => {
     const botDetection = (req as any).botDetection;
     res.json({
       message: 'Test sécurité OK',
       ip: req.ip,
       botDetection: botDetection || 'Non analysé',
+      environment: NODE_ENV,
+      corsOrigin: req.get('origin'),
       securityConfig: {
         antiBotEnabled: true,
         auditEnabled: securityManager.getAuditConfig().enableFullLogging,
@@ -102,7 +178,6 @@ if (process.env.NODE_ENV === 'development') {
 
 // 404 pour routes non trouvées
 app.use('*', (req: Request, res: Response) => {
-  // Log des tentatives d'accès aux routes inexistantes
   auditLogger.logEvent(
     'SECURITY_SUSPICIOUS_ACTIVITY',
     'Tentative d\'accès à une route inexistante',
@@ -125,11 +200,10 @@ app.use('*', (req: Request, res: Response) => {
   });
 });
 
-// 🚨 GESTIONNAIRE D'ERREURS AVEC AUDIT
+// 🚨 GESTIONNAIRE D'ERREURS
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   console.error('❌ Erreur serveur:', err);
 
-  // Log de l'erreur dans l'audit
   auditLogger.logEvent(
     'SYSTEM_ERROR',
     'Erreur serveur non gérée',
@@ -139,7 +213,7 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       success: false,
       error: err.message,
       details: {
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+        stack: NODE_ENV === 'development' ? err.stack : undefined,
         path: req.path,
         method: req.method,
         body: req.body ? Object.keys(req.body) : [],
@@ -148,28 +222,82 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     }
   );
 
-  const isDev = process.env.NODE_ENV === 'development';
   res.status(err.status || 500).json({ 
-    error: isDev ? err.message : 'Erreur interne du serveur',
-    ...(isDev && { stack: err.stack }),
+    error: NODE_ENV === 'development' ? err.message : 'Erreur interne du serveur',
+    ...(NODE_ENV === 'development' && { stack: err.stack }),
     code: err.code || 'INTERNAL_ERROR',
   });
 });
 
-// 🚀 DÉMARRAGE SERVEUR
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Serveur ChimArena démarré sur le port ${PORT}`);
-  console.log(`🔐 Sécurité crypto-grade: ✅ ACTIVÉE`);
-  console.log(`📊 Audit trail: ✅ ${securityManager.getAuditConfig().enableFullLogging ? 'COMPLET' : 'PARTIEL'}`);
-  console.log(`🤖 Protection anti-bot: ✅ MULTI-NIVEAUX`);
-  console.log(`🛡️ Validation XSS/Injection: ✅ ACTIVE`);
+// 🔐 Configuration SSL pour production
+function createHTTPSServer() {
+  if (NODE_ENV !== 'production') return null;
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🧪 Test sécurité: http://localhost:${PORT}/api/security-test`);
-  }
-});
+  try {
+    const sslPath = '/etc/letsencrypt/live/chimarena.cloud';
+    
+    if (!fs.existsSync(sslPath)) {
+      console.warn('⚠️ Certificats SSL non trouvés, HTTPS désactivé');
+      return null;
+    }
+    
+    const credentials = {
+      key: fs.readFileSync(path.join(sslPath, 'privkey.pem'), 'utf8'),
+      cert: fs.readFileSync(path.join(sslPath, 'cert.pem'), 'utf8'),
+      ca: fs.readFileSync(path.join(sslPath, 'chain.pem'), 'utf8')
+    };
 
-// 🛑 ARRÊT PROPRE DU SERVEUR
+    console.log('🔐 Certificats SSL chargés avec succès');
+    return https.createServer(credentials, app);
+    
+  } catch (error) {
+    console.error('❌ Erreur chargement certificats SSL:', error);
+    return null;
+  }
+}
+
+// 🚀 DÉMARRAGE DES SERVEURS
+async function startServers() {
+  try {
+    if (NODE_ENV === 'production') {
+      // Serveur HTTPS
+      const httpsServer = createHTTPSServer();
+      
+      if (httpsServer) {
+        httpsServer.listen(HTTPS_PORT, () => {
+          console.log(`🔐 Serveur HTTPS démarré sur le port ${HTTPS_PORT}`);
+          console.log(`🌐 URL: https://chimarena.cloud`);
+        });
+      }
+      
+      // Serveur HTTP pour redirection
+      const httpServer = http.createServer(app);
+      httpServer.listen(80, () => {
+        console.log('🔄 Serveur HTTP (redirection) sur le port 80');
+      });
+      
+    } else {
+      // Serveur HTTP pour développement
+      const server = http.createServer(app);
+      server.listen(PORT, () => {
+        console.log(`🚀 Serveur développement démarré`);
+        console.log(`🌐 URL: http://localhost:${PORT}`);
+        console.log(`🧪 Test: http://localhost:${PORT}/api/security-test`);
+      });
+    }
+    
+    console.log(`🔐 Sécurité crypto-grade: ✅ ACTIVÉE`);
+    console.log(`📊 Audit trail: ✅ ${securityManager.getAuditConfig().enableFullLogging ? 'COMPLET' : 'PARTIEL'}`);
+    console.log(`🤖 Protection anti-bot: ✅ MULTI-NIVEAUX`);
+    console.log(`🛡️ Validation XSS/Injection: ✅ ACTIVE`);
+    
+  } catch (error) {
+    console.error('❌ Erreur démarrage serveur:', error);
+    process.exit(1);
+  }
+}
+
+// 🛑 ARRÊT PROPRE
 const gracefulShutdown = () => {
   console.log('\n🛑 Arrêt du serveur en cours...');
   
@@ -187,25 +315,15 @@ const gracefulShutdown = () => {
     }
   );
 
-  server.close(() => {
-    console.log('✅ Serveur arrêté proprement');
-    process.exit(0);
-  });
-
-  // Force l'arrêt après 10 secondes
-  setTimeout(() => {
-    console.error('❌ Arrêt forcé du serveur');
-    process.exit(1);
-  }, 10000);
+  process.exit(0);
 };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Gestion des exceptions non capturées
+// Gestion des exceptions
 process.on('uncaughtException', (err) => {
   console.error('❌ Exception non capturée:', err);
-  
   auditLogger.logEvent(
     'SYSTEM_ERROR',
     'Exception non capturée',
@@ -213,20 +331,15 @@ process.on('uncaughtException', (err) => {
       ip: 'localhost',
       success: false,
       error: err.message,
-      details: {
-        stack: err.stack,
-        name: err.name,
-      },
+      details: { stack: err.stack, name: err.name },
       severity: 'CRITICAL',
     }
   );
-
   gracefulShutdown();
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('❌ Promesse rejetée non gérée:', reason);
-  
   auditLogger.logEvent(
     'SYSTEM_ERROR',
     'Promesse rejetée non gérée',
@@ -234,12 +347,12 @@ process.on('unhandledRejection', (reason, promise) => {
       ip: 'localhost',
       success: false,
       error: String(reason),
-      details: {
-        promise: String(promise),
-      },
       severity: 'CRITICAL',
     }
   );
 });
+
+// Démarrer les serveurs
+startServers();
 
 export default app;
