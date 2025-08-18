@@ -44,118 +44,56 @@ class MetaMaskHelper {
         }
     }
 
-    // 🔌 CONNEXION METAMASK
-    async connectWallet() {
-        if (!this.isMetaMaskAvailable) {
-            throw new Error('MetaMask n\'est pas installé. Veuillez l\'installer depuis https://metamask.io');
-        }
+   // 🔌 CONNEXION METAMASK (simplifiée : pas de signature ici)
+async connectWallet() {
+  if (!this.isMetaMaskAvailable) {
+    throw new Error('MetaMask n\'est pas installé. Veuillez l\'installer depuis https://metamask.io');
+  }
 
-        try {
-            console.log('🔌 Tentative de connexion MetaMask...');
-            
-            // Demander l'autorisation de connexion
-            const accounts = await window.ethereum.request({
-                method: 'eth_requestAccounts'
-            });
+  try {
+    console.log('🔌 Tentative de connexion MetaMask...');
 
-            if (accounts.length === 0) {
-                throw new Error('Aucun compte MetaMask sélectionné');
-            }
-
-            const account = accounts[0];
-            console.log('✅ Compte MetaMask connecté:', account);
-
-            // Récupérer les informations du réseau
-            const chainId = await window.ethereum.request({
-                method: 'eth_chainId'
-            });
-
-            this.currentAccount = account;
-            this.currentNetwork = chainId;
-            this.isConnected = true;
-
-          // Générer et signer un message de vérification
-const verificationData = await this.generateVerificationSignature(account);
-
-// Renommer les champs pour correspondre à l'API
-const walletData = {
-    address: verificationData.account,
-    signature: verificationData.signature,
-    message: verificationData.message,
-    timestamp: verificationData.timestamp,
-    nonce: verificationData.nonce
-};
-
-console.log('📤 Envoi des données wallet:', walletData);
-
-// Envoyer au serveur pour validation
-const result = await crypto.connectWallet(walletData);
-
-            if (result.success) {
-                console.log('✅ Wallet connecté et vérifié côté serveur');
-                return {
-                    success: true,
-                    account: account,
-                    network: this.getNetworkInfo(chainId),
-                    walletInfo: result.walletInfo
-                };
-            } else {
-                throw new Error(result.message || 'Échec de la vérification côté serveur');
-            }
-
-        } catch (error) {
-            console.error('❌ Erreur connexion MetaMask:', error);
-            this.isConnected = false;
-            this.currentAccount = null;
-            
-            // Messages d'erreur utilisateur-friendly
-            if (error.code === 4001) {
-                throw new Error('Connexion annulée par l\'utilisateur');
-            } else if (error.code === -32002) {
-                throw new Error('Requête de connexion déjà en cours. Vérifiez MetaMask.');
-            } else {
-                throw error;
-            }
-        }
+    // Demander l'autorisation de connexion
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || accounts.length === 0) {
+      throw new Error('Aucun compte MetaMask sélectionné');
     }
 
-    // ✍️ GÉNÉRATION SIGNATURE DE VÉRIFICATION
-    async generateVerificationSignature(account) {
-        try {
-            // Générer un nonce unique côté client
-            const nonce = this.generateNonce();
-            const timestamp = Date.now();
-            
-            // Message de vérification standardisé
-            const message = this.createVerificationMessage(account, nonce, timestamp);
-            
-            console.log('✍️ Demande de signature pour vérification...');
-            
-            // Demander la signature à MetaMask
-            const signature = await window.ethereum.request({
-                method: 'personal_sign',
-                params: [message, account]
-            });
+    const account = accounts[0];
+    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
 
-            return {
-                account: account,
-                message: message,
-                signature: signature,
-                nonce: nonce,
-                timestamp: timestamp,
-                chainId: this.currentNetwork
-            };
+    this.currentAccount = account;
+    this.currentNetwork = chainId;
+    this.isConnected = true;
 
-        } catch (error) {
-            console.error('❌ Erreur génération signature:', error);
-            
-            if (error.code === 4001) {
-                throw new Error('Signature annulée par l\'utilisateur');
-            } else {
-                throw new Error('Erreur lors de la signature: ' + error.message);
-            }
-        }
+    // 👉 Laisser l’API faire challenge + signature
+    const result = await crypto.connectWallet(); // SANS arguments
+
+    if (result?.success) {
+      console.log('✅ Wallet connecté et vérifié côté serveur');
+      return {
+        success: true,
+        account,
+        network: this.getNetworkInfo(chainId),
+        walletInfo: result.walletInfo
+      };
     }
+    throw new Error(result?.message || 'Échec de la vérification côté serveur');
+
+  } catch (error) {
+    console.error('❌ Erreur connexion MetaMask:', error);
+    this.isConnected = false;
+    this.currentAccount = null;
+
+    if (error.code === 4001) {
+      throw new Error('Connexion annulée par l\'utilisateur');
+    } else if (error.code === -32002) {
+      throw new Error('Requête de connexion déjà en cours. Vérifiez MetaMask.');
+    } else {
+      throw error;
+    }
+  }
+}
 
     // 📝 CRÉATION MESSAGE DE VÉRIFICATION
     createVerificationMessage(account, nonce, timestamp) {
