@@ -548,15 +548,16 @@ startAutoRefresh() {
 }
 
     update() {
-    // Vérification périodique de l'état d'authentification
-    if (this.scene.isActive() && !auth.isAuthenticated()) {
+    // Vérification périodique de l'état d'authentification (AVEC VÉRIFICATION)
+    if (this.scene.isActive() && auth && !auth.isAuthenticated()) {
         console.warn('⚠️ Perte d\'authentification détectée dans MenuScene');
         this.cleanup();
         this.scene.start('AuthScene');
+        return; // SORTIR APRÈS CLEANUP
     }
 
-    // Mise à jour de l'indicateur de sécurité
-    if (this.securityIndicator) {
+    // Mise à jour de l'indicateur de sécurité (AVEC VÉRIFICATION)
+    if (this.securityIndicator && auth && auth.getTokenInfo) {
         const tokenInfo = auth.getTokenInfo();
         if (tokenInfo) {
             const timeLeft = Math.max(0, Math.floor((tokenInfo.exp * 1000 - Date.now()) / 1000 / 60));
@@ -575,15 +576,24 @@ startAutoRefresh() {
     }
 }
     
-    cleanup() {
+   cleanup() {
+    // Nettoyer les timers
     if (this.refreshTimer) {
         this.refreshTimer.destroy();
         this.refreshTimer = null;
     }
     
-    auth.config.onAuthenticationLost(null);
-    auth.config.onTokenRefreshed(null);
+    // Nettoyer les hooks de sécurité (AVEC VÉRIFICATION)
+    if (auth && auth.config) {
+        if (auth.config.onAuthenticationLost) {
+            auth.config.onAuthenticationLost(null);
+        }
+        if (auth.config.onTokenRefreshed) {
+            auth.config.onTokenRefreshed(null);
+        }
+    }
 }
+    
     destroy() {
     this.cleanup();
     super.destroy();
