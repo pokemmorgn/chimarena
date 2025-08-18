@@ -30,8 +30,11 @@ export default class AuthScene extends Phaser.Scene {
         return;
     }
 
-    // 🔄 TENTATIVE DE RÉCUPÉRATION VIA REFRESH TOKEN (AJOUTER CETTE LIGNE)
-    this.attemptAutoLogin();
+    // 🔄 TENTATIVE DE RÉCUPÉRATION VIA REFRESH TOKEN (AWAIT POUR ASYNC)
+    this.attemptAutoLogin().catch(() => {
+        // Si erreur, continuer normalement vers l'écran de connexion
+        console.log('📋 Affichage écran de connexion');
+    });
 
     this.createBackground();
     this.createTitle();
@@ -41,8 +44,6 @@ export default class AuthScene extends Phaser.Scene {
     this.createFooter();
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
-
-    // 🔧 CONFIGURATION DES HOOKS SÉCURITÉ (AJOUTER CETTE LIGNE)
     this.setupSecurityHooks();
 }
 
@@ -54,7 +55,7 @@ async attemptAutoLogin() {
         // Essayer de refresh automatiquement
         const token = await auth.refreshToken();
         
-        if (token) {
+        if (token && this.scene.isActive()) { // AJOUTER VÉRIFICATION SCÈNE ACTIVE
             console.log('✅ Session récupérée automatiquement');
             
             // Récupérer les données utilisateur
@@ -68,11 +69,15 @@ async attemptAutoLogin() {
             return;
         }
     } catch (error) {
-        console.log('❌ Impossible de récupérer la session:', error.message);
-        // Continuer vers l'écran de connexion normal
+        // 403 = pas de cookie refresh ou expiré (NORMAL au F5)
+        if (error.message.includes('403') || error.message.includes('Forbidden')) {
+            console.log('📋 Pas de session sauvegardée - connexion requise');
+        } else {
+            console.log('❌ Erreur de récupération de session:', error.message);
+        }
+        // Continuer vers l'écran de connexion normal (pas d'erreur affichée)
     }
 }
-
 // MÉTHODE HOOKS SÉCURITÉ (INCHANGÉE)
 setupSecurityHooks() {
     // Vérifier que auth et config sont disponibles
