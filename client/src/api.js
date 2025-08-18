@@ -426,43 +426,34 @@ export const game = {
 
 // 💰 API CRYPTO - NOUVELLEMENT IMPLÉMENTÉE
 export const crypto = {
-  // Connecter un wallet MetaMask
- async connectWallet(walletData) {
-    console.log('🔍 Validation wallet data:', walletData);
-    
-    // Validation détaillée
-    if (!walletData) {
-      throw new Error('Aucune donnée wallet fournie');
+  // Connecter un wallet MetaMask (flow complet via challenge)
+  async connectWallet() {
+    // 1) Récupérer le challenge depuis le serveur
+    const challenge = await apiClient.authenticatedRequest('/crypto/challenge');
+    if (!challenge?.success || !challenge?.message) {
+      throw new Error('Impossible de récupérer le challenge de signature');
     }
-    
-    if (!walletData.address) {
-      throw new Error('Adresse wallet manquante');
-    }
-    
-    if (!walletData.signature) {
-      throw new Error('Signature wallet manquante');
-    }
-    
-    if (!walletData.message) {
-      throw new Error('Message wallet manquant');
-    }
-    
-    if (!walletData.timestamp) {
-      throw new Error('Timestamp wallet manquant');
+    const { message } = challenge;
+
+    // 2) Récupérer l’adresse active de MetaMask
+    if (!window.ethereum) throw new Error('MetaMask non détecté');
+    const [address] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      throw new Error('Adresse Ethereum invalide');
     }
 
-    // Validation format adresse
-    if (!/^0x[a-fA-F0-9]{40}$/.test(walletData.address)) {
-      throw new Error('Format d\'adresse Ethereum invalide');
-    }
+    // 3) Signer exactement le message renvoyé (ne pas le modifier)
+    const signature = await window.ethereum.request({
+      method: 'personal_sign',
+      params: [message, address],
+    });
 
-    console.log('✅ Données wallet validées côté client');
-
+    // 4) Envoyer au backend (le timestamp est déjà inclus dans le message)
     return apiClient.authenticatedRequest('/crypto/connect-wallet', {
       method: 'POST',
-      body: JSON.stringify(walletData),
+      body: JSON.stringify({ address, message, signature }),
     });
-},
+  },
 
   // Déconnecter le wallet
   async disconnectWallet() {
