@@ -251,7 +251,7 @@ export const verifyWalletOwnership = async (req: CryptoRequest, res: Response, n
 
     // Vérifier que l'adresse appartient à l'utilisateur
     const userWalletAddress = user.cryptoWallet?.address;
-    if (userWalletAddress && userWalletAddress.toLowerCase() !== req.cryptoValidation.address.toLowerCase()) {
+if (userWalletAddress && (userWalletAddress as string).toLowerCase() !== req.cryptoValidation.address.toLowerCase()) {
       await auditLogger.logEvent(
         'SECURITY_SUSPICIOUS_ACTIVITY',
         'Tentative d\'utilisation d\'adresse wallet non autorisée',
