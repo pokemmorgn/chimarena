@@ -1,7 +1,7 @@
-// server/src/routes/cryptoSimple.ts - ROUTES CRYPTO SIMPLIFIÉES POUR JEU
+// server/src/routes/cryptoRoutes.ts - VERSION ALLÉGÉE POUR JEU
 import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { ethersHelper } from '../utils/ethersSimple';
+import { ethersHelper } from '../utils/ethersHelper';
 import User from '../models/User';
 import rateLimit from 'express-rate-limit';
 
