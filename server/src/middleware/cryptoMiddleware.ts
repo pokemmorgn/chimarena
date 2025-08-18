@@ -523,3 +523,7 @@ export default {
   logCryptoActivity,
   secureCryptoAction,
 };
+
+// Ajouter ces exports nommés à la fin du fichier
+export const cryptoValidationMiddleware = validateCryptoSignature();
+export const cryptoSignatureMiddleware = verifyWalletOwnership;
