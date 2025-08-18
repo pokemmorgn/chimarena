@@ -1,5 +1,5 @@
-// server/src/config/middlewares.ts
-import type { Application, Request } from 'express';
+// server/src/config/middlewares.ts - VERSION ALLÉGÉE POUR JEU
+import type { Application } from 'express';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -8,313 +8,76 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 
-// 🔐 IMPORTS SÉCURITÉ
-import { securityManager } from './security';
-import { auditLogger } from '../utils/auditLogger';
-
 export const setupMiddlewares = (app: Application) => {
-  // Derrière Nginx/HTTPS
+  // Trust proxy
   app.set('trust proxy', 1);
 
-  // 🛡️ SÉCURITÉ RENFORCÉE AVEC HELMET
+  // Sécurité basique avec Helmet
   app.use(helmet({
-    // Content Security Policy stricte pour éviter XSS
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'wss:', 'ws:'],
-        mediaSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],
-        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
-      },
-    },
-    // Headers de sécurité additionnels
-    crossOriginEmbedderPolicy: false, // Peut casser le gaming
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-    dnsPrefetchControl: true,
-    frameguard: { action: 'deny' },
-    hidePoweredBy: true,
-    hsts: {
-      maxAge: 31536000, // 1 an
-      includeSubDomains: true,
-      preload: true
-    },
-    ieNoOpen: true,
-    noSniff: true,
-    originAgentCluster: true,
-    permittedCrossDomainPolicies: false,
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    xssFilter: true,
+    contentSecurityPolicy: false, // Plus simple pour le jeu
+    crossOriginEmbedderPolicy: false,
   }));
 
-  // Headers de sécurité custom additionnels
-  app.use((req, res, next) => {
-    // Anti-fingerprinting
-    res.removeHeader('X-Powered-By');
-    res.removeHeader('Server');
-    
-    // Headers de sécurité crypto-grade
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Feature-Policy', "geolocation 'none'; microphone 'none'; camera 'none'");
-    res.setHeader('Permissions-Policy', "geolocation=(), microphone=(), camera=()");
-    
-    // Anti-cache pour les données sensibles
-    if (req.path.includes('/api/user') || req.path.includes('/api/auth') || req.path.includes('/api/crypto')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
-    }
-    
-    next();
-  });
-
-  // 📊 LOGS AVEC AUDIT INTÉGRÉ
-  if (process.env.NODE_ENV === 'production') {
-    app.use(morgan('combined', {
-      stream: {
-        write: (message) => {
-          // Log les accès dans l'audit pour les routes sensibles
-          const logData = message.trim();
-          if (logData.includes('/api/auth') || logData.includes('/api/crypto') || logData.includes('error')) {
-            // Parse basique du log Morgan pour extraire l'IP
-            const parts = logData.split(' ');
-            const ip = parts[0] || 'unknown';
-            const method = parts[5]?.replace('"', '') || 'unknown';
-            const path = parts[6] || 'unknown';
-            const status = parseInt(parts[8]) || 0;
-            
-            if (status >= 400) {
-              auditLogger.logEvent(
-                'SECURITY_SUSPICIOUS_ACTIVITY',
-                `Accès HTTP ${status}`,
-                {
-                  ip,
-                  success: false,
-                  details: { method, path, status, fullLog: logData },
-                  severity: status >= 500 ? 'HIGH' : 'MEDIUM',
-                }
-              );
-            }
-          }
-          console.log(logData);
-        }
-      }
-    }));
-  } else {
-    app.use(morgan('dev'));
-  }
-
+  // Logs simples
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  
   // Compression
   app.use(compression());
-
-  // Cookies (INDISPENSABLE pour /refresh)
-  app.use(cookieParser());
-
-  // Body parsing avec validation de taille
-  // Body parsing avec validation allégée
-app.use(express.json({ 
-  limit: '1mb',
-  verify: (req, res, buf) => {
-    // Skip validation pour routes spéciales
-    const skipRoutes = ['/refresh', '/health'];
-    if (skipRoutes.some(route => req.url?.includes(route))) {
-      return;
-    }
-    
-    // Validation JSON seulement si il y a du contenu
-    if (buf.length > 0) {
-      try {
-        JSON.parse(buf.toString());
-      } catch (e) {
-        throw new Error('JSON malformé');
-      }
-    }
-  }
-}));
   
-  app.use(express.urlencoded({ 
-    extended: true, 
-    limit: '1mb',
-    parameterLimit: 100 // Limite le nombre de paramètres
+  // Cookies pour refresh tokens
+  app.use(cookieParser());
+  
+  // Body parsing simple
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+  // CORS simple
+  const allowedOrigins = [
+    'https://chimarena.cloud',
+    'https://www.chimarena.cloud',
+    ...(process.env.NODE_ENV === 'development' ? [
+      'http://localhost:8080',
+      'http://127.0.0.1:8080'
+    ] : [])
+  ];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS not allowed'), false);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }));
 
-  // 🌍 CORS SÉCURISÉ avec validation stricte
-  const allowedOrigins = (process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',')
-    : [
-        'https://chimarena.cloud',
-        'https://www.chimarena.cloud',
-        'http://localhost:8080',
-        'http://127.0.0.1:8080',
-      ]).map(s => s.trim());
-
-  app.use(
-    cors({
-      origin(origin, cb) {
-        // Permettre les requêtes sans origin (ex: mobile apps, curl)
-        if (!origin) return cb(null, true);
-        
-        // Vérifier la whitelist
-        const isAllowed = allowedOrigins.includes(origin);
-        
-        if (!isAllowed) {
-          // Log tentative d'accès non autorisée
-          auditLogger.logEvent(
-            'SECURITY_SUSPICIOUS_ACTIVITY',
-            'Tentative CORS non autorisée',
-            {
-              ip: 'unknown', // Pas d'accès à req ici
-              success: false,
-              details: { origin, allowedOrigins },
-              severity: 'MEDIUM',
-            }
-          );
-        }
-        
-        return isAllowed ? cb(null, true) : cb(new Error('CORS not allowed'));
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-      exposedHeaders: ['X-Total-Count', 'X-RateLimit-Warning'],
-      maxAge: 300, // 5 minutes de cache pour preflight
-    })
-  );
-
-  // 🚫 RATE LIMITING ADAPTÉ CRYPTO-GRADE
-const rateLimits = securityManager.getConfig().rateLimits;
-const isDev = process.env.NODE_ENV === 'development';
-  
- // REMPLACER la fonction createLimiter par :
-const createLimiter = (windowMs: number, max: number, message: string, skipSuccessful = false) =>
-  rateLimit({
-    windowMs,
-    max: isDev ? max * 10 : max, // 10x plus permissif en dev
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: message, retryAfter: Math.ceil(windowMs / 1000) },
-    keyGenerator: (req: Request) => {
-      const ip = req.ip || 'unknown';
-      const ua = req.headers['user-agent'] || '';
-      return securityManager.hashSensitiveData(ip + ua);
-    },
-    skip: (req) => {
-      // Routes toujours exemptées
-      const exemptRoutes = ['/api/health', '/api/auth/refresh'];
-      return exemptRoutes.some(route => req.path === route);
-    },
-    skipSuccessfulRequests: skipSuccessful,
+  // Rate limits basiques
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 tentatives par IP
+    message: { error: 'Trop de tentatives de connexion' },
   });
 
-// Logging des dépassements
-const logRateLimit = (req: Request, max: number, windowMs: number) => {
-  if (!isDev) { // Pas de spam en dev
-    auditLogger.logEvent(
-      'SECURITY_RATE_LIMIT',
-      'Rate limit dépassé',
-      {
-        ip: req.ip || 'unknown',
-        userAgent: req.headers['user-agent'],
-        success: false,
-        details: { path: req.path, method: req.method, limit: max, window: windowMs },
-        severity: 'MEDIUM',
-      }
-    );
-  }
-};
-
-
-// 1. Auth login : 5 en prod, 50 en dev
-app.use('/api/auth/login', createLimiter(
-  rateLimits.login.window, 
-  rateLimits.login.max, 
-  'Trop de tentatives de connexion'
-));
-
-// 2. Auth register : 3 en prod, 30 en dev  
-app.use('/api/auth/register', createLimiter(
-  60 * 60 * 1000, 
-  3, 
-  'Trop d\'inscriptions'
-));
-
-// 3. Routes crypto futures (très strict même en dev)
-app.use('/api/crypto/', createLimiter(
-  rateLimits.crypto.window,
-  isDev ? rateLimits.crypto.max * 2 : rateLimits.crypto.max, // Seulement 2x en dev
-  'Limite crypto dépassée'
-));
-
-// 4. Routes gaming (permissif, encore plus en dev)
-app.use('/api/game/', createLimiter(
-  rateLimits.gaming.window,
-  rateLimits.gaming.max,
-  'Ralentissez vos actions de jeu',
-  true
-));
-
-// 5. API globale EN DERNIER : 100 en prod, 1000 en dev
-app.use('/api/', createLimiter(
-  15 * 60 * 1000, 
-  100, 
-  'Trop de requêtes API'
-));
-
-  // 🕐 MARQUAGE TEMPOREL ET TRACKING
-  app.use((req, _res, next) => {
-    (req as any).requestTime = new Date().toISOString();
-    (req as any).requestId = securityManager.generateSecureToken(8);
-    next();
+  const cryptoLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 heure
+    max: 20, // 20 actions crypto par heure
+    message: { error: 'Trop d\'actions crypto' },
   });
 
-  // 🔍 MIDDLEWARE DE DÉTECTION D'ACTIVITÉ SUSPECTE
-  app.use((req, res, next) => {
-    // Détecter les tentatives d'accès à des chemins suspects
-    const suspiciousPaths = [
-      '/admin', '/phpmyadmin', '/wp-admin', '/wp-login',
-      '/.env', '/config', '/backup', '/dump',
-      '/shell', '/cmd', '/exec', '/eval',
-      '../', '..\\', '%2e%2e', '%252e%252e'
-    ];
-
-    const path = req.path.toLowerCase();
-    const isSuspicious = suspiciousPaths.some(sp => path.includes(sp));
-
-    if (isSuspicious) {
-      auditLogger.logEvent(
-        'SECURITY_SUSPICIOUS_ACTIVITY',
-        'Tentative d\'accès à un chemin suspect',
-        {
-          ip: req.ip || 'unknown',
-          userAgent: req.headers['user-agent'],
-          success: false,
-          details: {
-            path: req.path,
-            method: req.method,
-            query: req.query,
-            suspiciousPattern: suspiciousPaths.find(sp => path.includes(sp)),
-          },
-          severity: 'HIGH',
-        }
-      );
-      
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    next();
+  const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // 1000 requêtes par IP (généreux pour un jeu)
+    message: { error: 'Trop de requêtes' },
   });
 
-  console.log('✅ Middlewares de sécurité crypto-grade configurés');
+  // Appliquer les limiteurs
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
+  app.use('/api/crypto/', cryptoLimiter);
+  app.use('/api/', generalLimiter);
+
+  console.log('✅ Middlewares configurés pour jeu crypto');
 };
