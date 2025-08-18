@@ -1,4 +1,4 @@
-// server/src/routes/authSimple.ts - ROUTES AUTH SIMPLIFIÉES
+// server/src/routes/authRoutes.ts - VERSION ALLÉGÉE
 import { Router, Request, Response } from 'express';
 import User from '../models/User';
 import { 
@@ -7,7 +7,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken
-} from '../middleware/authSimple';
+} from '../middleware/authMiddleware';
 
 const router = Router();
 
