@@ -477,18 +477,33 @@ export default class WelcomeScene extends Phaser.Scene {
             const result = await this.metaMaskHelper.connectWallet();
             
            if (result?.success) {
-  // Harmoniser le payload (accepte walletInfo OU wallet)
-  const w = result.walletInfo || result.wallet || result.data?.wallet;
-  if (!w || !(w.address)) throw new Error('Réponse serveur invalide (wallet manquant)');
+  // 1) Essayer d'utiliser ce que renvoie directement /connect-wallet
+  let w = result.walletInfo || result.wallet || result.data?.wallet;
 
-  // Normalisation
+  // 2) Si manquant ou adresse tronquée (ex: "0xf3f6...923c"), rafraîchir depuis /wallet-info
+  if (!w || !w.address || w.address.includes('...')) {
+    const wiResp = await crypto.getWalletInfo(); // GET /api/crypto/wallet-info
+    if (wiResp?.success && wiResp.wallet?.fullAddress) {
+      w = {
+        address: wiResp.wallet.fullAddress,
+        connectedAt: wiResp.wallet.connectedAt,
+        connectionCount: wiResp.wallet.connectionCount
+      };
+    }
+  }
+
+  // 3) Dernier garde-fou
+  if (!w || !w.address) {
+    throw new Error('Réponse serveur invalide (wallet manquant)');
+  }
+
+  // 4) Normalisation + mise à jour UI/état
   const wallet = {
     address: (w.fullAddress || w.address).toLowerCase(),
     connectedAt: w.connectedAt || new Date().toISOString(),
     connectionCount: w.connectionCount ?? 1,
   };
 
-  // Mise à jour UI + état
   this.updateWalletUI(wallet);
   this.gameInstance?.setCurrentUser(this.currentUser);
   this.registry.set('currentUser', this.currentUser);
@@ -498,6 +513,7 @@ export default class WelcomeScene extends Phaser.Scene {
 } else {
   throw new Error(result?.message || 'Échec validation serveur');
 }
+
 
         } catch (error) {
             console.error('❌ Erreur connexion wallet:', error);
