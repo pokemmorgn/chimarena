@@ -23,6 +23,9 @@ interface SignatureValidationOptions {
 }
 
 // 🔐 MIDDLEWARE PRINCIPAL DE VALIDATION CRYPTO
+// Dans server/src/middleware/cryptoMiddleware.ts
+// REMPLACER la méthode validateCryptoSignature par celle-ci :
+
 export const validateCryptoSignature = (options: SignatureValidationOptions = {}) => {
   return async (req: CryptoRequest, res: Response, next: NextFunction) => {
     const requestInfo = {
@@ -34,7 +37,7 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
     try {
       const { address, message, signature, timestamp, nonce } = req.body;
 
-      // Validation des champs requis
+      // Validation des champs requis pour MetaMask
       if (!address || !message || !signature) {
         await auditLogger.logEvent(
           'SECURITY_SUSPICIOUS_ACTIVITY',
@@ -52,7 +55,11 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
         
         return res.status(400).json({
           error: 'Paramètres de signature requis manquants',
-          code: 'MISSING_SIGNATURE_PARAMS'
+          code: 'MISSING_SIGNATURE_PARAMS',
+          details: {
+            required: ['address', 'message', 'signature'],
+            provided: Object.keys(req.body)
+          }
         });
       }
 
@@ -75,8 +82,8 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
         });
       }
 
-      // Validation timestamp si requis
-      if (options.requireTimestamp && timestamp) {
+      // Validation timestamp si fourni (optionnel pour MetaMask)
+      if (timestamp && options.requireTimestamp) {
         const now = Date.now();
         const maxAge = options.maxAge || 5 * 60 * 1000; // 5 minutes par défaut
         
@@ -104,7 +111,7 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
         }
       }
 
-      // Validation signature
+      // Validation signature MetaMask
       const isValidSignature = await ethersHelper.verifySignature(address, message, signature);
       if (!isValidSignature) {
         await auditLogger.logEvent(
@@ -128,7 +135,7 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
         });
       }
 
-      // Vérification anti-replay si requis
+      // Vérification anti-replay si requis et nonce fourni
       if (!options.allowReuse && nonce) {
         const isNonceUsed = await ethersHelper.isNonceUsed(address, nonce);
         if (isNonceUsed) {
@@ -164,7 +171,7 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
 
       // Log succès de validation
       await auditLogger.logEvent(
-        'CRYPTO_DEPOSIT', // Utilise ce type pour les validations crypto
+        'CRYPTO_DEPOSIT',
         'Signature crypto validée avec succès',
         {
           ...requestInfo,
@@ -191,7 +198,8 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
           error: error instanceof Error ? error.message : 'Erreur inconnue',
           details: { 
             body: Object.keys(req.body),
-            errorType: error instanceof Error ? error.constructor.name : 'unknown'
+            errorType: error instanceof Error ? error.constructor.name : 'unknown',
+            stack: error instanceof Error ? error.stack : undefined
           },
           severity: 'HIGH',
         }
@@ -205,7 +213,6 @@ export const validateCryptoSignature = (options: SignatureValidationOptions = {}
     }
   };
 };
-
 // 🛡️ MIDDLEWARE DE VÉRIFICATION WALLET OWNERSHIP
 export const verifyWalletOwnership = async (req: CryptoRequest, res: Response, next: NextFunction) => {
   const requestInfo = {
