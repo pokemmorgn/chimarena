@@ -1,7 +1,7 @@
 // client/src/scenes/WelcomeScene.js - VERSION COMPLÈTE AVEC METAMASK
 import Phaser from 'phaser';
 import { auth, user, crypto } from '../api';
-import { MetaMaskHelper } from '../utils/metamask';
+import metaMaskHelper from '../utils/metamask';
 
 export default class WelcomeScene extends Phaser.Scene {
     constructor() {
@@ -39,7 +39,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
         
         // Initialiser MetaMask Helper
-        this.metaMaskHelper = new MetaMaskHelper();
+this.metaMaskHelper = metaMaskHelper;
         
         // Créer l'interface
         this.createBackground();
@@ -468,7 +468,7 @@ export default class WelcomeScene extends Phaser.Scene {
             console.log('🦊 Tentative de connexion MetaMask...');
             
             // Connecter via helper
-            const result = await this.metaMaskHelper.connect();
+const result = await this.metaMaskHelper.connectWallet();
             
             if (result.success) {
                 // Envoyer au serveur pour validation et stockage
@@ -544,7 +544,8 @@ export default class WelcomeScene extends Phaser.Scene {
         if (this.currentUser?.cryptoWallet?.address && window.GameConstants.CRYPTO.METAMASK_AVAILABLE) {
             try {
                 // Vérifier si MetaMask est toujours connecté à la même adresse
-                const accounts = await this.metaMaskHelper.getAccounts();
+const status = this.metaMaskHelper.getStatus();
+const accounts = status.isConnected ? [status.currentAccount] : [];
                 const currentAddress = this.currentUser.cryptoWallet.address.toLowerCase();
                 
                 if (!accounts.includes(currentAddress)) {
