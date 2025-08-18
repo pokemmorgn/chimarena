@@ -261,7 +261,7 @@ userId: (user._id as mongoose.Types.ObjectId).toString(),
         'Tentative de connexion avec mot de passe incorrect',
         {
           ...requestInfo,
-          userId: user._id.toString(),
+userId: (user._id as mongoose.Types.ObjectId).toString(),
           username: user.username,
           success: false,
           details: { email: user.email },
@@ -287,7 +287,7 @@ userId: (user._id as mongoose.Types.ObjectId).toString(),
       'Connexion réussie',
       {
         ...requestInfo,
-        userId: user._id.toString(),
+userId: (user._id as mongoose.Types.ObjectId).toString(),
         username: user.username,
         success: true,
         details: { 
@@ -364,7 +364,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       'Refresh token réussi',
       {
         ...requestInfo,
-        userId: user._id.toString(),
+        userId: (user._id as mongoose.Types.ObjectId).toString(),
         username: user.username,
         success: true,
         severity: 'LOW',
@@ -422,7 +422,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         'Consultation profil utilisateur',
         {
           ip: req.ip || 'unknown',
-          userId: user._id.toString(),
+          userId: (user._id as mongoose.Types.ObjectId).toString(),
           username: user.username,
           success: true,
           severity: 'LOW',
