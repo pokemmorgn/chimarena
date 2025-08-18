@@ -1,6 +1,6 @@
-// client/src/scenes/AuthScene.js - MODIFIÉ POUR CLIENT SÉCURISÉ
+// client/src/scenes/AuthScene.js
 import Phaser from 'phaser';
-import { auth } from '../api'; // Nouveau client sécurisé
+import { login, register } from '../api';
 
 export default class AuthScene extends Phaser.Scene {
   constructor() {
@@ -23,9 +23,7 @@ export default class AuthScene extends Phaser.Scene {
   create() {
     this.gameInstance = this.registry.get('gameInstance');
 
-    // 🔐 VÉRIFICATION AUTHENTIFICATION AVEC NOUVEAU CLIENT
-    if (auth.isAuthenticated()) {
-      console.log('✅ Utilisateur déjà authentifié');
+    if (this.gameInstance?.isAuthenticated?.()) {
       this.scene.start('MenuScene');
       return;
     }
@@ -38,32 +36,10 @@ export default class AuthScene extends Phaser.Scene {
     this.createFooter();
     this.setupKeyboardEvents();
     this.playEntranceAnimation();
-
-    // 🔧 CONFIGURATION DES HOOKS SÉCURITÉ
-    this.setupSecurityHooks();
   }
 
-  setupSecurityHooks() {
-    // Hook pour déconnexion automatique
-    auth.config.onAuthenticationLost((reason) => {
-      console.warn('🚨 Authentification perdue:', reason);
-      this.gameInstance?.clearAuthData();
-      window.NotificationManager.error(`Session expirée: ${reason}`);
-      
-      // Si on n'est pas déjà sur AuthScene, y aller
-      if (this.scene.key !== 'AuthScene') {
-        this.scene.start('AuthScene');
-      }
-    });
+  // ---------- UI base ----------
 
-    // Hook pour refresh automatique
-    auth.config.onTokenRefreshed((newToken) => {
-      console.log('🔄 Token rafraîchi automatiquement');
-      // Le gameInstance sera mis à jour automatiquement
-    });
-  }
-
-  // ---------- UI base (inchangée) ----------
   createUITextures() {
     const g = this.add.graphics();
 
@@ -114,23 +90,19 @@ export default class AuthScene extends Phaser.Scene {
       fill: '#ffffff', stroke: '#2c3e50', strokeThickness: 4
     }).setOrigin(0.5);
 
-    this.titleSubtext = this.add.text(width/2, 170, this.isLoginMode ? 'Connexion Sécurisée' : 'Inscription Sécurisée', {
+    this.titleSubtext = this.add.text(width/2, 170, this.isLoginMode ? 'Connexion' : 'Inscription', {
       fontSize: '24px', fontFamily: 'Roboto, sans-serif', fill: '#ecf0f1'
-    }).setOrigin(0.5);
-
-    // 🔐 Indicateur de sécurité
-    this.securityIndicator = this.add.text(width/2, 190, '🔐 Sécurité crypto-grade activée', {
-      fontSize: '12px', fontFamily: 'Roboto, sans-serif', fill: '#2ecc71'
     }).setOrigin(0.5);
 
     const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
     this.add.text(width - 10, height - 10, version, { fontSize: '12px', fill: '#bdc3c7' }).setOrigin(1,1);
   }
 
-  // ---------- Form (inchangée) ----------
+  // ---------- Form ----------
+
   createForm() {
     const { width } = this.scale;
-    const y = 260; // Ajusté pour l'indicateur sécurité
+    const y = 240;
 
     this.add.text(width/2 - 150, y, 'Email:', { fontSize: '16px', fill:'#fff', fontFamily:'Roboto, sans-serif' });
     this.inputs.email = this.createInput(width/2 - 150, y+25, 'Entrez votre email');
@@ -199,23 +171,24 @@ export default class AuthScene extends Phaser.Scene {
   }
 
   // ---------- Buttons & Links ----------
+
   createButtons() {
     const { width } = this.scale;
 
-    this.buttons.submit = this.add.image(width/2, 470, 'button-normal') // Ajusté position
+    this.buttons.submit = this.add.image(width/2, 450, 'button-normal')
       .setInteractive()
       .on('pointerover', () => { if (!this.isLoading) this.buttons.submit.setTexture('button-hover'); })
       .on('pointerout',  () => { if (!this.isLoading) this.buttons.submit.setTexture('button-normal'); })
       .on('pointerdown', () => { if (!this.isLoading) this.handleSubmit(); });
 
-    this.submitButtonText = this.add.text(width/2, 470, 'Se connecter', {
+    this.submitButtonText = this.add.text(width/2, 450, 'Se connecter', {
       fontSize:'18px', fill:'#fff', fontFamily:'Roboto, sans-serif', fontWeight:'bold'
     }).setOrigin(0.5);
   }
 
   createToggleLink() {
     const { width } = this.scale;
-    this.toggleText = this.add.text(width/2, 540, 'Pas encore de compte ? S\'inscrire', {
+    this.toggleText = this.add.text(width/2, 520, 'Pas encore de compte ? S\'inscrire', {
       fontSize:'14px', fill:'#3498db', fontFamily:'Roboto, sans-serif', fontStyle:'underline'
     })
     .setOrigin(0.5).setInteractive()
@@ -226,12 +199,13 @@ export default class AuthScene extends Phaser.Scene {
 
   createFooter() {
     const { width, height } = this.scale;
-    this.add.text(width/2, height-40, 'Sécurité crypto-grade • Tokens en mémoire uniquement', {
+    this.add.text(width/2, height-40, 'Propulsé par Phaser.js et Colyseus', {
       fontSize:'12px', fill:'#95a5a6', fontFamily:'Roboto, sans-serif'
     }).setOrigin(0.5);
   }
 
-  // ---------- Input handling (inchangée) ----------
+  // ---------- Input handling ----------
+
   setupKeyboardEvents() {
     this.input.keyboard.on('keydown', (e) => {
       if (!this.activeInput) return;
@@ -281,13 +255,13 @@ export default class AuthScene extends Phaser.Scene {
     this.isLoginMode = !this.isLoginMode;
 
     if (this.isLoginMode) {
-      this.titleSubtext.setText('Connexion Sécurisée');
+      this.titleSubtext.setText('Connexion');
       this.submitButtonText.setText('Se connecter');
       this.toggleText.setText('Pas encore de compte ? S\'inscrire');
       this.usernameLabel.setVisible(false);
       this.inputs.username.container.setVisible(false);
     } else {
-      this.titleSubtext.setText('Inscription Sécurisée');
+      this.titleSubtext.setText('Inscription');
       this.submitButtonText.setText('S\'inscrire');
       this.toggleText.setText('Déjà un compte ? Se connecter');
       this.usernameLabel.setVisible(true);
@@ -297,3 +271,114 @@ export default class AuthScene extends Phaser.Scene {
 
     this.tweens.add({
       targets:[this.titleSubtext,this.submitButtonText,this.toggleText],
+      alpha:{ from:0.5, to:1 }, duration:300, ease:'Power2'
+    });
+  }
+
+  clearForm() {
+    Object.values(this.inputs).forEach(input => {
+      input.container.value = '';
+      input.container.isActive = false;
+      input.container.bg.setTexture('input-bg');
+      input.textInput.setText('');
+      input.placeholderText.setVisible(true);
+    });
+    this.formData = { email:'', password:'', username:'' };
+    this.activeInput = null;
+  }
+
+  // ---------- Submit ----------
+
+  async handleSubmit() {
+    if (this.isLoading) return;
+
+    this.updateFormData();
+    const v = this.validateForm();
+    if (!v.isValid) {
+      this.showMessage(v.message, 'error');
+      return;
+    }
+
+    this.setLoading(true);
+    try {
+      let res;
+      if (this.isLoginMode) {
+res = await login(this.formData.email, this.formData.password);
+      } else {
+        res = await register({
+          email: this.formData.email,
+          password: this.formData.password,
+          username: this.formData.username
+        });
+      }
+
+      this.gameInstance.setAuthToken(res.token);
+      this.gameInstance.setCurrentUser(res.user);
+      this.showMessage(this.isLoginMode ? 'Connexion réussie !' : 'Inscription réussie !', 'success');
+
+      setTimeout(() => this.scene.start('MenuScene'), 800);
+    } catch (err) {
+      console.error('Auth error:', err);
+      this.showMessage(err.message || 'Une erreur est survenue', 'error');
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  validateForm() {
+    const { email, password, username } = this.formData;
+
+    if (!email || !password) return { isValid:false, message:'Veuillez remplir tous les champs requis' };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return { isValid:false, message:'Adresse email invalide' };
+    if (password.length < 6) return { isValid:false, message:'Le mot de passe doit contenir au moins 6 caractères' };
+
+    if (!this.isLoginMode) {
+      if (!username) return { isValid:false, message:'Le nom d’utilisateur est requis' };
+      if (username.length < 3 || username.length > 20) return { isValid:false, message:'Le nom d’utilisateur doit contenir entre 3 et 20 caractères' };
+    }
+    return { isValid: true };
+  }
+
+  // ---------- UX helpers ----------
+
+  setLoading(loading) {
+    this.isLoading = loading;
+    this.buttons.submit.setTexture(loading ? 'button-disabled' : 'button-normal');
+    this.submitButtonText.setText(loading ? 'Chargement...' : (this.isLoginMode ? 'Se connecter' : 'S\'inscrire'));
+  }
+
+  showMessage(text, type = 'info') {
+    if (this.messageText) this.messageText.destroy();
+
+    const color = type === 'error' ? '#e74c3c' : type === 'success' ? '#2ecc71' : '#3498db';
+    this.messageText = this.add.text(this.scale.width/2, 380, text, {
+      fontSize:'14px', fill: color, fontFamily:'Roboto, sans-serif', align:'center', wordWrap:{ width: 400 }
+    }).setOrigin(0.5);
+
+    this.messageText.setAlpha(0);
+    this.tweens.add({ targets:this.messageText, alpha:1, duration:300, ease:'Power2' });
+    this.time.delayedCall(3000, () => {
+      if (!this.messageText) return;
+      this.tweens.add({
+        targets:this.messageText, alpha:0, duration:300, ease:'Power2',
+        onComplete: () => { this.messageText?.destroy(); this.messageText = null; }
+      });
+    });
+  }
+
+  playEntranceAnimation() {
+    const elements = [
+      this.titleLogo, this.titleSubtext,
+      ...Object.values(this.inputs).map(i => i.container),
+      this.buttons.submit, this.submitButtonText, this.toggleText
+    ];
+    elements.forEach((el, i) => {
+      if (!el) return;
+      el.setAlpha(0); el.setY(el.y + 50);
+      this.tweens.add({ targets: el, alpha:1, y:el.y - 50, duration:600, delay:i*100, ease:'Back.easeOut' });
+    });
+  }
+
+  update() {}
+}
