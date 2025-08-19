@@ -263,8 +263,8 @@ export function validateConfig(config: unknown): {
         data: result.data,
       };
     } else {
-      const errors = result.error.issues.map(issue => 
-        `${issue.path.join('.')}: ${issue.message}`
+const errors = result.error.issues.map((issue: any) =>
+  `${issue.path.join('.')}: ${issue.message}`
       );
       
       return {
@@ -275,7 +275,7 @@ export function validateConfig(config: unknown): {
   } catch (error) {
     return {
       success: false,
-      errors: [`Erreur de validation: ${error.message}`],
+errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
     };
   }
 }
@@ -303,7 +303,7 @@ export function validateConfigSection(section: keyof AppConfig, data: unknown): 
     monitoring: MonitoringSchema,
   };
 
-  const schema = schemas[section];
+const schema = schemas[section as keyof typeof schemas];
   if (!schema) {
     return {
       success: false,
@@ -320,7 +320,7 @@ export function validateConfigSection(section: keyof AppConfig, data: unknown): 
         data: result.data,
       };
     } else {
-      const errors = result.error.issues.map(issue => 
+const errors = result.error.issues.map((issue: any) =>
         `${issue.path.join('.')}: ${issue.message}`
       );
       
@@ -332,7 +332,7 @@ export function validateConfigSection(section: keyof AppConfig, data: unknown): 
   } catch (error) {
     return {
       success: false,
-      errors: [`Erreur de validation: ${error.message}`],
+errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
     };
   }
 }
