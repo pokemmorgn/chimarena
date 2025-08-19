@@ -44,16 +44,22 @@ const DatabaseSchema = z.object({
 
 // Schéma pour l'authentification
 const AuthSchema = z.object({
-  jwtSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')),
+  // jwtSecret devient optionnel (pour compat)
+  jwtSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')).optional(),
+
+  // ⬇️ nouveaux champs, alignés avec ton .env
+  accessTokenSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')),
+  refreshTokenSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')),
+
   accessTokenExpiry: z.string().regex(/^\d+[smhd]$/), // 15m, 1h, 1d
   refreshTokenExpiry: z.string().regex(/^\d+[smhd]$/),
   maxFailedAttempts: z.number().int().min(3).max(20),
-  lockDurationMinutes: z.number().int().min(5).max(1440), // Max 24h
+  lockDurationMinutes: z.number().int().min(5).max(1440),
   cookieOptions: z.object({
     httpOnly: z.boolean(),
     secure: z.boolean().or(z.literal('auto')),
     sameSite: z.enum(['strict', 'lax', 'none']),
-    maxAge: z.number().int().min(60000), // Min 1 minute
+    maxAge: z.number().int().min(60000),
   }).strict(),
 }).strict();
 
