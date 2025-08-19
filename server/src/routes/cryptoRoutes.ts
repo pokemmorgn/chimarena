@@ -121,7 +121,7 @@ router.post('/connect-wallet',
       if (existingUser) {
         requestLogger.warn('Adresse déjà utilisée', { 
           address: ethersHelper.formatAddress(address),
-          conflictUserId: existingUser._id.toString()
+          conflictUserId: existingUser._id?.toString()
         });
         return res.status(409).json({ 
           success: false, 
@@ -179,8 +179,8 @@ router.post('/connect-wallet',
 
     } catch (error) {
       requestLogger.error('Erreur connexion wallet', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -235,8 +235,8 @@ router.post('/disconnect-wallet',
 
     } catch (error) {
       requestLogger.error('Erreur déconnexion wallet', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -297,8 +297,8 @@ router.get('/wallet-info',
 
     } catch (error) {
       requestLogger.error('Erreur récupération wallet info', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -373,8 +373,8 @@ router.post('/verify-signature',
 
     } catch (error) {
       requestLogger.error('Erreur vérification signature', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -413,8 +413,8 @@ router.get('/challenge',
 
     } catch (error) {
       requestLogger.error('Erreur génération challenge', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -467,8 +467,8 @@ router.get('/balance',
 
     } catch (error) {
       requestLogger.error('Erreur récupération balance', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -578,8 +578,8 @@ router.post('/withdraw',
 
     } catch (error) {
       requestLogger.error('Erreur retrait', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
@@ -636,8 +636,8 @@ router.get('/transactions',
 
     } catch (error) {
       requestLogger.error('Erreur historique transactions', { 
-        error: error.message,
-        stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
       });
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
