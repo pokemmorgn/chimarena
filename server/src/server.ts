@@ -338,7 +338,7 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     // Auth routes
     try {
       const authMod = await import('./routes/authRoutes');
-      const authRouter = typeof authMod.default === 'function' ? authMod.default() : authMod.default;
+const authRouter = authMod.default;
       
       app.use('/api/auth', (req, res, next) => {
         if (configManager.isLogModuleEnabled('auth')) {
@@ -358,8 +358,7 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     // User routes
     try {
       const userMod = await import('./routes/userRoutes');
-      const userRouter = typeof userMod.default === 'function' ? userMod.default() : userMod.default;
-      
+const userRouter = userMod.default;      
       app.use('/api/user', (req, res, next) => {
         if (configManager.isLogModuleEnabled('api')) {
           logger.api.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route user', {
@@ -379,8 +378,7 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     if (config.crypto.enabled) {
       try {
         const cryptoMod = await import('./routes/cryptoRoutes');
-        const cryptoRouter = typeof cryptoMod.default === 'function' ? cryptoMod.default() : cryptoMod.default;
-        
+const cryptoRouter = cryptoMod.default;        
         app.use('/api/crypto', (req, res, next) => {
           if (configManager.isLogModuleEnabled('crypto')) {
             logger.crypto.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route crypto', {
