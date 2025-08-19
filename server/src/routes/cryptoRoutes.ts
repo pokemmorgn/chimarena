@@ -4,7 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddl
 import { ethersHelper } from '../utils/ethersHelper';
 import User from '../models/User';
 import rateLimit from 'express-rate-limit';
-import { logger } from '../utils/Logger.ts';
+import { logger } from '../utils/Logger';
 import { configManager } from '../config/ConfigManager';
 
 const router = Router();
