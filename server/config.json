@@ -49,7 +49,8 @@
   },
 
   "auth": {
-    "jwtSecret": "ENV_OVERRIDE",
+    "accessTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
+    "refreshTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
     "accessTokenExpiry": "15m",
     "refreshTokenExpiry": "7d",
     "maxFailedAttempts": 5,
@@ -273,135 +274,6 @@
       "enabled": false,
       "errorThreshold": 10,
       "memoryThreshold": 85
-    }
-  },
-
-  "_scenarios": {
-    "_comment": "Scénarios de configuration prêts à copier-coller",
-    
-    "development": {
-      "app.debug": true,
-      "app.env": "development",
-      "logging.level": "debug",
-      "logging.modules.crypto.level": "trace",
-      "logging.modules.api.enabled": true,
-      "features.devTools": true,
-      "server.corsOrigins": ["http://localhost:8080", "http://localhost:3000"]
-    },
-    
-    "production": {
-      "app.debug": false,
-      "app.env": "production",
-      "logging.level": "info",
-      "logging.modules.performance.enabled": true,
-      "logging.output.file.enabled": true,
-      "features.devTools": false,
-      "features.adminPanel": false
-    },
-    
-    "maintenance": {
-      "app.maintenance": true,
-      "logging.level": "warn",
-      "features.registration": false,
-      "features.matchmaking": false
-    },
-    
-    "debug_crypto": {
-      "logging.modules.crypto.level": "trace",
-      "logging.modules.crypto.logSignatures": true,
-      "logging.modules.security.level": "debug",
-      "crypto.security.autoDetectSuspicious": false
-    },
-    
-    "high_traffic": {
-      "security.rateLimits.api.max": 5000,
-      "security.rateLimits.auth.max": 20,
-      "performance.enableCaching": true,
-      "game.maxPlayersOnline": 5000,
-      "logging.modules.performance.enabled": true
-    },
-    
-    "security_lockdown": {
-      "security.rateLimits.auth.max": 3,
-      "security.rateLimits.crypto.max": 5,
-      "security.suspicion.threshold": 30,
-      "security.suspicion.autobanScore": 60,
-      "crypto.security.banThreshold": 60,
-      "logging.modules.security.level": "debug"
-    }
-  },
-
-  "_quickToggle": {
-    "_comment": "Toggles rapides pour situations courantes",
-    
-    "enableDebugMode": {
-      "app.debug": true,
-      "logging.level": "debug",
-      "logging.modules.api.enabled": true,
-      "features.devTools": true
-    },
-    
-    "enableMaintenanceMode": {
-      "app.maintenance": true,
-      "features.registration": false,
-      "features.matchmaking": false,
-      "logging.level": "warn"
-    },
-    
-    "enableCryptoDebugging": {
-      "logging.modules.crypto.level": "trace",
-      "logging.modules.crypto.logSignatures": true,
-      "logging.modules.security.level": "debug"
-    },
-    
-    "enableFileLogging": {
-      "logging.output.file.enabled": true,
-      "logging.output.json.enabled": true,
-      "logging.modules.performance.enabled": true
-    },
-    
-    "relaxSecurity": {
-      "security.rateLimits.auth.max": 20,
-      "security.rateLimits.crypto.max": 50,
-      "security.suspicion.threshold": 80,
-      "crypto.security.autoDetectSuspicious": false
-    },
-    
-    "strictSecurity": {
-      "security.rateLimits.auth.max": 3,
-      "security.rateLimits.crypto.max": 5,
-      "security.suspicion.threshold": 20,
-      "security.suspicion.autobanScore": 50,
-      "logging.modules.security.level": "debug"
-    }
-  },
-
-  "_instructions": {
-    "_comment": "Guide d'utilisation de cette configuration",
-    
-    "hotReload": "Modifiez ce fichier et sauvegardez. Les changements sont appliqués instantanément.",
-    
-    "backups": "Un backup automatique est créé avant chaque modification dans config/backup/",
-    
-    "validation": "Toute configuration invalide sera rejetée et l'ancienne sera conservée.",
-    
-    "logs": "Modifiez logging.modules.* pour activer/désactiver les logs par module en temps réel.",
-    
-    "rateLimits": "Modifiez security.rateLimits.* pour ajuster les limites instantanément.",
-    
-    "features": "Activez/désactivez features.* pour contrôler les fonctionnalités.",
-    
-    "debugging": "Utilisez _quickToggle.enableDebugMode pour débugger rapidement.",
-    
-    "maintenance": "Utilisez _quickToggle.enableMaintenanceMode pour maintenance rapide.",
-    
-    "security": "En cas d'attaque, utilisez _quickToggle.strictSecurity pour protection maximale.",
-    
-    "examples": {
-      "enableDebug": "Copiez les valeurs de _quickToggle.enableDebugMode dans les sections principales",
-      "reduceNoise": "Passez logging.modules.api.enabled à false pour réduire les logs",
-      "cryptoDebug": "Activez logging.modules.crypto.logSignatures pour débugger MetaMask",
-      "blockAttack": "Réduisez security.rateLimits.auth.max à 1 pour bloquer une attaque"
     }
   }
 }
