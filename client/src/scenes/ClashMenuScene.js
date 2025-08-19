@@ -1,4 +1,7 @@
 // client/src/scenes/ClashMenuScene.js - ARCHITECTURE CORRIGÉE
+import Phaser from 'phaser';
+import { auth } from '../api';
+import { ClashHeader } from '../clashmenu';
 
 export default class ClashMenuScene extends Phaser.Scene {
     constructor() {
