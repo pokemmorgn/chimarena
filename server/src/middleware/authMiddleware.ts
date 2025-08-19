@@ -8,8 +8,8 @@ export interface AuthenticatedRequest extends Request {
 }
 
 // ✅ UTILISER LES BONNES VARIABLES D'ENVIRONNEMENT
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'your-secret-key-change-in-production';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_ACCESS_SECRET || 'your-secret-key-change-in-production';
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET as string;
 
 // Auth obligatoire (simplifié)
 export const authenticateToken = async (
