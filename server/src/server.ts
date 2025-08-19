@@ -80,15 +80,24 @@ async function initializeServer() {
 }
 
 /**
- * 🔍 VALIDATION ENV
+ * 🔍 VALIDATION ENV - CORRIGÉE
  */
 async function validateEnvironment(): Promise<void> {
   logger.general.info('🔍 Validation de l\'environnement...');
-  const required = ['JWT_SECRET'];
+  
+  // ✅ UTILISER LES BONNES VARIABLES JWT
+  const required = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) throw new Error(`Variables d'environnement manquantes: ${missing.join(', ')}`);
 
-  if (process.env.JWT_SECRET!.length < 32) throw new Error('JWT_SECRET doit contenir au moins 32 caractères');
+  // ✅ VÉRIFIER LA LONGUEUR DES BONS SECRETS
+  if (process.env.JWT_ACCESS_SECRET!.length < 32) {
+    throw new Error('JWT_ACCESS_SECRET doit contenir au moins 32 caractères');
+  }
+  
+  if (process.env.JWT_REFRESH_SECRET!.length < 32) {
+    throw new Error('JWT_REFRESH_SECRET doit contenir au moins 32 caractères');
+  }
 
   const env = configManager.get('app.env');
   if (env === 'production') {
@@ -297,7 +306,7 @@ function setupHTTPSRedirection(app: express.Application): void {
 }
 
 /**
- * 🛣️ ROUTES — IMPORTS DYNAMIQUES APRÈS INIT
+ * 🛣️ ROUTES — IMPORTS DYNAMIQUES SÉCURISÉS APRÈS INIT
  */
 async function setupRoutes(app: express.Application, config: any): Promise<void> {
   // Request ID
@@ -322,68 +331,80 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     });
   });
 
-  // === Imports dynamiques ===
-  const authMod = await import('./routes/authRoutes');
-  const userMod = await import('./routes/userRoutes');
-  const cryptoMod = await import('./routes/cryptoRoutes');
-
-  // Supporte export par défaut: Router OU Factory
-  const asRouter = (m: any) => (typeof m.default === 'function' ? m.default() : m.default);
-
-  const authRouter = asRouter(authMod);
-  const userRouter = asRouter(userMod);
-  const cryptoRouter = asRouter(cryptoMod);
-
-  // Auth
-  app.use(
-    '/api/auth',
-    (req, res, next) => {
-      if (configManager.isLogModuleEnabled('auth')) {
-        logger.auth.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route auth', {
-          method: req.method,
-          path: req.path,
-        });
-      }
-      next();
-    },
-    authRouter,
-  );
-
-  // User
-  app.use(
-    '/api/user',
-    (req, res, next) => {
-      if (configManager.isLogModuleEnabled('api')) {
-        logger.api.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route user', {
-          method: req.method,
-          path: req.path,
-        });
-      }
-      next();
-    },
-    userRouter,
-  );
-
-  // Crypto (conditionnel)
-  if (config.crypto.enabled) {
-    app.use(
-      '/api/crypto',
-      (req, res, next) => {
-        if (configManager.isLogModuleEnabled('crypto')) {
-          logger.crypto.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route crypto', {
+  // === Imports dynamiques SÉCURISÉS ===
+  try {
+    console.log('🛣️ Chargement des routes...');
+    
+    // Auth routes
+    try {
+      const authMod = await import('./routes/authRoutes');
+      const authRouter = typeof authMod.default === 'function' ? authMod.default() : authMod.default;
+      
+      app.use('/api/auth', (req, res, next) => {
+        if (configManager.isLogModuleEnabled('auth')) {
+          logger.auth.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route auth', {
             method: req.method,
             path: req.path,
           });
         }
         next();
-      },
-      cryptoRouter,
-    );
-    logger.crypto.info('✅ Routes crypto activées', { metamask: config.crypto.metamask });
-  } else {
-    app.use('/api/crypto/*', (req, res) =>
-      res.status(503).json({ error: 'Fonctionnalités crypto temporairement désactivées', enabled: false }),
-    );
+      }, authRouter);
+      
+      console.log('✅ Routes auth chargées');
+    } catch (error) {
+      console.error('❌ Erreur chargement routes auth:', (error as Error)?.message);
+    }
+
+    // User routes
+    try {
+      const userMod = await import('./routes/userRoutes');
+      const userRouter = typeof userMod.default === 'function' ? userMod.default() : userMod.default;
+      
+      app.use('/api/user', (req, res, next) => {
+        if (configManager.isLogModuleEnabled('api')) {
+          logger.api.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route user', {
+            method: req.method,
+            path: req.path,
+          });
+        }
+        next();
+      }, userRouter);
+      
+      console.log('✅ Routes user chargées');
+    } catch (error) {
+      console.error('❌ Erreur chargement routes user:', (error as Error)?.message);
+    }
+
+    // Crypto routes (conditionnel)
+    if (config.crypto.enabled) {
+      try {
+        const cryptoMod = await import('./routes/cryptoRoutes');
+        const cryptoRouter = typeof cryptoMod.default === 'function' ? cryptoMod.default() : cryptoMod.default;
+        
+        app.use('/api/crypto', (req, res, next) => {
+          if (configManager.isLogModuleEnabled('crypto')) {
+            logger.crypto.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route crypto', {
+              method: req.method,
+              path: req.path,
+            });
+          }
+          next();
+        }, cryptoRouter);
+        
+        console.log('✅ Routes crypto chargées');
+        logger.crypto.info('✅ Routes crypto activées', { metamask: config.crypto.metamask });
+      } catch (error) {
+        console.error('❌ Erreur chargement routes crypto:', (error as Error)?.message);
+      }
+    } else {
+      app.use('/api/crypto/*', (req, res) =>
+        res.status(503).json({ error: 'Fonctionnalités crypto temporairement désactivées', enabled: false }),
+      );
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur critique lors du chargement des routes:', (error as Error)?.message);
+    // Ne pas faire planter le serveur, continuer avec les routes de base
   }
 
   // Dev tools config API
@@ -413,6 +434,8 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     if (fs.existsSync(indexPath)) res.sendFile(indexPath);
     else res.status(404).json({ error: 'Application non trouvée' });
   });
+  
+  console.log('✅ Configuration des routes terminée');
 }
 
 /**
