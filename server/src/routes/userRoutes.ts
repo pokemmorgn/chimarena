@@ -108,7 +108,7 @@ router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
         })
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur récupération profil', { 
       error: error.message,
       stack: configManager.isDebug() ? error.stack : undefined
@@ -185,7 +185,7 @@ router.put('/profile', createProfileUpdateLimiter(), authenticateToken, async (r
       message: 'Profil mis à jour avec succès',
       user: user.getPublicProfile()
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur mise à jour profil', { 
 error: (error as Error)?.message,
 stack: configManager.isDebug() ? (error as Error)?.stack : undefined
@@ -226,7 +226,7 @@ router.get('/deck', authenticateToken, async (req: AuthenticatedRequest, res: Re
       deck: user.deck, 
       cards: user.cards 
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur récupération deck', { 
 error: (error as Error)?.message
     });
@@ -283,7 +283,7 @@ router.get('/stats', createStatsLimiter(), authenticateToken, async (req: Authen
       success: true,
       stats
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur récupération stats', { 
 error: (error as Error)?.message,
 stack: configManager.isDebug() ? (error as Error)?.stack : undefined
@@ -363,7 +363,7 @@ router.get('/leaderboard', createStatsLimiter(), async (req: Request, res: Respo
         cached: false // Pour future implémentation cache
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur récupération classement', { 
 error: (error as Error)?.message,
 stack: configManager.isDebug() ? (error as Error)?.stack : undefined
@@ -423,7 +423,7 @@ router.get('/:username', async (req: Request, res: Response) => {
       success: true, 
       player: user.getPublicProfile() 
     });
-  } catch (error) {
+  } catch (error: any) {
     requestLogger.error('Erreur récupération profil public', { 
 error: (error as Error)?.message,
       username: req.params.username
