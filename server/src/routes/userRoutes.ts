@@ -161,7 +161,7 @@ router.put('/profile', createProfileUpdateLimiter(), authenticateToken, async (r
       if (existingUser) {
         requestLogger.warn('Username déjà pris', { 
           requestedUsername: username,
-          conflictUserId: existingUser._id.toString()
+          conflictUserId: existingUser._id?.toString()
         });
         return res.status(400).json({ 
           success: false, 
@@ -187,8 +187,8 @@ router.put('/profile', createProfileUpdateLimiter(), authenticateToken, async (r
     });
   } catch (error) {
     requestLogger.error('Erreur mise à jour profil', { 
-      error: error.message,
-      stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
@@ -228,7 +228,7 @@ router.get('/deck', authenticateToken, async (req: AuthenticatedRequest, res: Re
     });
   } catch (error) {
     requestLogger.error('Erreur récupération deck', { 
-      error: error.message
+error: (error as Error)?.message
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
@@ -285,8 +285,8 @@ router.get('/stats', createStatsLimiter(), authenticateToken, async (req: Authen
     });
   } catch (error) {
     requestLogger.error('Erreur récupération stats', { 
-      error: error.message,
-      stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
@@ -365,8 +365,8 @@ router.get('/leaderboard', createStatsLimiter(), async (req: Request, res: Respo
     });
   } catch (error) {
     requestLogger.error('Erreur récupération classement', { 
-      error: error.message,
-      stack: configManager.isDebug() ? error.stack : undefined
+error: (error as Error)?.message,
+stack: configManager.isDebug() ? (error as Error)?.stack : undefined
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
@@ -425,7 +425,7 @@ router.get('/:username', async (req: Request, res: Response) => {
     });
   } catch (error) {
     requestLogger.error('Erreur récupération profil public', { 
-      error: error.message,
+error: (error as Error)?.message
       username: req.params.username
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
