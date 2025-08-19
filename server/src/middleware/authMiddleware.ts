@@ -1,6 +1,6 @@
 // server/src/middleware/authMiddleware.ts - VERSION CORRIGÉE
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import User from '../models/User';
 
 export interface AuthenticatedRequest extends Request {
@@ -108,21 +108,23 @@ export const optionalAuth = async (
 
 // ✅ GÉNÉRATION DE TOKENS AVEC LES BONNES VARIABLES
 export const generateAccessToken = (user: any): string => {
+  // @ts-ignore
   return jwt.sign(
     {
       id: user._id.toString(),
       username: user.username,
       email: user.email,
     },
-    JWT_ACCESS_SECRET as jwt.Secret,
+    JWT_ACCESS_SECRET,
     { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
   );
 };
 
 export const generateRefreshToken = (user: any): string => {
+  // @ts-ignore
   return jwt.sign(
     { id: user._id.toString() },
-    JWT_REFRESH_SECRET as jwt.Secret,
+    JWT_REFRESH_SECRET,
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
   );
 };
@@ -196,7 +198,8 @@ export const requireAdmin = requireRole('admin');
 
 // ✅ UTILITAIRE POUR CRÉER UN TOKEN TEMPORAIRE
 export const generateTemporaryToken = (payload: any, expiresIn: string = '1h'): string => {
-  return jwt.sign(payload, JWT_ACCESS_SECRET as jwt.Secret, { expiresIn });
+  // @ts-ignore
+  return jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn });
 };
 
 // ✅ UTILITAIRE POUR VÉRIFIER SI UN TOKEN EST EXPIRÉ
