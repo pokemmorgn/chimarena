@@ -18,6 +18,8 @@ export default class AuthScene extends Phaser.Scene {
 
   preload() {
     this.createUITextures();
+      this.load.image('mainmenu-bg', '/background/mainmenu.png'); // chemin public
+  this.createUITextures();
   }
 
   create() {
