@@ -665,8 +665,9 @@ return value !== undefined ? value : (defaultValue as T);
     console.log(`↩️ Restauration backup du ${backup.timestamp.toISOString()} (${backup.reason})`);
     
     await this.createBackup('pre_restore');
-    this.config = JSON.parse(JSON.stringify(backup.config)); // Deep copy
-    await this.saveConfigToFile(this.config, reason);
+const restoredConfig = JSON.parse(JSON.stringify(backup.config)) as AppConfig; // narrow local
+this.config = restoredConfig;
+await this.saveConfigToFile(restoredConfig, reason);
     
     console.log('✅ Backup restauré avec succès');
   }
