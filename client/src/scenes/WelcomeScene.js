@@ -386,22 +386,22 @@ export default class WelcomeScene extends Phaser.Scene {
     }
 
     // 📱 BOUTONS DE NAVIGATION PORTRAIT
-    createPortraitNavigationButtons() {
-        const { width, height } = this.scale;
-        
-        // Boutons en bas de l'écran
-        const navY = height - (this.isMobile ? 100 : 120);
-        
-        // Bouton principal vers le jeu - plus grand
-        this.createPortraitNavButton(width / 2, navY, '⚔️ JOUER', '#e74c3c', () => {
-            this.scene.start('MenuScene');
-        }, true);
-        
-        // Bouton paramètres plus petit à côté
-        this.createPortraitNavButton(width / 2, navY + (this.isMobile ? 35 : 40), '⚙️ Paramètres', '#7f8c8d', () => {
-            window.NotificationManager.show('Paramètres - Bientôt disponible !', 'info');
-        }, false);
-    }
+   createPortraitNavigationButtons() {
+    const { width, height } = this.scale;
+    
+    // Boutons en bas de l'écran
+    const navY = height - (this.isMobile ? 100 : 120);
+    
+    // 🔄 CORRECTION: Rediriger vers ClashMenuScene au lieu de MenuScene
+    this.createPortraitNavButton(width / 2, navY, '⚔️ JOUER', '#e74c3c', () => {
+        this.scene.start('ClashMenuScene'); // ✅ CORRIGÉ
+    }, true);
+    
+    // Bouton paramètres plus petit à côté
+    this.createPortraitNavButton(width / 2, navY + (this.isMobile ? 35 : 40), '⚙️ Paramètres', '#7f8c8d', () => {
+        window.NotificationManager.show('Paramètres - Bientôt disponible !', 'info');
+    }, false);
+}
 
     createPortraitNavButton(x, y, text, color, action, isPrimary = false) {
         const fontSize = isPrimary ? (this.isMobile ? '16px' : '18px') : (this.isMobile ? '12px' : '14px');
@@ -580,16 +580,16 @@ export default class WelcomeScene extends Phaser.Scene {
     // === MÉTHODES DE GESTION ===
 
     setupKeyboardControls() {
-        if (!this.isMobile) {
-            this.input.keyboard.on('keydown-ENTER', () => {
-                this.scene.start('MenuScene');
-            });
-            
-            this.input.keyboard.on('keydown-ESC', () => {
-                this.handleSecureLogout();
-            });
-        }
+    if (!this.isMobile) {
+        this.input.keyboard.on('keydown-ENTER', () => {
+            this.scene.start('ClashMenuScene'); // ✅ CORRIGÉ
+        });
+        
+        this.input.keyboard.on('keydown-ESC', () => {
+            this.handleSecureLogout();
+        });
     }
+}
 
     setupSecurityHooks() {
         config.onAuthenticationLost((reason) => {
