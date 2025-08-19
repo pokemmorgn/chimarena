@@ -125,6 +125,7 @@ export const generateRefreshToken = (user: any): string => {
     JWT_REFRESH_SECRET as jwt.Secret,
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
   );
+};
 
 // ✅ VÉRIFICATION REFRESH TOKEN AVEC LA BONNE VARIABLE
 export const verifyRefreshToken = (token: string): any => {
