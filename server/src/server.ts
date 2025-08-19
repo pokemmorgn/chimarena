@@ -1,4 +1,4 @@
-// server/src/server.ts - ÉTAPE 5 : Serveur intégré avec système de configuration complet
+// server/src/server.ts - SERVEUR COMPLET CORRIGÉ (sans erreurs TypeScript)
 import express, { Request, Response, NextFunction } from 'express';
 import https from 'https';
 import http from 'http';
@@ -76,10 +76,10 @@ async function initializeServer() {
       nodeVersion: process.version
     });
     
-  } catch (error) {
+  } catch (error: any) {
     logger.general.error('❌ Erreur critique lors de l\'initialisation', {
-      error: error.message,
-      stack: error.stack
+      error: (error as Error)?.message,
+      stack: (error as Error)?.stack
     });
     
     // Arrêt propre en cas d'erreur critique
@@ -569,15 +569,15 @@ function setupConfigAPI(app: express.Application): void {
         message: 'Configuration rechargée avec succès',
         timestamp: new Date().toISOString()
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.general.error('Erreur rechargement configuration', { 
-        error: error.message,
+        error: (error as Error)?.message,
         ip: req.ip
       });
       
       res.status(500).json({ 
         success: false, 
-        message: error.message 
+        message: (error as Error)?.message
       });
     }
   });
@@ -635,8 +635,8 @@ function setupErrorHandling(app: express.Application, config: any): void {
     
     // Log de l'erreur
     logger.general.error('Erreur serveur', {
-      error: err.message,
-      stack: isDev ? err.stack : undefined,
+      error: (err as Error)?.message,
+      stack: isDev ? (err as Error)?.stack : undefined,
       path: req.path,
       method: req.method,
       ip: req.ip,
@@ -647,12 +647,12 @@ function setupErrorHandling(app: express.Application, config: any): void {
 
     // Réponse selon l'environnement
     const errorResponse = {
-      error: isDev ? err.message : 'Erreur interne du serveur',
+      error: isDev ? (err as Error)?.message : 'Erreur interne du serveur',
       code: err.code || 'INTERNAL_ERROR',
       requestId,
       timestamp: new Date().toISOString(),
       ...(isDev && { 
-        stack: err.stack,
+        stack: (err as Error)?.stack,
         details: err.details 
       })
     };
@@ -663,16 +663,16 @@ function setupErrorHandling(app: express.Application, config: any): void {
   // Gestion des promesses rejetées
   process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
     logger.general.error('Promesse rejetée non gérée', {
-      reason: reason?.message || reason,
-      stack: reason?.stack
+      reason: (reason as Error)?.message || reason,
+      stack: (reason as Error)?.stack
     });
   });
 
   // Gestion des exceptions non capturées
   process.on('uncaughtException', (err: Error) => {
     logger.general.error('Exception non capturée', {
-      error: err.message,
-      stack: err.stack
+      error: (err as Error)?.message,
+      stack: (err as Error)?.stack
     });
     
     // Arrêt propre en cas d'exception critique
@@ -752,9 +752,9 @@ function createHTTPSServer(app: express.Application) {
     logger.security.info('🔐 Certificats SSL chargés avec succès');
     return https.createServer(credentials, app);
     
-  } catch (error) {
+  } catch (error: any) {
     logger.security.error('❌ Erreur chargement certificats SSL', { 
-      error: error.message 
+      error: (error as Error)?.message
     });
     return null;
   }
@@ -852,9 +852,9 @@ async function gracefulShutdown(): Promise<void> {
     // Autres nettoyages ici (fermer DB, WebSocket, etc.)
     
     logger.general.info('✅ Arrêt propre terminé');
-  } catch (error) {
+  } catch (error: any) {
     logger.general.error('❌ Erreur lors de l\'arrêt propre', { 
-      error: error.message 
+      error: (error as Error)?.message
     });
   }
 }
@@ -872,8 +872,8 @@ process.on('SIGINT', () => {
 
 // 🚀 DÉMARRAGE DU SERVEUR
 if (require.main === module) {
-  initializeServer().catch((error) => {
-    console.error('❌ Erreur fatale lors du démarrage:', error);
+  initializeServer().catch((error: any) => {
+    console.error('❌ Erreur fatale lors du démarrage:', (error as Error)?.message);
     process.exit(1);
   });
 }
