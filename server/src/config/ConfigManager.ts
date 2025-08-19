@@ -562,15 +562,14 @@ throw new Error('Impossible de charger la configuration initiale: ' + (error as 
   /**
    * 📖 OBTENIR UNE VALEUR DE CONFIGURATION
    */
-  get<T = any>(path: string, defaultValue?: T): T {
-    if (!this.config) {
-      throw new Error('Configuration non initialisée');
-    }
-
-    const value = this.getNestedValue(this.config, path);
-return value !== undefined ? value : (defaultValue as T);
+get<T = any>(path: string, defaultValue?: T): T {
+  if (!this.config) {
+    // renvoie juste la valeur par défaut pendant le bootstrap
+    return defaultValue as T;
   }
-
+  const value = this.getNestedValue(this.config, path);
+  return value !== undefined ? value : (defaultValue as T);
+}
   /**
    * ✏️ DÉFINIR UNE VALEUR DE CONFIGURATION (en mémoire)
    */
