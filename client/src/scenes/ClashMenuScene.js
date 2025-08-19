@@ -1,6 +1,12 @@
-// client/src/scenes/ClashMenuScene.js - SCÈNE PRINCIPALE CLASH ROYALE
+// client/src/scenes/ClashMenuScene.js - SCÈNE AVEC COMPOSANTS INTÉGRÉS
 import Phaser from 'phaser';
 import { auth } from '../api';
+import { 
+    ClashHeader, 
+    ArenaDisplay, 
+    TabNavigation, 
+    TabPanels 
+} from '../clashmenu';
 
 export default class ClashMenuScene extends Phaser.Scene {
     constructor() {
@@ -10,10 +16,10 @@ export default class ClashMenuScene extends Phaser.Scene {
         this.gameInstance = null;
         
         // Navigation
-        this.currentTab = 0; // 0=Bataille, 1=Collection, 2=Deck, 3=Clan, 4=Profil
+        this.currentTab = 0;
         this.tabs = ['Bataille', 'Collection', 'Deck', 'Clan', 'Profil'];
         
-        // Composants (seront importés plus tard)
+        // Composants Clash Royale
         this.clashHeader = null;
         this.arenaDisplay = null;
         this.tabNavigation = null;
@@ -39,10 +45,7 @@ export default class ClashMenuScene extends Phaser.Scene {
         
         // Créer l'interface
         this.createBackground();
-        this.createHeader();
-        this.createArenaSection();
-        this.createTabNavigation();
-        this.createTabContent();
+        this.createClashComponents();
         
         // Afficher l'onglet par défaut
         this.switchToTab(0);
@@ -51,7 +54,7 @@ export default class ClashMenuScene extends Phaser.Scene {
         this.playEntranceAnimation();
         this.setupInputEvents();
         
-        console.log('✅ ClashMenuScene initialisé');
+        console.log('✅ ClashMenuScene initialisé avec composants');
     }
 
     // === CRÉATION DU FOND ===
@@ -98,255 +101,176 @@ export default class ClashMenuScene extends Phaser.Scene {
         }
     }
 
-    // === CRÉATION DES COMPOSANTS ===
-    createHeader() {
-        // TODO: Importer et utiliser ClashHeader
-        // this.clashHeader = new ClashHeader(this, this.currentUser);
+    // === CRÉATION DES COMPOSANTS CLASH ROYALE ===
+    createClashComponents() {
+        console.log('🏗️ Création des composants Clash Royale...');
         
-        // TEMPORAIRE - Version simplifiée
-        this.createTempHeader();
+        try {
+            // 1. Header avec infos joueur
+            this.clashHeader = new ClashHeader(this, this.currentUser);
+            console.log('✅ ClashHeader créé');
+            
+            // 2. Section arène centrale
+            this.arenaDisplay = new ArenaDisplay(this, this.currentUser);
+            console.log('✅ ArenaDisplay créé');
+            
+            // 3. Panels de contenu
+            this.tabPanels = new TabPanels(this, this.currentUser, (action, data) => {
+                this.handlePanelAction(action, data);
+            });
+            console.log('✅ TabPanels créé');
+            
+            // 4. Navigation en bas
+            this.tabNavigation = new TabNavigation(this, this.tabs, (tabIndex) => {
+                this.switchToTab(tabIndex);
+            });
+            console.log('✅ TabNavigation créé');
+            
+        } catch (error) {
+            console.error('❌ Erreur création composants:', error);
+            this.showMessage('Erreur de chargement des composants', 'error');
+        }
     }
 
-    createArenaSection() {
-        // TODO: Importer et utiliser ArenaDisplay
-        // this.arenaDisplay = new ArenaDisplay(this, this.currentUser);
-        
-        // TEMPORAIRE - Version simplifiée
-        this.createTempArena();
-    }
-
-    createTabNavigation() {
-        // TODO: Importer et utiliser TabNavigation
-        // this.tabNavigation = new TabNavigation(this, this.tabs, (index) => this.switchToTab(index));
-        
-        // TEMPORAIRE - Version simplifiée
-        this.createTempTabs();
-    }
-
-    createTabContent() {
-        // TODO: Importer et utiliser TabPanels
-        // this.tabPanels = new TabPanels(this, this.currentUser);
-        
-        // TEMPORAIRE - Version simplifiée
-        this.createTempPanels();
-    }
-
-    // === VERSIONS TEMPORAIRES (en attendant les composants) ===
-    createTempHeader() {
-        const { width } = this.scale;
-        
-        // Panel header
-        const headerBg = this.add.graphics();
-        headerBg.fillStyle(0x2F4F4F, 0.9);
-        headerBg.fillRoundedRect(10, 10, width - 20, 80, 10);
-        headerBg.lineStyle(2, 0xFFD700);
-        headerBg.strokeRoundedRect(10, 10, width - 20, 80, 10);
-        
-        // Info joueur
-        const playerName = this.currentUser?.username || 'Joueur';
-        const playerLevel = this.currentUser?.playerStats?.level || 1;
-        
-        this.add.text(30, 30, `👑 ${playerName}`, {
-            fontSize: this.isMobile ? '16px' : '18px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFFFFF'
-        });
-        
-        this.add.text(30, 55, `Niveau ${playerLevel}`, {
-            fontSize: this.isMobile ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#B0C4DE'
-        });
-        
-        // Ressources
-        const trophies = this.currentUser?.playerStats?.trophies || 0;
-        const gold = this.currentUser?.resources?.gold || 0;
-        
-        this.add.text(width - 150, 35, `🏆 ${window.GameUtils.formatNumber(trophies)}`, {
-            fontSize: this.isMobile ? '14px' : '16px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        });
-        
-        this.add.text(width - 150, 60, `💰 ${window.GameUtils.formatNumber(gold)}`, {
-            fontSize: this.isMobile ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        });
-    }
-
-    createTempArena() {
-        const { width } = this.scale;
-        const arenaY = 110;
-        
-        // Panel arène
-        const arenaBg = this.add.graphics();
-        arenaBg.fillStyle(0x2F4F4F, 0.9);
-        arenaBg.fillRoundedRect(20, arenaY, width - 40, 120, 15);
-        arenaBg.lineStyle(3, 0xFFD700);
-        arenaBg.strokeRoundedRect(20, arenaY, width - 40, 120, 15);
-        
-        // Image de l'arène (temporaire)
-        const arenaImage = this.add.graphics();
-        arenaImage.fillStyle(0x8B4513, 1);
-        arenaImage.fillRoundedRect(30, arenaY + 10, 80, 60, 8);
-        arenaImage.lineStyle(2, 0xDAA520);
-        arenaImage.strokeRoundedRect(30, arenaY + 10, 80, 60, 8);
-        
-        // Détails
-        arenaImage.fillStyle(0x90EE90, 1);
-        arenaImage.fillRect(35, arenaY + 55, 70, 10);
-        
-        // Info arène
-        this.add.text(130, arenaY + 25, 'Arène des Gobelins', {
-            fontSize: this.isMobile ? '18px' : '20px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        });
-        
-        this.add.text(130, arenaY + 50, 'Arène 1', {
-            fontSize: this.isMobile ? '14px' : '16px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#B0C4DE'
-        });
-        
-        // Progression
-        const currentTrophies = this.currentUser?.playerStats?.trophies || 0;
-        this.add.text(130, arenaY + 75, `${currentTrophies}/400 🏆`, {
-            fontSize: this.isMobile ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#FFD700'
-        });
-    }
-
-    createTempTabs() {
-        const { width, height } = this.scale;
-        const tabsY = height - 70;
-        
-        // Background barre onglets
-        const tabsBg = this.add.graphics();
-        tabsBg.fillStyle(0x2F4F4F, 0.95);
-        tabsBg.fillRect(0, tabsY, width, 70);
-        tabsBg.lineStyle(2, 0x4682B4);
-        tabsBg.strokeRect(0, tabsY, width, 70);
-        
-        // Onglets
-        const tabWidth = width / this.tabs.length;
-        const tabIcons = ['⚔️', '🃏', '🛡️', '🏰', '👤'];
-        
-        this.tabButtons = [];
-        
-        this.tabs.forEach((tabName, index) => {
-            const tabX = tabWidth * index + tabWidth / 2;
-            const tabY = tabsY + 35;
-            
-            // Background onglet
-            const tabBg = this.add.graphics();
-            tabBg.fillStyle(index === 0 ? 0xFFD700 : 0x4682B4, 0.8);
-            tabBg.fillRoundedRect(tabX - tabWidth/2 + 5, tabY - 30, tabWidth - 10, 60, 8);
-            
-            // Icône et texte
-            const icon = this.add.text(tabX, tabY - 8, tabIcons[index], {
-                fontSize: this.isMobile ? '20px' : '24px'
-            }).setOrigin(0.5);
-            
-            const text = this.add.text(tabX, tabY + 15, tabName, {
-                fontSize: this.isMobile ? '10px' : '12px',
-                fontFamily: 'Arial, sans-serif',
-                fontWeight: 'bold',
-                fill: '#FFFFFF'
-            }).setOrigin(0.5);
-            
-            // Interactivité
-            tabBg.setInteractive(new Phaser.Geom.Rectangle(tabX - tabWidth/2 + 5, tabY - 30, tabWidth - 10, 60), 
-                Phaser.Geom.Rectangle.Contains);
-            
-            tabBg.on('pointerdown', () => this.switchToTab(index));
-            
-            this.tabButtons.push({ bg: tabBg, icon, text, index });
-        });
-    }
-
-    createTempPanels() {
-        const { width, height } = this.scale;
-        const contentY = 250;
-        const contentHeight = height - contentY - 80;
-        
-        this.contentPanels = [];
-        
-        this.tabs.forEach((tabName, index) => {
-            const panel = this.add.container(0, contentY);
-            
-            // Background
-            const panelBg = this.add.graphics();
-            panelBg.fillStyle(0x2F4F4F, 0.8);
-            panelBg.fillRoundedRect(15, 0, width - 30, contentHeight, 12);
-            panelBg.lineStyle(2, 0x4682B4);
-            panelBg.strokeRoundedRect(15, 0, width - 30, contentHeight, 12);
-            panel.add(panelBg);
-            
-            // Contenu
-            const title = this.add.text(width/2, 30, `${['⚔️', '🃏', '🛡️', '🏰', '👤'][index]} ${tabName.toUpperCase()}`, {
-                fontSize: this.isMobile ? '18px' : '20px',
-                fontFamily: 'Arial, sans-serif',
-                fontWeight: 'bold',
-                fill: '#FFD700'
-            }).setOrigin(0.5);
-            
-            const content = this.add.text(width/2, contentHeight/2, `Contenu ${tabName}\n\nEn développement...`, {
-                fontSize: this.isMobile ? '14px' : '16px',
-                fontFamily: 'Arial, sans-serif',
-                fill: '#B0C4DE',
-                align: 'center'
-            }).setOrigin(0.5);
-            
-            panel.add([title, content]);
-            panel.setVisible(index === 0);
-            
-            this.contentPanels.push(panel);
-        });
-    }
-
-    // === NAVIGATION ===
+    // === GESTION DES ONGLETS ===
     switchToTab(index) {
         if (index === this.currentTab) return;
         
-        // Masquer panel actuel
-        if (this.contentPanels[this.currentTab]) {
-            this.contentPanels[this.currentTab].setVisible(false);
-        }
+        console.log(`📱 Changement onglet: ${this.tabs[this.currentTab]} -> ${this.tabs[index]}`);
         
-        // Réinitialiser style onglet précédent
-        if (this.tabButtons[this.currentTab]) {
-            const prevTab = this.tabButtons[this.currentTab];
-            prevTab.bg.clear();
-            prevTab.bg.fillStyle(0x4682B4, 0.8);
-            const tabWidth = this.scale.width / this.tabs.length;
-            const tabX = tabWidth * this.currentTab + tabWidth / 2;
-            prevTab.bg.fillRoundedRect(tabX - tabWidth/2 + 5, this.scale.height - 70 + 5, tabWidth - 10, 60, 8);
-        }
-        
-        // Activer nouvel onglet
+        const oldTab = this.currentTab;
         this.currentTab = index;
         
-        // Style onglet actif
-        const activeTab = this.tabButtons[this.currentTab];
-        activeTab.bg.clear();
-        activeTab.bg.fillStyle(0xFFD700, 0.8);
-        const tabWidth = this.scale.width / this.tabs.length;
-        const tabX = tabWidth * index + tabWidth / 2;
-        activeTab.bg.fillRoundedRect(tabX - tabWidth/2 + 5, this.scale.height - 70 + 5, tabWidth - 10, 60, 8);
-        
-        // Afficher nouveau panel
-        if (this.contentPanels[this.currentTab]) {
-            this.contentPanels[this.currentTab].setVisible(true);
+        // Changer le panel
+        if (this.tabPanels) {
+            this.tabPanels.switchToPanel(index);
         }
         
-        console.log(`📱 Onglet changé: ${this.tabs[index]}`);
+        // Mettre à jour la navigation
+        if (this.tabNavigation) {
+            // La navigation se met à jour automatiquement via son callback
+        }
+        
+        console.log(`✅ Onglet actif: ${this.tabs[index]} (${index})`);
+    }
+
+    // === GESTION DES ACTIONS DES PANELS ===
+    handlePanelAction(action, data) {
+        console.log(`🎮 Action panel: ${action}`, data);
+        
+        switch (action) {
+            case 'battle':
+                this.startBattle();
+                break;
+                
+            case 'training':
+                this.showMessage('Mode entraînement - Bientôt disponible !', 'info');
+                break;
+                
+            case 'tournament':
+                this.showMessage('Tournois - Bientôt disponibles !', 'info');
+                break;
+                
+            case 'view_card':
+                this.showCardDetails(data);
+                break;
+                
+            case 'upgrade_cards':
+                this.showMessage('Amélioration de cartes - En développement', 'info');
+                break;
+                
+            case 'filter_cards':
+                this.showMessage('Filtres de cartes - En développement', 'info');
+                break;
+                
+            case 'edit_deck':
+                this.showMessage('Éditeur de deck - En développement', 'info');
+                break;
+                
+            case 'copy_deck':
+                this.showMessage('Copie de deck - En développement', 'info');
+                break;
+                
+            case 'join_clan':
+                this.showMessage('Rejoindre un clan - En développement', 'info');
+                break;
+                
+            case 'create_clan':
+                this.showMessage('Créer un clan - En développement', 'info');
+                break;
+                
+            case 'clan_chat':
+                this.showMessage('Chat de clan - En développement', 'info');
+                break;
+                
+            case 'clan_war':
+                this.showMessage('Guerre de clan - En développement', 'info');
+                break;
+                
+            case 'clan_donate':
+                this.showMessage('Donations - En développement', 'info');
+                break;
+                
+            case 'settings':
+                this.openSettings();
+                break;
+                
+            case 'logout':
+                this.handleLogout();
+                break;
+                
+            default:
+                console.warn('Action non gérée:', action);
+                this.showMessage(`Action "${action}" non implémentée`, 'info');
+        }
+    }
+
+    // === ACTIONS SPÉCIFIQUES ===
+    startBattle() {
+        console.log('⚔️ Démarrage bataille...');
+        this.showMessage('Recherche d\'adversaire...', 'info');
+        // TODO: Implémenter le matchmaking
+    }
+
+    showCardDetails(cardData) {
+        console.log('🃏 Détails carte:', cardData);
+        this.showMessage(`Carte: ${cardData.name}`, 'info');
+        // TODO: Ouvrir popup de détails
+    }
+
+    openSettings() {
+        console.log('⚙️ Ouverture paramètres...');
+        this.showMessage('Paramètres - En développement', 'info');
+        // TODO: Créer scene de paramètres
+    }
+
+    async handleLogout() {
+        const confirm = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+        if (!confirm) return;
+
+        try {
+            console.log('🚪 Déconnexion...');
+            
+            // Nettoyer les composants
+            this.cleanupComponents();
+            
+            // Déconnexion API
+            await auth.logout();
+            this.gameInstance?.clearAuthData();
+            
+            this.showMessage('Déconnexion réussie', 'success');
+            this.scene.start('AuthScene');
+            
+        } catch (error) {
+            console.error('❌ Erreur déconnexion:', error);
+            
+            // Forcer la déconnexion locale
+            this.cleanupComponents();
+            this.gameInstance?.clearAuthData();
+            
+            this.showMessage('Déconnexion locale effectuée', 'info');
+            this.scene.start('AuthScene');
+        }
     }
 
     // === ÉVÉNEMENTS ===
@@ -354,40 +278,29 @@ export default class ClashMenuScene extends Phaser.Scene {
         // Navigation clavier (PC)
         if (!this.isMobile) {
             this.input.keyboard.on('keydown-LEFT', () => {
-                const newTab = Math.max(0, this.currentTab - 1);
-                this.switchToTab(newTab);
+                if (this.tabNavigation) {
+                    this.tabNavigation.handleKeyboard('left');
+                }
             });
             
             this.input.keyboard.on('keydown-RIGHT', () => {
-                const newTab = Math.min(this.tabs.length - 1, this.currentTab + 1);
-                this.switchToTab(newTab);
+                if (this.tabNavigation) {
+                    this.tabNavigation.handleKeyboard('right');
+                }
+            });
+            
+            this.input.keyboard.on('keydown-ESC', () => {
+                this.handleLogout();
             });
         }
         
-        // Swipe mobile
-        if (this.isMobile) {
-            let startX = 0;
-            
-            this.input.on('pointerdown', (pointer) => {
-                startX = pointer.x;
-            });
-            
-            this.input.on('pointerup', (pointer) => {
-                const diffX = pointer.x - startX;
-                if (Math.abs(diffX) > 50) {
-                    if (diffX > 0 && this.currentTab > 0) {
-                        this.switchToTab(this.currentTab - 1);
-                    } else if (diffX < 0 && this.currentTab < this.tabs.length - 1) {
-                        this.switchToTab(this.currentTab + 1);
-                    }
-                }
-            });
-        }
+        // Swipe mobile (géré par TabNavigation)
+        // Pas besoin de redéfinir ici
     }
 
     // === ANIMATIONS ===
     playEntranceAnimation() {
-        // Animation simple pour l'instant
+        // Animation globale simple
         this.cameras.main.setAlpha(0);
         this.tweens.add({
             targets: this.cameras.main,
@@ -395,23 +308,90 @@ export default class ClashMenuScene extends Phaser.Scene {
             duration: 500,
             ease: 'Power2'
         });
+        
+        // Les composants ont leurs propres animations d'entrée
+        if (this.clashHeader) {
+            this.clashHeader.show();
+        }
+        
+        if (this.arenaDisplay) {
+            this.arenaDisplay.show();
+        }
+        
+        if (this.tabNavigation) {
+            this.tabNavigation.show();
+        }
+        
+        if (this.tabPanels) {
+            this.tabPanels.show();
+        }
     }
 
     // === MÉTHODES UTILITAIRES ===
     showMessage(message, type = 'info') {
-        window.NotificationManager?.show(message, type);
+        if (window.NotificationManager) {
+            window.NotificationManager.show(message, type);
+        } else {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+    }
+
+    updateUserData(newUserData) {
+        this.currentUser = newUserData;
+        this.registry.set('currentUser', newUserData);
+        
+        // Mettre à jour tous les composants
+        if (this.clashHeader) {
+            this.clashHeader.updateUserData(newUserData);
+        }
+        
+        if (this.arenaDisplay) {
+            this.arenaDisplay.updateUserData(newUserData);
+        }
+        
+        if (this.tabPanels) {
+            this.tabPanels.updateUserData(newUserData);
+        }
+        
+        console.log('🔄 Données utilisateur mises à jour dans tous les composants');
+    }
+
+    cleanupComponents() {
+        console.log('🧹 Nettoyage des composants...');
+        
+        if (this.clashHeader) {
+            this.clashHeader.destroy();
+            this.clashHeader = null;
+        }
+        
+        if (this.arenaDisplay) {
+            this.arenaDisplay.destroy();
+            this.arenaDisplay = null;
+        }
+        
+        if (this.tabNavigation) {
+            this.tabNavigation.destroy();
+            this.tabNavigation = null;
+        }
+        
+        if (this.tabPanels) {
+            this.tabPanels.destroy();
+            this.tabPanels = null;
+        }
     }
 
     update() {
         // Vérifications périodiques
         if (!auth.isAuthenticated()) {
+            console.warn('⚠️ Perte d\'authentification détectée');
+            this.cleanupComponents();
             this.scene.start('AuthScene');
         }
     }
 
     destroy() {
-        // Nettoyage
         console.log('🧹 ClashMenuScene détruite');
+        this.cleanupComponents();
         super.destroy();
     }
 }
