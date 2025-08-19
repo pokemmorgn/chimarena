@@ -131,7 +131,7 @@ router.post('/register', async (req: Request, res: Response) => {
     res.cookie('rt', refreshToken, getRefreshCookieOptions());
 
     requestLogger.info('Inscription réussie', { 
-      userId: user._id.toString(),
+      userId: user._id?.toString(),
       username: user.username,
       email: `${email.substring(0, 3)}***`
     });
@@ -145,7 +145,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
   } catch (err: any) {
     requestLogger.error('Erreur inscription', { 
-      error: err.message,
+      error: (err as Error)?.message,
       stack: configManager.isDebug() ? err.stack : undefined
     });
     
@@ -230,7 +230,7 @@ router.post('/login', async (req: Request, res: Response) => {
     // Vérifier si le compte est verrouillé
     if (user.isAccountLocked) {
       requestLogger.warn('Connexion - Compte verrouillé', { 
-        userId: user._id.toString(),
+        userId: user._id?.toString(),
         email: `${email.substring(0, 3)}***`,
         attempts: user.accountInfo?.failedLoginAttempts || 0
       });
@@ -244,7 +244,7 @@ router.post('/login', async (req: Request, res: Response) => {
     // Vérifier si banni
     if (user.accountInfo?.isBanned) {
       requestLogger.warn('Connexion - Compte banni', {
-        userId: user._id.toString(),
+        userId: user._id?.toString(),
         reason: user.accountInfo.banReason,
         expiresAt: user.accountInfo.banExpires
       });
@@ -263,7 +263,7 @@ router.post('/login', async (req: Request, res: Response) => {
       await user.incrementFailedLogins();
       
       requestLogger.warn('Connexion - Mot de passe incorrect', { 
-        userId: user._id.toString(),
+        userId: user._id?.toString(),
         email: `${email.substring(0, 3)}***`,
         attempts: (user.accountInfo?.failedLoginAttempts || 0) + 1
       });
@@ -301,7 +301,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.cookie('rt', refreshToken, getRefreshCookieOptions());
 
     requestLogger.info('Connexion réussie', { 
-      userId: user._id.toString(),
+      userId: user._id?.toString(),
       username: user.username,
       email: `${email.substring(0, 3)}***`,
       loginCount: user.accountInfo.loginCount,
@@ -317,7 +317,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
   } catch (err: any) {
     requestLogger.error('Erreur connexion', { 
-      error: err.message,
+      error: (err as Error)?.message,
       stack: configManager.isDebug() ? err.stack : undefined
     });
     return res.status(500).json({ 
@@ -361,7 +361,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     if (user.accountInfo?.isBanned) {
       requestLogger.warn('Refresh - Compte banni', { 
-        userId: user._id.toString() 
+        userId: user._id?.toString() 
       });
       return res.status(403).json({ 
         success: false, 
@@ -372,7 +372,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const accessToken = generateAccessToken(user);
 
     requestLogger.debug('Token rafraîchi', { 
-      userId: user._id.toString(),
+      userId: user._id?.toString(),
       username: user.username
     });
 
@@ -383,7 +383,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
   } catch (err) {
     requestLogger.warn('Refresh - Token invalide', { 
-      error: err.message 
+      error: (err as Error)?.message 
     });
     return res.status(403).json({ 
       success: false, 
@@ -463,7 +463,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     });
   } catch (err) {
     requestLogger.error('Erreur récupération profil', { 
-      error: err.message 
+      error: (err as Error)?.message 
     });
     return res.status(500).json({ 
       success: false, 
