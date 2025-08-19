@@ -16,11 +16,11 @@ export default class AuthScene extends Phaser.Scene {
     this.formData = { email: '', password: '', username: '' };
   }
 
-  preload() {
-    this.createUITextures();
-      this.load.image('mainmenu-bg', '/background/mainmenu.png'); // chemin public
+preload() {
   this.createUITextures();
-  }
+  this.load.image('mainmenu-bg', 'background/mainmenu.png'); // sans le slash
+}
+
 
   create() {
     this.gameInstance = this.registry.get('gameInstance');
