@@ -117,13 +117,17 @@ setupSecurityHooks() {
     g.destroy();
   }
 
-  createBackground() {
-    const { width, height } = this.scale;
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x667eea,0x667eea,0x764ba2,0x764ba2);
-    bg.fillRect(0,0,width,height);
-    this.createBackgroundParticles();
-  }
+createBackground() {
+  const { width, height } = this.scale;
+  
+  // Ajouter l’image
+  const bg = this.add.image(width / 2, height / 2, 'mainmenu-bg')
+    .setOrigin(0.5)
+    .setDisplaySize(width, height); // occupe tout l’écran
+  
+  // (Optionnel) ajouter encore les petites particules si tu veux garder l’effet
+  this.createBackgroundParticles();
+}
 
   createBackgroundParticles() {
     const { width, height } = this.scale;
