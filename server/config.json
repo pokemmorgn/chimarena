@@ -1,0 +1,407 @@
+{
+  "_meta": {
+    "description": "Configuration ChimArena - Hot reload activé",
+    "version": "1.0.0",
+    "lastModified": "2024-01-15T10:30:00.000Z",
+    "environment": "production",
+    "warningReadMe": "Ce fichier est rechargé automatiquement. Sauvegardé avant modification."
+  },
+
+  "app": {
+    "name": "ChimArena",
+    "version": "1.0.0",
+    "env": "auto",
+    "debug": false,
+    "maintenance": false
+  },
+
+  "server": {
+    "port": 3000,
+    "httpsPort": 443,
+    "host": "0.0.0.0",
+    "corsOrigins": [
+      "https://chimarena.cloud",
+      "https://www.chimarena.cloud",
+      "https://app.chimarena.cloud",
+      "http://localhost:8080",
+      "http://localhost:3000",
+      "http://127.0.0.1:8080",
+      "http://127.0.0.1:3000"
+    ],
+    "staticFiles": {
+      "enabled": true,
+      "maxAge": "1y",
+      "path": "../../client/dist"
+    }
+  },
+
+  "database": {
+    "uri": "mongodb://localhost:27017/chimarena",
+    "options": {
+      "maxPoolSize": 10,
+      "serverSelectionTimeoutMS": 5000,
+      "socketTimeoutMS": 45000,
+      "family": 4,
+      "retryWrites": true,
+      "retryReads": true
+    },
+    "autoReconnect": true
+  },
+
+  "auth": {
+    "jwtSecret": "ENV_OVERRIDE",
+    "accessTokenExpiry": "15m",
+    "refreshTokenExpiry": "7d",
+    "maxFailedAttempts": 5,
+    "lockDurationMinutes": 30,
+    "cookieOptions": {
+      "httpOnly": true,
+      "secure": "auto",
+      "sameSite": "strict",
+      "maxAge": 604800000
+    }
+  },
+
+  "crypto": {
+    "enabled": true,
+    "metamask": {
+      "enabled": true,
+      "supportedNetworks": [1, 137, 56],
+      "signatureTimeoutSeconds": 300,
+      "maxConnectionsPerHour": 3,
+      "maxNoncesStored": 100
+    },
+    "security": {
+      "requireTimestamp": true,
+      "maxSignatureAge": 300000,
+      "autoDetectSuspicious": true,
+      "banThreshold": 80
+    }
+  },
+
+  "security": {
+    "rateLimits": {
+      "auth": {
+        "windowMs": 900000,
+        "max": 10,
+        "message": "Trop de tentatives de connexion"
+      },
+      "crypto": {
+        "windowMs": 3600000,
+        "max": 20,
+        "message": "Trop d'actions crypto"
+      },
+      "api": {
+        "windowMs": 900000,
+        "max": 1000,
+        "message": "Trop de requêtes"
+      },
+      "registration": {
+        "windowMs": 3600000,
+        "max": 3,
+        "message": "Trop d'inscriptions"
+      }
+    },
+    "suspicion": {
+      "threshold": 50,
+      "autobanScore": 80,
+      "accountAgeMinHours": 24,
+      "maxUnknownIPs": 3
+    },
+    "encryption": {
+      "algorithm": "aes-256-gcm",
+      "keyDerivation": "pbkdf2"
+    }
+  },
+
+  "logging": {
+    "level": "info",
+    "modules": {
+      "auth": {
+        "enabled": true,
+        "level": "info",
+        "logSensitive": false,
+        "logFailedAttempts": true,
+        "logSuccessfulLogins": true
+      },
+      "crypto": {
+        "enabled": true,
+        "level": "debug",
+        "logAddresses": true,
+        "logSignatures": false,
+        "logWalletConnections": true,
+        "logSuspiciousActivity": true
+      },
+      "security": {
+        "enabled": true,
+        "level": "warn",
+        "logIPs": true,
+        "logUserAgents": false,
+        "logRateLimitHits": true,
+        "logSuspiciousPatterns": true
+      },
+      "api": {
+        "enabled": false,
+        "level": "error",
+        "logRequests": false,
+        "logResponses": false,
+        "logSlowRequests": true,
+        "slowRequestThresholdMs": 1000
+      },
+      "database": {
+        "enabled": true,
+        "level": "info",
+        "logQueries": false,
+        "logSlowQueries": true,
+        "slowQueryThresholdMs": 1000,
+        "logConnections": true
+      },
+      "game": {
+        "enabled": true,
+        "level": "info",
+        "logMatches": true,
+        "logPlayerActions": false,
+        "logMatchmaking": true,
+        "logCardActions": false
+      },
+      "performance": {
+        "enabled": false,
+        "level": "debug",
+        "logSlowQueries": true,
+        "logMemoryUsage": false,
+        "logResponseTimes": false,
+        "slowQueryThresholdMs": 1000
+      }
+    },
+    "output": {
+      "console": {
+        "enabled": true,
+        "colorize": true,
+        "timestamp": true
+      },
+      "file": {
+        "enabled": false,
+        "path": "./logs",
+        "filename": "chimarena-%DATE%.log",
+        "maxSize": "20mb",
+        "maxFiles": "14d",
+        "datePattern": "YYYY-MM-DD"
+      },
+      "json": {
+        "enabled": false,
+        "filename": "chimarena-json-%DATE%.log"
+      }
+    },
+    "filters": {
+      "excludePasswords": true,
+      "excludeTokens": true,
+      "excludePrivateKeys": true,
+      "maxStringLength": 1000
+    }
+  },
+
+  "features": {
+    "registration": true,
+    "login": true,
+    "guestMode": false,
+    "leaderboard": true,
+    "matchmaking": true,
+    "chatSystem": false,
+    "tournaments": false,
+    "devTools": false,
+    "adminPanel": false,
+    "analytics": false
+  },
+
+  "game": {
+    "maxPlayersOnline": 1000,
+    "matchmaking": {
+      "enabled": true,
+      "timeoutSeconds": 30,
+      "maxTrophyDifference": 200,
+      "priorityQueue": true
+    },
+    "session": {
+      "timeoutMinutes": 60,
+      "extendOnActivity": true,
+      "warningBeforeExpiry": 300
+    },
+    "battle": {
+      "durationSeconds": 180,
+      "overtimeSeconds": 60,
+      "maxElixir": 10,
+      "elixirRegenMs": 1000
+    },
+    "cards": {
+      "maxLevel": 14,
+      "maxDeckSize": 8,
+      "startingCards": ["knight", "archers", "fireball", "arrows"]
+    },
+    "economy": {
+      "startingGold": 1000,
+      "startingGems": 50,
+      "startingElixir": 100,
+      "dailyRewards": true
+    }
+  },
+
+  "performance": {
+    "enableCaching": true,
+    "cacheExpirySeconds": 300,
+    "enableCompression": true,
+    "enableGzip": true,
+    "maxRequestSize": "1mb",
+    "timeouts": {
+      "database": 30000,
+      "crypto": 10000,
+      "api": 5000
+    }
+  },
+
+  "monitoring": {
+    "enabled": false,
+    "healthCheck": {
+      "enabled": true,
+      "path": "/health",
+      "interval": 30000
+    },
+    "metrics": {
+      "enabled": false,
+      "collectInterval": 60000
+    },
+    "alerts": {
+      "enabled": false,
+      "errorThreshold": 10,
+      "memoryThreshold": 85
+    }
+  },
+
+  "_scenarios": {
+    "_comment": "Scénarios de configuration prêts à copier-coller",
+    
+    "development": {
+      "app.debug": true,
+      "app.env": "development",
+      "logging.level": "debug",
+      "logging.modules.crypto.level": "trace",
+      "logging.modules.api.enabled": true,
+      "features.devTools": true,
+      "server.corsOrigins": ["http://localhost:8080", "http://localhost:3000"]
+    },
+    
+    "production": {
+      "app.debug": false,
+      "app.env": "production",
+      "logging.level": "info",
+      "logging.modules.performance.enabled": true,
+      "logging.output.file.enabled": true,
+      "features.devTools": false,
+      "features.adminPanel": false
+    },
+    
+    "maintenance": {
+      "app.maintenance": true,
+      "logging.level": "warn",
+      "features.registration": false,
+      "features.matchmaking": false
+    },
+    
+    "debug_crypto": {
+      "logging.modules.crypto.level": "trace",
+      "logging.modules.crypto.logSignatures": true,
+      "logging.modules.security.level": "debug",
+      "crypto.security.autoDetectSuspicious": false
+    },
+    
+    "high_traffic": {
+      "security.rateLimits.api.max": 5000,
+      "security.rateLimits.auth.max": 20,
+      "performance.enableCaching": true,
+      "game.maxPlayersOnline": 5000,
+      "logging.modules.performance.enabled": true
+    },
+    
+    "security_lockdown": {
+      "security.rateLimits.auth.max": 3,
+      "security.rateLimits.crypto.max": 5,
+      "security.suspicion.threshold": 30,
+      "security.suspicion.autobanScore": 60,
+      "crypto.security.banThreshold": 60,
+      "logging.modules.security.level": "debug"
+    }
+  },
+
+  "_quickToggle": {
+    "_comment": "Toggles rapides pour situations courantes",
+    
+    "enableDebugMode": {
+      "app.debug": true,
+      "logging.level": "debug",
+      "logging.modules.api.enabled": true,
+      "features.devTools": true
+    },
+    
+    "enableMaintenanceMode": {
+      "app.maintenance": true,
+      "features.registration": false,
+      "features.matchmaking": false,
+      "logging.level": "warn"
+    },
+    
+    "enableCryptoDebugging": {
+      "logging.modules.crypto.level": "trace",
+      "logging.modules.crypto.logSignatures": true,
+      "logging.modules.security.level": "debug"
+    },
+    
+    "enableFileLogging": {
+      "logging.output.file.enabled": true,
+      "logging.output.json.enabled": true,
+      "logging.modules.performance.enabled": true
+    },
+    
+    "relaxSecurity": {
+      "security.rateLimits.auth.max": 20,
+      "security.rateLimits.crypto.max": 50,
+      "security.suspicion.threshold": 80,
+      "crypto.security.autoDetectSuspicious": false
+    },
+    
+    "strictSecurity": {
+      "security.rateLimits.auth.max": 3,
+      "security.rateLimits.crypto.max": 5,
+      "security.suspicion.threshold": 20,
+      "security.suspicion.autobanScore": 50,
+      "logging.modules.security.level": "debug"
+    }
+  },
+
+  "_instructions": {
+    "_comment": "Guide d'utilisation de cette configuration",
+    
+    "hotReload": "Modifiez ce fichier et sauvegardez. Les changements sont appliqués instantanément.",
+    
+    "backups": "Un backup automatique est créé avant chaque modification dans config/backup/",
+    
+    "validation": "Toute configuration invalide sera rejetée et l'ancienne sera conservée.",
+    
+    "logs": "Modifiez logging.modules.* pour activer/désactiver les logs par module en temps réel.",
+    
+    "rateLimits": "Modifiez security.rateLimits.* pour ajuster les limites instantanément.",
+    
+    "features": "Activez/désactivez features.* pour contrôler les fonctionnalités.",
+    
+    "debugging": "Utilisez _quickToggle.enableDebugMode pour débugger rapidement.",
+    
+    "maintenance": "Utilisez _quickToggle.enableMaintenanceMode pour maintenance rapide.",
+    
+    "security": "En cas d'attaque, utilisez _quickToggle.strictSecurity pour protection maximale.",
+    
+    "examples": {
+      "enableDebug": "Copiez les valeurs de _quickToggle.enableDebugMode dans les sections principales",
+      "reduceNoise": "Passez logging.modules.api.enabled à false pour réduire les logs",
+      "cryptoDebug": "Activez logging.modules.crypto.logSignatures pour débugger MetaMask",
+      "blockAttack": "Réduisez security.rateLimits.auth.max à 1 pour bloquer une attaque"
+    }
+  }
+}
