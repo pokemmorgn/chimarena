@@ -15,11 +15,19 @@ const AppSchema = z.object({
   maintenance: z.boolean(),
 }).strict();
 
+// IPv4 strict (0–255)
+const ipv4Regex =
+  /^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$/;
+
 // Schéma pour le serveur
 const ServerSchema = z.object({
   port: z.number().int().min(1000).max(65535),
-httpsPort: z.union([z.literal(443), z.number().int().min(1000).max(65535)]),
-  host: z.string().ip().or(z.literal('0.0.0.0')).or(z.literal('localhost')),
+  httpsPort: z.union([z.literal(443), z.number().int().min(1000).max(65535)]),
+  host: z.union([
+    z.literal('0.0.0.0'),
+    z.literal('localhost'),
+    z.string().regex(ipv4Regex, 'Adresse IPv4 invalide'),
+  ]),
   corsOrigins: z.array(z.string().url()).max(20),
   staticFiles: z.object({
     enabled: z.boolean(),
@@ -246,7 +254,7 @@ export const ConfigSchema = z.object({
   game: GameSchema,
   performance: PerformanceSchema,
   monitoring: MonitoringSchema,
-}).strip();
+}).strip(); // on supprime les clés inconnues (_meta, etc.)
 
 // Type TypeScript inféré automatiquement
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -262,17 +270,17 @@ export function validateConfig(config: unknown): {
 } {
   try {
     const result = ConfigSchema.safeParse(config);
-    
+
     if (result.success) {
       return {
         success: true,
         data: result.data,
       };
     } else {
-const errors = result.error.issues.map((issue: any) =>
-  `${issue.path.join('.')}: ${issue.message}`
+      const errors = result.error.issues.map((issue: any) =>
+        `${issue.path.join('.')}: ${issue.message}`
       );
-      
+
       return {
         success: false,
         errors,
@@ -281,7 +289,7 @@ const errors = result.error.issues.map((issue: any) =>
   } catch (error) {
     return {
       success: false,
-errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
+      errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
     };
   }
 }
@@ -309,7 +317,7 @@ export function validateConfigSection(section: keyof AppConfig, data: unknown): 
     monitoring: MonitoringSchema,
   };
 
-const schema = schemas[section as keyof typeof schemas];
+  const schema = (schemas as any)[section];
   if (!schema) {
     return {
       success: false,
@@ -319,17 +327,17 @@ const schema = schemas[section as keyof typeof schemas];
 
   try {
     const result = schema.safeParse(data);
-    
+
     if (result.success) {
       return {
         success: true,
         data: result.data,
       };
     } else {
-const errors = result.error.issues.map((issue: any) =>
+      const errors = result.error.issues.map((issue: any) =>
         `${issue.path.join('.')}: ${issue.message}`
       );
-      
+
       return {
         success: false,
         errors,
@@ -338,7 +346,7 @@ const errors = result.error.issues.map((issue: any) =>
   } catch (error) {
     return {
       success: false,
-errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
+      errors: [`Erreur de validation: ${(error as Error)?.message || 'Erreur inconnue'}`],
     };
   }
 }
@@ -358,9 +366,20 @@ export function validateSafety(config: AppConfig): {
     warnings.push('Port HTTP et HTTPS identiques');
   }
 
-  // Vérifier la sécurité auth
-  if (config.auth.jwtSecret !== 'ENV_OVERRIDE' && config.auth.jwtSecret.length < 32) {
+  // Vérifier la sécurité auth (compat + nouveaux secrets)
+  const jwt = (config as any).auth?.jwtSecret;
+  if (typeof jwt === 'string' && jwt !== 'ENV_OVERRIDE' && jwt.length < 32) {
     warnings.push('JWT Secret trop court (minimum 32 caractères)');
+  }
+
+  const access = (config as any).auth?.accessTokenSecret;
+  if (typeof access === 'string' && access !== 'ENV_OVERRIDE' && access.length < 32) {
+    warnings.push('Access token secret trop court (min 32 caractères)');
+  }
+
+  const refresh = (config as any).auth?.refreshTokenSecret;
+  if (typeof refresh === 'string' && refresh !== 'ENV_OVERRIDE' && refresh.length < 32) {
+    warnings.push('Refresh token secret trop court (min 32 caractères)');
   }
 
   // Vérifier les rate limits
