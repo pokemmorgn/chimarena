@@ -18,7 +18,7 @@ const AppSchema = z.object({
 // Schéma pour le serveur
 const ServerSchema = z.object({
   port: z.number().int().min(1000).max(65535),
-  httpsPort: z.number().int().min(1000).max(65535),
+httpsPort: z.union([z.literal(443), z.number().int().min(1000).max(65535)]),
   host: z.string().ip().or(z.literal('0.0.0.0')).or(z.literal('localhost')),
   corsOrigins: z.array(z.string().url()).max(20),
   staticFiles: z.object({
