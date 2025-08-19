@@ -159,19 +159,21 @@ class SecureConfigManager extends EventEmitter {
         },
         autoReconnect: true
       },
-      auth: {
-        jwtSecret: "ENV_OVERRIDE",
-        accessTokenExpiry: "15m",
-        refreshTokenExpiry: "7d",
-        maxFailedAttempts: 5,
-        lockDurationMinutes: 30,
-        cookieOptions: {
-          httpOnly: true,
-          secure: "auto",
-          sameSite: "strict",
-          maxAge: 604800000
-        }
-      },
+auth: {
+  // ⬇️ on utilise les 2 secrets
+  accessTokenSecret: "ENV_OVERRIDE",
+  refreshTokenSecret: "ENV_OVERRIDE",
+  accessTokenExpiry: "15m",
+  refreshTokenExpiry: "7d",
+  maxFailedAttempts: 5,
+  lockDurationMinutes: 30,
+  cookieOptions: {
+    httpOnly: true,
+    secure: "auto",
+    sameSite: "strict",
+    maxAge: 604800000
+  }
+},
       crypto: {
         enabled: true,
         metamask: {
@@ -396,61 +398,89 @@ throw new Error('Impossible de charger la configuration initiale: ' + (error as 
   /**
    * 🔐 APPLIQUER LES OVERRIDES D'ENVIRONNEMENT
    */
-  private applyEnvironmentOverrides(): void {
-    if (!this.config) return;
+private applyEnvironmentOverrides(): void {
+  if (!this.config) return;
 
-    console.log('🔧 Application des overrides d\'environnement...');
+  console.log('🔧 Application des overrides d\'environnement...');
 
-    // JWT Secret obligatoire depuis env
-    if (this.config.auth.jwtSecret === 'ENV_OVERRIDE') {
-      const jwtSecret = process.env.JWT_SECRET;
-      if (!jwtSecret) {
-        throw new Error('JWT_SECRET variable d\'environnement requise');
-      }
-      if (jwtSecret.length < 32) {
-        throw new Error('JWT_SECRET doit contenir au moins 32 caractères');
-      }
-      this.config.auth.jwtSecret = jwtSecret;
+  // ---------- AUTH SECRETS (depuis .env) ----------
+  const auth = this.config.auth as any;
+
+  // Access token secret (obligatoire)
+  if (!auth.accessTokenSecret || auth.accessTokenSecret === 'ENV_OVERRIDE') {
+    const access = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || '';
+    if (!access) {
+      throw new Error('JWT_ACCESS_SECRET variable d\'environnement requise');
     }
-
-    // Database URI
-    if (process.env.MONGODB_URI) {
-      this.config.database.uri = process.env.MONGODB_URI;
+    if (access.length < 32) {
+      throw new Error('JWT_ACCESS_SECRET doit contenir au moins 32 caractères');
     }
-
-    // Ports
-    if (process.env.PORT) {
-      const port = parseInt(process.env.PORT, 10);
-      if (port > 0 && port < 65536) {
-        this.config.server.port = port;
-      }
-    }
-
-    if (process.env.HTTPS_PORT) {
-      const httpsPort = parseInt(process.env.HTTPS_PORT, 10);
-      if (httpsPort > 0 && httpsPort < 65536) {
-        this.config.server.httpsPort = httpsPort;
-      }
-    }
-
-    // Sécurité selon environnement
-    if (this.config.app.env === 'production') {
-      this.config.auth.cookieOptions.secure = true;
-      this.config.app.debug = false;
-      this.config.features.devTools = false;
-      this.config.features.adminPanel = false;
-      
-      // Forcer certains niveaux de logs en prod
-      if (this.config.logging.level === 'debug' || this.config.logging.level === 'trace') {
-        console.warn('⚠️ Niveau de log forcé à "info" en production');
-        this.config.logging.level = 'info';
-      }
-    } else {
-      this.config.auth.cookieOptions.secure = false;
-    }
-
-    console.log('✅ Overrides d\'environnement appliqués');
+    auth.accessTokenSecret = access;
   }
+
+  // Refresh token secret (obligatoire)
+  if (!auth.refreshTokenSecret || auth.refreshTokenSecret === 'ENV_OVERRIDE') {
+    const refresh = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || '';
+    if (!refresh) {
+      throw new Error('JWT_REFRESH_SECRET variable d\'environnement requise');
+    }
+    if (refresh.length < 32) {
+      throw new Error('JWT_REFRESH_SECRET doit contenir au moins 32 caractères');
+    }
+    auth.refreshTokenSecret = refresh;
+  }
+
+  // Compat rétro (si du code lit encore auth.jwtSecret)
+  if (!auth.jwtSecret || auth.jwtSecret === 'ENV_OVERRIDE') {
+    auth.jwtSecret = auth.accessTokenSecret;
+  }
+
+  // Durées depuis .env si présentes
+  if (process.env.JWT_ACCESS_EXPIRES_IN) {
+    auth.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRES_IN;
+  }
+  if (process.env.JWT_REFRESH_EXPIRES_IN) {
+    auth.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRES_IN;
+  }
+
+  // ---------- DATABASE ----------
+  if (process.env.MONGODB_URI) {
+    this.config.database.uri = process.env.MONGODB_URI;
+  }
+
+  // ---------- PORTS ----------
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (port > 0 && port < 65536) {
+      this.config.server.port = port;
+    }
+  }
+
+  if (process.env.HTTPS_PORT) {
+    const httpsPort = parseInt(process.env.HTTPS_PORT, 10);
+    if (httpsPort > 0 && httpsPort < 65536) {
+      this.config.server.httpsPort = httpsPort;
+    }
+  }
+
+  // ---------- SÉCURITÉ SELON ENVIRONNEMENT ----------
+  if (this.config.app.env === 'production') {
+    this.config.auth.cookieOptions.secure = true;
+    this.config.app.debug = false;
+    this.config.features.devTools = false;
+    this.config.features.adminPanel = false;
+
+    // Forcer certains niveaux de logs en prod
+    if (this.config.logging.level === 'debug' || this.config.logging.level === 'trace') {
+      console.warn('⚠️ Niveau de log forcé à "info" en production');
+      this.config.logging.level = 'info';
+    }
+  } else {
+    this.config.auth.cookieOptions.secure = false;
+  }
+
+  console.log('✅ Overrides d\'environnement appliqués');
+}
 
   /**
    * 👁️ CONFIGURER LE WATCHER POUR HOT RELOAD
