@@ -8,7 +8,7 @@ import {
   generateRefreshToken,
   verifyRefreshToken
 } from '../middleware/authMiddleware';
-import { logger } from '../utils/Logger.ts';
+import { logger } from '../utils/Logger';
 import { configManager } from '../config/ConfigManager';
 
 const router = Router();
