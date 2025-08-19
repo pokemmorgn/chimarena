@@ -59,6 +59,50 @@ export default class ClashMenuScene extends Phaser.Scene {
         console.log('✅ ClashMenuScene avec Header fixe + Panels complets');
     }
 
+    // === CRÉATION DU FOND ===
+    createBackground() {
+        const { width, height } = this.scale;
+        
+        // Dégradé bleu Clash Royale
+        const bg = this.add.graphics();
+        bg.fillGradientStyle(0x87CEEB, 0x87CEEB, 0x4682B4, 0x4682B4, 1);
+        bg.fillRect(0, 0, width, height);
+        
+        // Nuages décoratifs
+        this.createClouds();
+    }
+
+    createClouds() {
+        const { width } = this.scale;
+        const cloudCount = this.isMobile ? 3 : 5;
+        
+        for (let i = 0; i < cloudCount; i++) {
+            const cloud = this.add.graphics();
+            cloud.fillStyle(0xFFFFFF, 0.1);
+            
+            // Forme de nuage simple
+            cloud.fillCircle(0, 0, 30);
+            cloud.fillCircle(25, 0, 25);
+            cloud.fillCircle(-20, 0, 20);
+            cloud.fillCircle(10, -15, 15);
+            
+            cloud.setPosition(
+                Phaser.Math.Between(0, width),
+                Phaser.Math.Between(50, 200)
+            );
+            
+            // Animation flottante
+            this.tweens.add({
+                targets: cloud,
+                x: cloud.x + Phaser.Math.Between(20, 50),
+                duration: Phaser.Math.Between(8000, 12000),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
     // === HEADER FIXE (inchangé) ===
     createFixedHeader() {
         console.log('🏗️ Création Header fixe...');
