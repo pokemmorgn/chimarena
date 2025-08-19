@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // 🔧 SYSTÈME DE CONFIGURATION
 import { configManager } from './config/ConfigManager';
