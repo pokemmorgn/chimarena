@@ -425,7 +425,7 @@ router.get('/:username', async (req: Request, res: Response) => {
     });
   } catch (error) {
     requestLogger.error('Erreur récupération profil public', { 
-error: (error as Error)?.message
+error: (error as Error)?.message,
       username: req.params.username
     });
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
