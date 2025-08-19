@@ -1,8 +1,8 @@
-// client/src/main.js - VERSION COMPLÈTE PORTRAIT
+// client/src/main.js - VERSION MISE À JOUR AVEC CLASHMENU
 import Phaser from 'phaser';
 import AuthScene from './scenes/AuthScene';
 import WelcomeScene from './scenes/WelcomeScene';
-import MenuScene from './scenes/MenuScene';
+import ClashMenuScene from './scenes/ClashMenuScene'; // 🆕 NOUVEAU MENU CLASH ROYALE
 import { auth, config } from './api';
 
 // 📱 DÉTECTION DE L'APPAREIL
@@ -51,7 +51,7 @@ const createGameConfig = () => {
     height: dimensions.height,
     parent: 'game-container',
     backgroundColor: '#2c3e50',
-    scene: [AuthScene, WelcomeScene, MenuScene],
+    scene: [AuthScene, WelcomeScene, ClashMenuScene], // 🔄 MENU CLASH AJOUTÉ
     render: { 
       antialias: !mobile, // Désactiver sur mobile pour performance
       pixelArt: false, 
@@ -220,8 +220,8 @@ class ChimArenaGame {
       this.updateSecurityStatus('warning');
     }
 
-    // Vérifier l'état global
-    if (!debugInfo.isAuthenticated && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('MenuScene'))) {
+    // Vérifier l'état global - 🔄 MISE À JOUR POUR CLASHMENU
+    if (!debugInfo.isAuthenticated && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('ClashMenuScene'))) {
       console.error('❌ État incohérent: Scène authentifiée active mais non authentifié');
       this.handleAuthenticationLoss('État de session incohérent');
     }
@@ -251,8 +251,8 @@ class ChimArenaGame {
       this.wsConnection = null;
     }
     
-    // Rediriger vers AuthScene si pas déjà fait
-    if (this.game && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('MenuScene'))) {
+    // Rediriger vers AuthScene - 🔄 MISE À JOUR POUR CLASHMENU
+    if (this.game && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('ClashMenuScene'))) {
       this.game.scene.start('AuthScene');
     }
     
@@ -351,7 +351,7 @@ class ChimArenaGame {
       this.game.registry.set('currentUser', this.currentUser);
       this.game.registry.set('settings', this.settings);
       
-      console.log('🎮 Jeu Phaser créé avec sécurité intégrée + WelcomeScene + PORTRAIT');
+      console.log('🎮 Jeu Phaser créé avec ClashMenuScene + sécurité intégrée + PORTRAIT');
       this.simulateLoading();
     } catch (err) {
       console.error('❌ Erreur création jeu:', err);
@@ -652,7 +652,7 @@ window.GameConstants = {
 
 // --- Entrée principale sécurisée ---
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 DOM chargé, démarrage de ChimArena sécurisé en mode PORTRAIT...');
+  console.log('🚀 DOM chargé, démarrage de ChimArena sécurisé avec ClashMenuScene...');
   
   // Vérifier la compatibilité de sécurité
   if (!window.crypto || !window.crypto.getRandomValues) {
@@ -677,11 +677,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Créer l'instance de jeu sécurisée
   window.ChimArenaInstance = new ChimArenaGame();
   
-  console.log('✅ ChimArena sécurisé initialisé avec WelcomeScene');
+  console.log('✅ ChimArena sécurisé initialisé avec ClashMenuScene');
   console.log('🔐 Tokens stockés UNIQUEMENT en mémoire');
   console.log('🛡️ Monitoring de sécurité actif');
   console.log('📱 Mode PORTRAIT universel activé');
   console.log('💰 Support crypto: ' + (window.GameConstants.CRYPTO.METAMASK_AVAILABLE ? 'ACTIVÉ' : 'LIMITÉ'));
+  console.log('🏆 Menu Clash Royale authentique prêt !');
   
   // Debug en développement
   if (window.GameConfig?.DEBUG) {
