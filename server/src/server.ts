@@ -11,7 +11,7 @@ dotenv.config();
 
 // 🔧 SYSTÈME DE CONFIGURATION
 import { configManager } from './config/ConfigManager';
-import { logger } from './utils/Logger.ts';
+import { logger } from './utils/Logger';
 
 // Routes et middlewares
 import { connectDatabase } from './config/database';
