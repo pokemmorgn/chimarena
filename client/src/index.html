@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ChimArena - Jeu de stratégie en temps réel</title>
     
     <!-- Meta tags pour SEO et réseaux sociaux -->
@@ -33,25 +33,81 @@
 
         html, body {
             height: 100%;
-            overflow: hidden;
             font-family: 'Roboto', sans-serif;
+            overflow: hidden;
         }
 
+        /* 📱 STYLES UNIVERSELS PORTRAIT */
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             position: relative;
+            min-height: 100vh;
         }
 
-        /* Container principal du jeu */
+        /* Container principal du jeu - TOUJOURS PORTRAIT */
         #game-container {
             position: relative;
-            border-radius: 8px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
             overflow: hidden;
             background: #000;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+
+        /* 📱 STYLES MOBILE */
+        @media (max-width: 768px) {
+            body {
+                padding: 0;
+                margin: 0;
+                position: fixed;
+                width: 100%;
+                height: 100%;
+                background: #000; /* Fond noir sur mobile pour économie batterie */
+            }
+            
+            #game-container {
+                width: 100vw !important;
+                height: 100vh !important;
+                border-radius: 0;
+                border: none;
+                box-shadow: none;
+            }
+        }
+
+        /* 💻 STYLES PC - Format portrait centré */
+        @media (min-width: 769px) {
+            body {
+                padding: 20px;
+            }
+            
+            #game-container {
+                width: 400px !important;
+                height: 700px !important;
+            }
+            
+            /* Effet de profondeur pour PC */
+            #game-container::before {
+                content: '';
+                position: absolute;
+                top: -5px;
+                left: -5px;
+                right: -5px;
+                bottom: -5px;
+                background: linear-gradient(45deg, #3498db, #9b59b6, #e74c3c, #f39c12);
+                border-radius: 20px;
+                z-index: -1;
+                animation: glow 2s ease-in-out infinite alternate;
+            }
+            
+            @keyframes glow {
+                0% { opacity: 0.5; transform: scale(1); }
+                100% { opacity: 0.8; transform: scale(1.02); }
+            }
         }
 
         /* Écran de chargement */
@@ -78,7 +134,7 @@
         }
 
         .logo {
-            font-size: 3rem;
+            font-size: clamp(2rem, 8vw, 3rem); /* Responsive */
             font-weight: 900;
             margin-bottom: 2rem;
             text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -89,14 +145,16 @@
         }
 
         .loading-text {
-            font-size: 1.2rem;
+            font-size: clamp(1rem, 4vw, 1.2rem);
             margin-bottom: 2rem;
             opacity: 0.9;
+            text-align: center;
+            padding: 0 20px;
         }
 
         /* Barre de progression */
         .progress-container {
-            width: 300px;
+            width: min(300px, 80vw);
             height: 6px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
@@ -113,7 +171,7 @@
         }
 
         .progress-text {
-            font-size: 0.9rem;
+            font-size: clamp(0.8rem, 3vw, 0.9rem);
             opacity: 0.8;
         }
 
@@ -133,64 +191,70 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Messages d'erreur */
-        .error-message {
+        /* Messages d'erreur et succès */
+        .error-message, .success-message {
             position: fixed;
             top: 20px;
             right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            font-size: clamp(0.8rem, 3vw, 1rem);
+            max-width: calc(100vw - 40px);
+        }
+
+        .error-message {
             background: #ff6b6b;
             color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            font-weight: 500;
             box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-            z-index: 2000;
-            transform: translateX(400px);
-            transition: transform 0.3s ease;
         }
 
-        .error-message.show {
-            transform: translateX(0);
-        }
-
-        /* Messages de succès */
         .success-message {
-            position: fixed;
-            top: 20px;
-            right: 20px;
             background: #51cf66;
             color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            font-weight: 500;
             box-shadow: 0 4px 12px rgba(81, 207, 102, 0.3);
-            z-index: 2000;
-            transform: translateX(400px);
-            transition: transform 0.3s ease;
         }
 
-        .success-message.show {
+        .error-message.show, .success-message.show {
             transform: translateX(0);
         }
 
-        /* Styles pour mobile */
-        @media (max-width: 768px) {
-            #game-container {
-                width: 100vw !important;
-                height: 100vh !important;
-                border-radius: 0;
+        /* 📱 Optimisations tactiles */
+        @media (hover: none) and (pointer: coarse) {
+            /* Styles pour appareils tactiles */
+            * {
+                -webkit-tap-highlight-color: transparent;
             }
-
-            .logo {
-                font-size: 2rem;
+            
+            body {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
             }
+        }
 
-            .loading-text {
-                font-size: 1rem;
-            }
-
-            .progress-container {
-                width: 250px;
+        /* Orientations */
+        @media screen and (orientation: landscape) and (max-width: 768px) {
+            /* Message d'orientation pour mobile en paysage */
+            body::before {
+                content: "🔄 Veuillez orienter votre appareil en mode portrait pour une meilleure expérience";
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                font-size: 1.2rem;
+                text-align: center;
+                padding: 20px;
             }
         }
 
@@ -201,6 +265,13 @@
             position: absolute;
             left: -9999px;
             visibility: hidden;
+        }
+
+        /* Accessibilité - mode sombre forcé sur mobile */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+            }
         }
     </style>
 </head>
@@ -213,7 +284,7 @@
         <!-- Écran de chargement -->
         <div id="loading-screen">
             <div class="logo">ChimArena</div>
-            <div class="loading-text">Chargement du jeu...</div>
+            <div class="loading-text">Chargement du jeu en mode portrait...</div>
             <div class="spinner"></div>
             <div class="progress-container">
                 <div class="progress-bar" id="progress-bar"></div>
@@ -223,14 +294,16 @@
     </div>
 
     <script>
-        // Configuration globale du jeu
-window.GameConfig = {
-    SERVER_URL: 'https://chimarena.cloud',
-    API_URL: 'https://chimarena.cloud/api',
-    WS_URL: 'wss://chimarena.cloud/colyseus',
-    VERSION: '0.1.0',
-    DEBUG: false
-};
+        // Configuration globale du jeu PORTRAIT
+        window.GameConfig = {
+            SERVER_URL: 'https://chimarena.cloud',
+            API_URL: 'https://chimarena.cloud/api',
+            WS_URL: 'wss://chimarena.cloud/colyseus',
+            VERSION: '0.1.0',
+            DEBUG: false,
+            PORTRAIT_MODE: true, // 📱 NOUVEAU FLAG
+            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        };
 
         // Gestionnaire de chargement
         window.LoadingManager = {
@@ -278,7 +351,7 @@ window.GameConfig = {
                     <div style="color: #ff6b6b; font-size: 1.2rem; margin-bottom: 1rem;">
                         Erreur de chargement
                     </div>
-                    <div style="color: #fff; opacity: 0.8; margin-bottom: 2rem;">
+                    <div style="color: #fff; opacity: 0.8; margin-bottom: 2rem; text-align: center; padding: 0 20px;">
                         ${message}
                     </div>
                     <button onclick="location.reload()" style="
@@ -290,6 +363,7 @@ window.GameConfig = {
                         cursor: pointer;
                         font-size: 1rem;
                         font-weight: 500;
+                        touch-action: manipulation;
                     ">
                         Réessayer
                     </button>
@@ -297,21 +371,36 @@ window.GameConfig = {
             }
         };
 
-        // Gestionnaire de notifications
+        // Gestionnaire de notifications OPTIMISÉ PORTRAIT
         window.NotificationManager = {
             show: function(message, type = 'info', duration = 3000) {
                 const notification = document.createElement('div');
                 notification.className = type + '-message';
                 notification.textContent = message;
                 
+                // Position adaptée pour portrait
+                if (window.innerWidth <= 768) {
+                    notification.style.position = 'fixed';
+                    notification.style.top = '60px';
+                    notification.style.left = '20px';
+                    notification.style.right = '20px';
+                    notification.style.transform = 'translateY(-100px)';
+                }
+                
                 document.body.appendChild(notification);
                 
                 setTimeout(() => {
                     notification.classList.add('show');
+                    if (window.innerWidth <= 768) {
+                        notification.style.transform = 'translateY(0)';
+                    }
                 }, 100);
                 
                 setTimeout(() => {
                     notification.classList.remove('show');
+                    if (window.innerWidth <= 768) {
+                        notification.style.transform = 'translateY(-100px)';
+                    }
                     setTimeout(() => {
                         if (notification.parentNode) {
                             notification.parentNode.removeChild(notification);
@@ -329,6 +418,15 @@ window.GameConfig = {
             }
         };
 
+        // Gestion spéciale de l'orientation
+        window.addEventListener('orientationchange', function() {
+            setTimeout(() => {
+                if (window.GameConfig.MOBILE_OPTIMIZED) {
+                    window.scrollTo(0, 1);
+                }
+            }, 500);
+        });
+
         // Gestion des erreurs globales
         window.addEventListener('error', function(e) {
             console.error('Erreur JavaScript:', e.error);
@@ -345,7 +443,7 @@ window.GameConfig = {
         });
 
         // Log de démarrage
-        console.log('🎮 ChimArena v' + window.GameConfig.VERSION + ' - Initialisation...');
+        console.log(`🎮 ChimArena v${window.GameConfig.VERSION} - Mode Portrait ${window.GameConfig.MOBILE_OPTIMIZED ? 'Mobile' : 'PC'}`);
     </script>
 </body>
 </html>
