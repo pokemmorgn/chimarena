@@ -93,6 +93,11 @@ module.exports = (env, argv) => {
             from: 'assets',
             to: 'assets',
             noErrorOnMissing: true
+          },
+          {
+            from: 'public',
+            to: '.', // 👉 copie tout le contenu de client/public/ dans dist/
+            noErrorOnMissing: true
           }
         ]
       })
