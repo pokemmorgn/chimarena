@@ -396,7 +396,7 @@ throw new Error('Impossible de charger la configuration initiale: ' + (error as 
   }
 
   /**
-   * 🔐 APPLIQUER LES OVERRIDES D'ENVIRONNEMENT
+   * 🔐 APPLIQUER LES OVERRIDES D'ENVIRONNEMENT - CORRIGÉ
    */
 private applyEnvironmentOverrides(): void {
   if (!this.config) return;
@@ -406,9 +406,9 @@ private applyEnvironmentOverrides(): void {
   // ---------- AUTH SECRETS (depuis .env) ----------
   const auth = this.config.auth as any;
 
-  // Access token secret (obligatoire)
+  // Access token secret (obligatoire) - CORRIGÉ
   if (!auth.accessTokenSecret || auth.accessTokenSecret === 'ENV_OVERRIDE') {
-    const access = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || '';
+    const access = process.env.JWT_ACCESS_SECRET || '';  // ✅ Utiliser JWT_ACCESS_SECRET
     if (!access) {
       throw new Error('JWT_ACCESS_SECRET variable d\'environnement requise');
     }
@@ -418,9 +418,9 @@ private applyEnvironmentOverrides(): void {
     auth.accessTokenSecret = access;
   }
 
-  // Refresh token secret (obligatoire)
+  // Refresh token secret (obligatoire) - CORRIGÉ
   if (!auth.refreshTokenSecret || auth.refreshTokenSecret === 'ENV_OVERRIDE') {
-    const refresh = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || '';
+    const refresh = process.env.JWT_REFRESH_SECRET || '';  // ✅ Utiliser JWT_REFRESH_SECRET
     if (!refresh) {
       throw new Error('JWT_REFRESH_SECRET variable d\'environnement requise');
     }
@@ -430,12 +430,12 @@ private applyEnvironmentOverrides(): void {
     auth.refreshTokenSecret = refresh;
   }
 
-  // Compat rétro (si du code lit encore auth.jwtSecret)
+  // Compat rétro (si du code lit encore auth.jwtSecret) - CORRIGÉ
   if (!auth.jwtSecret || auth.jwtSecret === 'ENV_OVERRIDE') {
-    auth.jwtSecret = auth.accessTokenSecret;
+    auth.jwtSecret = auth.accessTokenSecret;  // ✅ Utiliser accessTokenSecret comme fallback
   }
 
-  // Durées depuis .env si présentes
+  // Durées depuis .env si présentes - CORRIGÉ
   if (process.env.JWT_ACCESS_EXPIRES_IN) {
     auth.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRES_IN;
   }
@@ -481,6 +481,8 @@ private applyEnvironmentOverrides(): void {
 
   console.log('✅ Overrides d\'environnement appliqués');
 }
+
+  // ... [RESTE DU CODE IDENTIQUE - toutes les autres méthodes restent inchangées]
 
   /**
    * 👁️ CONFIGURER LE WATCHER POUR HOT RELOAD
@@ -600,6 +602,7 @@ get<T = any>(path: string, defaultValue?: T): T {
   const value = this.getNestedValue(this.config, path);
   return value !== undefined ? value : (defaultValue as T);
 }
+
   /**
    * ✏️ DÉFINIR UNE VALEUR DE CONFIGURATION (en mémoire)
    */
