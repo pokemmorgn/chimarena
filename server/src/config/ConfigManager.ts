@@ -384,7 +384,7 @@ class SecureConfigManager extends EventEmitter {
       console.error('❌ Erreur chargement configuration:', error);
       
       if (!this.config) {
-        throw new Error('Impossible de charger la configuration initiale: ' + error.message);
+throw new Error('Impossible de charger la configuration initiale: ' + (error as Error)?.message);
       }
       
       console.warn('⚠️ Configuration précédente conservée');
@@ -568,7 +568,7 @@ class SecureConfigManager extends EventEmitter {
     }
 
     const value = this.getNestedValue(this.config, path);
-    return value !== undefined ? value : defaultValue;
+return value !== undefined ? value : (defaultValue as T);
   }
 
   /**
