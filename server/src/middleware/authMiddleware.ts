@@ -114,21 +114,31 @@ export const generateAccessToken = (user: any): string => {
       username: user.username,
       email: user.email,
     },
-    JWT_ACCESS_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    JWT_ACCESS_SECRET,  // ✅ UTILISER JWT_ACCESS_SECRET
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }  // ✅ UTILISER LA BONNE VARIABLE
   );
 };
 
 export const generateRefreshToken = (user: any): string => {
   return jwt.sign(
     { id: user._id.toString() },
-    JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    JWT_REFRESH_SECRET,  // ✅ UTILISER JWT_REFRESH_SECRET
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }  // ✅ UTILISER LA BONNE VARIABLE
   );
 };
 
-export const generateTemporaryToken = (payload: any, expiresIn: string = '1h'): string => {
-  return jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn });
+// ✅ VÉRIFICATION REFRESH TOKEN AVEC LA BONNE VARIABLE
+export const verifyRefreshToken = (token: string): any => {
+  return jwt.verify(token, JWT_REFRESH_SECRET);  // ✅ UTILISER JWT_REFRESH_SECRET
+};
+
+// ✅ VALIDATION D'UN TOKEN ACCESS (utilitaire)
+export const validateAccessToken = (token: string): any => {
+  try {
+    return jwt.verify(token, JWT_ACCESS_SECRET);
+  } catch (error) {
+    return null;
+  }
 };
 
 // ✅ EXTRACTION DU TOKEN DEPUIS LES HEADERS
