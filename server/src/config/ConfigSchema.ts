@@ -240,7 +240,7 @@ export const ConfigSchema = z.object({
   game: GameSchema,
   performance: PerformanceSchema,
   monitoring: MonitoringSchema,
-}).strict();
+}).strip();
 
 // Type TypeScript inféré automatiquement
 export type AppConfig = z.infer<typeof ConfigSchema>;
