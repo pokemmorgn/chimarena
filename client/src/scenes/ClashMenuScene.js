@@ -359,12 +359,13 @@ export default class ClashMenuScene extends Phaser.Scene {
         const { width, height } = this.scale;
         const navContainer = this.add.container(0, height - 70);
         
-        // Fond navigation
+        // Fond navigation (ajouté en premier pour être derrière)
         const navBg = this.add.graphics();
         navBg.fillStyle(0x2F4F4F, 1);
         navBg.fillRect(0, 0, width, 70);
         navBg.lineStyle(3, 0xFFD700);
         navBg.lineBetween(0, 0, width, 0);
+        navContainer.add(navBg);
         
         // Boutons onglets
         const tabWidth = width / this.tabs.length;
@@ -386,9 +387,10 @@ export default class ClashMenuScene extends Phaser.Scene {
                 tabBg.fillRoundedRect(x - 25, y - 20, 50, 40, 10);
             }
             
-            // Icône
+            // Icône avec couleur visible
             const icon = this.add.text(x, y - 5, tabIcons[index], {
-                fontSize: isActive ? '24px' : '20px'
+                fontSize: isActive ? '24px' : '20px',
+                fill: isActive ? '#2F4F4F' : '#FFFFFF'  // ✅ Couleur ajoutée
             }).setOrigin(0.5);
             
             // Texte
@@ -399,7 +401,10 @@ export default class ClashMenuScene extends Phaser.Scene {
                 fill: isActive ? '#2F4F4F' : '#FFFFFF'
             }).setOrigin(0.5);
             
-            // Interactivité
+            // Ajouter les éléments dans le bon ordre
+            navContainer.add([tabBg, icon, text]);
+            
+            // Interactivité (ajoutée après pour être au-dessus)
             if (!isActive) {
                 const hitArea = this.add.zone(x, y, 60, 50).setInteractive();
                 hitArea.on('pointerdown', () => {
@@ -407,11 +412,8 @@ export default class ClashMenuScene extends Phaser.Scene {
                 });
                 navContainer.add(hitArea);
             }
-            
-            navContainer.add([tabBg, icon, text]);
         });
         
-        navContainer.add(navBg);
         return navContainer;
     }
 
