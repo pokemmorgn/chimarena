@@ -6,7 +6,6 @@
     "environment": "production",
     "warningReadMe": "Ce fichier est rechargé automatiquement. Sauvegardé avant modification."
   },
-
   "app": {
     "name": "ChimArena",
     "version": "1.0.0",
@@ -14,7 +13,6 @@
     "debug": true,
     "maintenance": false
   },
-
   "server": {
     "port": 3000,
     "httpsPort": 443,
@@ -34,7 +32,6 @@
       "path": "../../client/dist"
     }
   },
-
   "database": {
     "uri": "mongodb://localhost:27017/chimarena",
     "options": {
@@ -47,23 +44,21 @@
     },
     "autoReconnect": true
   },
-
- "auth": {
-  "enabled": true,
-  "accessTokenSecret": "ENV_OVERRIDE",
-  "refreshTokenSecret": "ENV_OVERRIDE",
-  "accessTokenExpiry": "15m",
-  "refreshTokenExpiry": "7d",
-  "maxFailedAttempts": 5,
-  "lockDurationMinutes": 30,
-  "cookieOptions": {
-    "httpOnly": true,
-    "secure": "auto",
-    "sameSite": "strict",
-    "maxAge": 604800000
-  }
-},
-
+  "auth": {
+    "enabled": true,
+    "accessTokenSecret": "ENV_OVERRIDE",
+    "refreshTokenSecret": "ENV_OVERRIDE",
+    "accessTokenExpiry": "15m",
+    "refreshTokenExpiry": "7d",
+    "maxFailedAttempts": 5,
+    "lockDurationMinutes": 30,
+    "cookieOptions": {
+      "httpOnly": true,
+      "secure": "auto",
+      "sameSite": "strict",
+      "maxAge": 604800000
+    }
+  },
   "crypto": {
     "enabled": true,
     "metamask": {
@@ -80,7 +75,6 @@
       "banThreshold": 80
     }
   },
-
   "security": {
     "rateLimits": {
       "auth": {
@@ -115,14 +109,13 @@
       "keyDerivation": "pbkdf2"
     }
   },
-
   "logging": {
     "level": "debug",
     "modules": {
       "auth": {
         "enabled": true,
         "level": "debug",
-        "logSensitive": false,
+        "logSensitive": true,
         "logFailedAttempts": true,
         "logSuccessfulLogins": true
       },
@@ -130,49 +123,49 @@
         "enabled": true,
         "level": "debug",
         "logAddresses": true,
-        "logSignatures": false,
+        "logSignatures": true,
         "logWalletConnections": true,
         "logSuspiciousActivity": true
       },
       "security": {
         "enabled": true,
-        "level": "warn",
+        "level": "debug",
         "logIPs": true,
-        "logUserAgents": false,
+        "logUserAgents": true,
         "logRateLimitHits": true,
         "logSuspiciousPatterns": true
       },
       "api": {
         "enabled": true,
-        "level": "error",
+        "level": "debug",
         "logRequests": true,
         "logResponses": true,
         "logSlowRequests": true,
-        "slowRequestThresholdMs": 1000
+        "slowRequestThresholdMs": 100
       },
       "database": {
         "enabled": true,
-        "level": "info",
-        "logQueries": false,
+        "level": "debug",
+        "logQueries": true,
         "logSlowQueries": true,
-        "slowQueryThresholdMs": 1000,
+        "slowQueryThresholdMs": 100,
         "logConnections": true
       },
       "game": {
         "enabled": true,
-        "level": "info",
+        "level": "debug",
         "logMatches": true,
         "logPlayerActions": true,
         "logMatchmaking": true,
         "logCardActions": true
       },
       "performance": {
-        "enabled": false,
+        "enabled": true,
         "level": "debug",
         "logSlowQueries": true,
-        "logMemoryUsage": false,
-        "logResponseTimes": false,
-        "slowQueryThresholdMs": 1000
+        "logMemoryUsage": true,
+        "logResponseTimes": true,
+        "slowQueryThresholdMs": 100
       }
     },
     "output": {
@@ -182,7 +175,7 @@
         "timestamp": true
       },
       "file": {
-        "enabled": false,
+        "enabled": true,
         "path": "./logs",
         "filename": "chimarena-%DATE%.log",
         "maxSize": "20mb",
@@ -190,18 +183,17 @@
         "datePattern": "YYYY-MM-DD"
       },
       "json": {
-        "enabled": false,
+        "enabled": true,
         "filename": "chimarena-json-%DATE%.log"
       }
     },
     "filters": {
-      "excludePasswords": true,
-      "excludeTokens": true,
-      "excludePrivateKeys": true,
-      "maxStringLength": 1000
+      "excludePasswords": false,
+      "excludeTokens": false,
+      "excludePrivateKeys": false,
+      "maxStringLength": 10000
     }
   },
-
   "features": {
     "registration": true,
     "login": true,
@@ -214,7 +206,6 @@
     "adminPanel": false,
     "analytics": false
   },
-
   "game": {
     "maxPlayersOnline": 1000,
     "matchmaking": {
@@ -246,7 +237,6 @@
       "dailyRewards": true
     }
   },
-
   "performance": {
     "enableCaching": true,
     "cacheExpirySeconds": 300,
@@ -259,20 +249,19 @@
       "api": 5000
     }
   },
-
   "monitoring": {
-    "enabled": false,
+    "enabled": true,
     "healthCheck": {
       "enabled": true,
       "path": "/health",
       "interval": 30000
     },
     "metrics": {
-      "enabled": false,
+      "enabled": true,
       "collectInterval": 60000
     },
     "alerts": {
-      "enabled": false,
+      "enabled": true,
       "errorThreshold": 10,
       "memoryThreshold": 85
     }
