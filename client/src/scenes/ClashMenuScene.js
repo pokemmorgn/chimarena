@@ -292,9 +292,9 @@ export default class ClashMenuScene extends Phaser.Scene {
                 // Rafraîchir les données de bataille
                 this.refreshBattlePanelData();
                 break;
-            case 'collection':
+            case 'cards':
                 // Charger les cartes si nécessaire
-                this.refreshCollectionData();
+                this.refreshCardsData();
                 break;
             // Autres panels...
         }
@@ -847,11 +847,11 @@ export default class ClashMenuScene extends Phaser.Scene {
     }
     
     /**
-     * Rafraîchir les données de collection
+     * Rafraîchir les données de cartes
      */
-    refreshCollectionData() {
+    refreshCardsData() {
         // TODO: Charger les cartes depuis l'API
-        console.log('🔄 Rafraîchissement données collection');
+        console.log('🔄 Rafraîchissement données cartes');
     }
 
     // === COMMUNICATION AVEC PANELS ===
@@ -865,6 +865,18 @@ export default class ClashMenuScene extends Phaser.Scene {
         const battlePanel = this.panelManager.panels.get('battle');
         if (battlePanel && typeof battlePanel[method] === 'function') {
             battlePanel[method](data);
+        }
+    }
+    
+    /**
+     * Notifier le panel cartes
+     */
+    notifyCardsPanel(method, data = null) {
+        if (!this.panelManager) return;
+        
+        const cardsPanel = this.panelManager.panels.get('cards');
+        if (cardsPanel && typeof cardsPanel[method] === 'function') {
+            cardsPanel[method](data);
         }
     }
 
@@ -1335,30 +1347,30 @@ if (typeof window !== 'undefined') {
         }
     };
     
-    // Test du panel deck
-    window.testDeckPanel = () => {
+    // Test du panel cartes (ancien deck)
+    window.testCardsPanel = () => {
         const gameInstance = window.ChimArenaInstance;
         const scenes = gameInstance?.game?.scene?.getScenes();
         const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
         
         if (clashScene) {
-            clashScene.switchToPanel('deck');
-            console.log('🛡️ Test: Basculement vers panel deck');
+            clashScene.switchToPanel('cards');
+            console.log('🃏 Test: Basculement vers panel cartes');
             
             // Tester les sous-onglets après un délai
             setTimeout(() => {
-                const deckPanel = clashScene.panelManager?.panels?.get('deck');
-                if (deckPanel) {
-                    console.log('🃏 Test: Basculement vers collection');
-                    deckPanel.switchToSubTab('collection');
+                const cardsPanel = clashScene.panelManager?.panels?.get('cards');
+                if (cardsPanel) {
+                    console.log('🛡️ Test: Basculement vers deck');
+                    cardsPanel.switchToSubTab('deck');
                     
                     setTimeout(() => {
                         console.log('⚡ Test: Basculement vers défis');
-                        deckPanel.switchToSubTab('defis');
+                        cardsPanel.switchToSubTab('defis');
                         
                         setTimeout(() => {
-                            console.log('🛡️ Test: Retour vers deck');
-                            deckPanel.switchToSubTab('deck');
+                            console.log('🃏 Test: Retour vers collection');
+                            cardsPanel.switchToSubTab('collection');
                         }, 2000);
                     }, 2000);
                 }
@@ -1369,42 +1381,47 @@ if (typeof window !== 'undefined') {
     };
     
     // Test du système de cartes
-    window.testDeckCards = () => {
+    window.testCardsSystem = () => {
         const gameInstance = window.ChimArenaInstance;
         const scenes = gameInstance?.game?.scene?.getScenes();
         const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
         
         if (clashScene) {
-            clashScene.switchToPanel('deck');
+            clashScene.switchToPanel('cards');
             
             setTimeout(() => {
-                const deckPanel = clashScene.panelManager?.panels?.get('deck');
-                if (deckPanel) {
-                    // Tester l'ajout d'une carte
-                    const testCard = {
-                        id: 'knight',
-                        name: 'Chevalier',
-                        icon: '🗡️',
-                        cost: 3,
-                        rarity: 'common',
-                        type: 'troupe'
-                    };
-                    
-                    console.log('🗡️ Test: Ajout carte Chevalier au slot 0');
-                    deckPanel.addCardToDeck(testCard, 0);
+                const cardsPanel = clashScene.panelManager?.panels?.get('cards');
+                if (cardsPanel) {
+                    // Aller au sous-onglet deck
+                    cardsPanel.switchToSubTab('deck');
                     
                     setTimeout(() => {
-                        console.log('🔥 Test: Ajout Boule de feu au slot 1');
-                        const fireballCard = {
-                            id: 'fireball',
-                            name: 'Boule de feu',
-                            icon: '🔥',
-                            cost: 4,
-                            rarity: 'rare',
-                            type: 'sort'
+                        // Tester l'ajout d'une carte
+                        const testCard = {
+                            id: 'knight',
+                            name: 'Chevalier',
+                            icon: '🗡️',
+                            cost: 3,
+                            rarity: 'common',
+                            type: 'troupe'
                         };
-                        deckPanel.addCardToDeck(fireballCard, 1);
-                    }, 1000);
+                        
+                        console.log('🗡️ Test: Ajout carte Chevalier au slot 0');
+                        cardsPanel.addCardToDeck(testCard, 0);
+                        
+                        setTimeout(() => {
+                            console.log('🔥 Test: Ajout Boule de feu au slot 1');
+                            const fireballCard = {
+                                id: 'fireball',
+                                name: 'Boule de feu',
+                                icon: '🔥',
+                                cost: 4,
+                                rarity: 'rare',
+                                type: 'sort'
+                            };
+                            cardsPanel.addCardToDeck(fireballCard, 1);
+                        }, 1000);
+                    }, 500);
                 }
             }, 500);
         }
@@ -1414,14 +1431,14 @@ if (typeof window !== 'undefined') {
     console.log(`
 🎯 === COMMANDES DE TEST MISES À JOUR ===
 
-▶️ testSwitchPanel('deck') - Basculer vers panel deck
-▶️ testDeckPanel() - Test complet du panel deck + sous-onglets
-▶️ testDeckCards() - Test du système de cartes
+▶️ testSwitchPanel('cards') - Basculer vers panel cartes
+▶️ testCardsPanel() - Test complet du panel cartes + sous-onglets
+▶️ testCardsSystem() - Test du système de cartes et deck
 ▶️ testColyseus() - Tester connexion Colyseus
 ▶️ testBattleSearch() - Tester recherche bataille
 ▶️ testMatchFound() - Tester match trouvé
 
-PANELS DISPONIBLES: battle, deck, collection, clan, profile
-SOUS-ONGLETS DECK: deck, collection, defis
+PANELS DISPONIBLES: battle, cards, clan, profile
+SOUS-ONGLETS CARTES: collection, deck, defis
     `);
 }
