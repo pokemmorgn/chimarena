@@ -50,16 +50,13 @@ const DatabaseSchema = z.object({
   autoReconnect: z.boolean(),
 }).strict();
 
-// Schéma pour l'authentification
+// Schéma pour l'authentification (corrigé)
 const AuthSchema = z.object({
-  // jwtSecret devient optionnel (pour compat)
+  enabled: z.boolean(), // 👈 Ajouté ici
   jwtSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')).optional(),
-
-  // ⬇️ nouveaux champs, alignés avec ton .env
   accessTokenSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')),
   refreshTokenSecret: z.string().min(32).or(z.literal('ENV_OVERRIDE')),
-
-  accessTokenExpiry: z.string().regex(/^\d+[smhd]$/), // 15m, 1h, 1d
+  accessTokenExpiry: z.string().regex(/^\d+[smhd]$/),
   refreshTokenExpiry: z.string().regex(/^\d+[smhd]$/),
   maxFailedAttempts: z.number().int().min(3).max(20),
   lockDurationMinutes: z.number().int().min(5).max(1440),
@@ -70,6 +67,7 @@ const AuthSchema = z.object({
     maxAge: z.number().int().min(60000),
   }).strict(),
 }).strict();
+
 
 // Schéma pour crypto/MetaMask
 const CryptoSchema = z.object({
