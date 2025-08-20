@@ -109,51 +109,62 @@ class RefreshManager {
     }
   }
 
-  async doRefresh() {
-    try {
-        console.log('🔄 Envoi requête refresh...');
-        
-        const response = await fetch(`${API_URL}/auth/refresh`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+ async doRefresh() {
+  try {
+    console.log('🔄 Envoi requête refresh...');
+    
+    const response = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-        console.log('📡 Réponse refresh:', response.status, response.statusText);
-
-        if (!response.ok) {
-            console.log('❌ Refresh échoué - Status:', response.status);
-            throw new Error(`Refresh failed: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('📦 Data refresh:', data);
-        
-        if (data.success && data.token) {
-            tokenManager.setToken(data.token);
-            console.log('✅ Token refresh stocké en mémoire');
-            
-            if (tokenManager.onTokenRefreshed) {
-                tokenManager.onTokenRefreshed(data.token);
-            }
-            
-            return data.token;
-        } else {
-            throw new Error('Refresh response invalid');
-        }
-    } catch (error) {
-        console.log('❌ Erreur complète refresh:', error);
-        tokenManager.clearToken();
-        
-        if (tokenManager.onAuthenticationLost) {
-            tokenManager.onAuthenticationLost('Session expirée');
-        }
-        
-        throw error;
+    if (!response.ok) {
+      // ✅ AMÉLIORATION : Différencier les erreurs 401
+      if (response.status === 401) {
+        console.log('ℹ️ Pas de session active (normal au démarrage)');
+        throw new Error('No active session');
+      } else {
+        console.log('❌ Refresh échoué - Status:', response.status);
+        throw new Error(`Refresh failed: ${response.status}`);
+      }
     }
+
+    const data = await response.json();
+    console.log('📦 Data refresh:', data);
+    
+    if (data.success && data.token) {
+      tokenManager.setToken(data.token);
+      console.log('✅ Token refresh stocké en mémoire');
+      
+      if (tokenManager.onTokenRefreshed) {
+        tokenManager.onTokenRefreshed(data.token);
+      }
+      
+      return data.token;
+    } else {
+      throw new Error('Refresh response invalid');
+    }
+  } catch (error) {
+    // ✅ AMÉLIORATION : Logger différemment selon le type d'erreur
+    if (error.message === 'No active session') {
+      console.log('ℹ️ Session refresh: aucune session active (normal)');
+    } else {
+      console.log('❌ Erreur refresh:', error);
+    }
+    
+    tokenManager.clearToken();
+    
+    // ✅ AMÉLIORATION : Ne pas déclencher onAuthenticationLost si pas de session
+    if (tokenManager.onAuthenticationLost && error.message !== 'No active session') {
+      tokenManager.onAuthenticationLost('Session expirée');
+    }
+    
+    throw error;
   }
+}
 
   // Refresh automatique si nécessaire
   async ensureValidToken() {
