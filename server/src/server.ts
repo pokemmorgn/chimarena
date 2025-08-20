@@ -143,16 +143,17 @@ async function setupColyseus(app: express.Application, config: any): Promise<voi
     
     await new Promise<void>((resolve, reject) => {
       try {
-        gameServer.listen(config.colyseus.port, config.host, () => {
-          console.log(`✅ Serveur Colyseus démarré sur ${config.host}:${config.colyseus.port}`);
-          logger.general.info('🎮 Serveur Colyseus opérationnel', {
-            port: config.colyseus.port,
-            host: config.host,
-            wsUrl: `ws://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
-            rooms: ['world']
-          });
-          resolve();
+        // Colyseus listen() prend seulement le port, pas de callback ni host
+        gameServer.listen(config.colyseus.port);
+        
+        console.log(`✅ Serveur Colyseus démarré sur ${config.host}:${config.colyseus.port}`);
+        logger.general.info('🎮 Serveur Colyseus opérationnel', {
+          port: config.colyseus.port,
+          host: config.host,
+          wsUrl: `ws://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
+          rooms: ['world']
         });
+        resolve();
       } catch (error) {
         reject(error);
       }
