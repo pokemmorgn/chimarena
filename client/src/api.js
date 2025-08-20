@@ -1,8 +1,7 @@
-// client/src/api.js - CLIENT ULTRA-SÉCURISÉ CRYPTO-GRADE + MODULE CRYPTO
+// client/src/api.js - CLIENT ULTRA-SÉCURISÉ CRYPTO-GRADE + MODULE CRYPTO (VERSION VITE)
 
-const API_URL = (typeof window !== 'undefined' && window.GameConfig?.API_URL)
-  ? window.GameConfig.API_URL
-  : 'https://chimarena.cloud/api';
+// 🔄 Configuration API avec variables d'environnement Vite
+const API_URL = import.meta.env.VITE_API_URL || 'https://chimarena.cloud/api';
 
 // 🔐 GESTIONNAIRE DE TOKENS EN MÉMOIRE UNIQUEMENT
 class SecureTokenManager {
@@ -409,9 +408,8 @@ export const user = {
   }
 };
 
-// 🎮 API GAMING (futures)
+// 🎮 API GAMING
 export const game = {
-  // TODO: Implémenter quand les routes gaming seront créées
   async startMatch() {
     return apiClient.authenticatedRequest('/game/start');
   },
@@ -424,7 +422,7 @@ export const game = {
   }
 };
 
-// 💰 API CRYPTO - NOUVELLEMENT IMPLÉMENTÉE
+// 💰 API CRYPTO
 export const crypto = {
   // Connecter un wallet MetaMask (flow complet via challenge)
   async connectWallet() {
@@ -435,7 +433,7 @@ export const crypto = {
     }
     const { message } = challenge;
 
-    // 2) Récupérer l’adresse active de MetaMask
+    // 2) Récupérer l'adresse active de MetaMask
     if (!window.ethereum) throw new Error('MetaMask non détecté');
     const [address] = await window.ethereum.request({ method: 'eth_requestAccounts' });
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
@@ -507,7 +505,6 @@ export const crypto = {
   async getTransactionHistory(limit = 20, offset = 0) {
     return apiClient.authenticatedRequest('/crypto/transactions', {
       method: 'GET',
-      // Utiliser params pour GET
     });
   }
 };
@@ -523,18 +520,19 @@ export const config = {
     tokenManager.onAuthenticationLost = callback;
   },
 
-  // Debug info (development only)
+  // Debug info (development only) - 🔄 Utilise Vite env
   getDebugInfo() {
-    if (process.env.NODE_ENV !== 'development') return null;
-    
-    return {
-      hasToken: !!tokenManager.getToken(),
-      isAuthenticated: tokenManager.isAuthenticated,
-      tokenExpiry: tokenManager.tokenExpiry,
-      timeToExpiry: tokenManager.tokenExpiry ? tokenManager.tokenExpiry - Date.now() : null,
-      isExpiringSoon: tokenManager.isTokenExpiringSoon(),
-      refreshInProgress: tokenManager.refreshInProgress,
-    };
+    if (import.meta.env.DEV) {
+      return {
+        hasToken: !!tokenManager.getToken(),
+        isAuthenticated: tokenManager.isAuthenticated,
+        tokenExpiry: tokenManager.tokenExpiry,
+        timeToExpiry: tokenManager.tokenExpiry ? tokenManager.tokenExpiry - Date.now() : null,
+        isExpiringSoon: tokenManager.isTokenExpiringSoon(),
+        refreshInProgress: tokenManager.refreshInProgress,
+      };
+    }
+    return null;
   }
 };
 
@@ -543,7 +541,7 @@ export default {
   auth,
   user,
   game,
-  crypto, // NOUVEAU MODULE CRYPTO
+  crypto,
   config,
   
   // Méthodes directes pour compatibilité avec l'ancien code
