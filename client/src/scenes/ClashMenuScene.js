@@ -654,7 +654,173 @@ export default class ClashMenuScene extends Phaser.Scene {
         
         return panel;
     }
+// === TEST DIRECT VIA LA SCÈNE ===
 
+// Fonction pour tester directement depuis ClashMenuScene
+window.testDirectColyseus = () => {
+  console.group('🎯 TEST DIRECT COLYSEUS VIA SCÈNE');
+  
+  // Récupérer la scène active
+  const gameInstance = window.ChimArenaInstance;
+  const scenes = gameInstance.game.scene.getScenes();
+  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
+  
+  if (!clashScene) {
+    console.error('❌ ClashMenuScene non trouvée');
+    return;
+  }
+  
+  console.log('🏆 ClashMenuScene trouvée');
+  
+  // 1. Essayer d'accéder au colyseusManager via l'import dans la scène
+  console.log('🔍 Recherche colyseusManager...');
+  
+  // Le colyseusManager est importé dans ClashMenuScene.js comme :
+  // import colyseusManager from '../managers/ColyseusManager';
+  
+  // On va essayer de déclencher la méthode setupColyseus() directement
+  if (typeof clashScene.setupColyseus === 'function') {
+    console.log('🎯 setupColyseus trouvée, tentative d\'exécution...');
+    try {
+      clashScene.setupColyseus();
+      console.log('✅ setupColyseus exécutée');
+    } catch (error) {
+      console.error('❌ Erreur setupColyseus:', error);
+    }
+  } else {
+    console.log('⚠️ setupColyseus non trouvée');
+  }
+  
+  // 2. Vérifier l'état de connexion
+  console.log('📊 État actuel scène:', {
+    colyseusConnected: clashScene.colyseusConnected,
+    realtimeProfile: clashScene.realtimeProfile,
+    globalStats: clashScene.globalStats
+  });
+  
+  // 3. Essayer de simuler la connexion manuellement
+  console.log('🔧 Tentative de connexion manuelle...');
+  
+  // Si on peut accéder à colyseusManager via une propriété de la scène
+  const possibleManagers = [
+    'colyseusManager',
+    'manager', 
+    'wsManager',
+    'connectionManager'
+  ];
+  
+  let foundManager = null;
+  for (const prop of possibleManagers) {
+    if (clashScene[prop]) {
+      console.log(`✅ Manager trouvé: ${prop}`);
+      foundManager = clashScene[prop];
+      break;
+    }
+  }
+  
+  if (!foundManager) {
+    console.log('⚠️ Aucun manager trouvé dans la scène');
+    console.log('🔍 Propriétés de la scène contenant "manager":', 
+      Object.keys(clashScene).filter(k => k.toLowerCase().includes('manager'))
+    );
+  } else {
+    console.log('🎯 Test connexion via manager trouvé...');
+    if (typeof foundManager.connect === 'function') {
+      foundManager.connect().then(result => {
+        console.log('📡 Résultat connexion:', result);
+      }).catch(error => {
+        console.error('❌ Erreur connexion:', error);
+      });
+    }
+  }
+  
+  console.groupEnd();
+};
+
+// Test du bouton bataille
+window.testBattleButton = () => {
+  console.group('⚔️ TEST BOUTON BATAILLE');
+  
+  const gameInstance = window.ChimArenaInstance;
+  const scenes = gameInstance.game.scene.getScenes();
+  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
+  
+  if (!clashScene) {
+    console.error('❌ ClashMenuScene non trouvée');
+    return;
+  }
+  
+  // Simuler le clic sur le bouton bataille
+  if (typeof clashScene.handleBattleClick === 'function') {
+    console.log('🎯 Simulation clic bouton bataille...');
+    try {
+      clashScene.handleBattleClick();
+      console.log('✅ Clic simulé');
+    } catch (error) {
+      console.error('❌ Erreur simulation:', error);
+    }
+  } else {
+    console.log('❌ handleBattleClick non trouvée');
+  }
+  
+  console.groupEnd();
+};
+
+// Forcer la connexion Colyseus avec URL directe
+window.forceColyseusConnection = () => {
+  console.group('🚀 FORCE CONNEXION COLYSEUS');
+  
+  // Test avec l'URL correcte
+  const url = 'wss://chimarena.cloud:2567';
+  console.log(`🔗 Test connexion directe: ${url}`);
+  
+  try {
+    const ws = new WebSocket(url);
+    
+    ws.onopen = () => {
+      console.log('✅ WebSocket connecté !');
+      
+      // Envoyer un message de test (format Colyseus)
+      const joinMessage = {
+        method: 'joinOrCreate',
+        roomName: 'world',
+        options: {
+          token: 'test' // Tu devras mettre le vrai token ici
+        }
+      };
+      
+      ws.send(JSON.stringify(joinMessage));
+      console.log('📤 Message envoyé:', joinMessage);
+    };
+    
+    ws.onmessage = (event) => {
+      console.log('📨 Message reçu:', event.data);
+    };
+    
+    ws.onerror = (error) => {
+      console.error('❌ Erreur WebSocket:', error);
+    };
+    
+    ws.onclose = (event) => {
+      console.log(`🔌 WebSocket fermé: ${event.code} - ${event.reason}`);
+    };
+    
+  } catch (error) {
+    console.error('❌ Erreur création WebSocket:', error);
+  }
+  
+  console.groupEnd();
+};
+
+console.log(`
+🎯 === TESTS DIRECTS DISPONIBLES ===
+
+▶️ testDirectColyseus() - Test via scène ClashMenu
+▶️ testBattleButton() - Simuler clic bataille  
+▶️ forceColyseusConnection() - Force connexion directe
+
+COMMENCE PAR: testDirectColyseus()
+`);
     createProfilePanel() {
         const { width, height } = this.scale;
         const panel = this.add.container(0, 0);
@@ -1072,171 +1238,4 @@ export default class ClashMenuScene extends Phaser.Scene {
         this.cleanup();
         super.destroy();
     }
-    // === TEST DIRECT VIA LA SCÈNE ===
-
-// Fonction pour tester directement depuis ClashMenuScene
-window.testDirectColyseus = () => {
-  console.group('🎯 TEST DIRECT COLYSEUS VIA SCÈNE');
-  
-  // Récupérer la scène active
-  const gameInstance = window.ChimArenaInstance;
-  const scenes = gameInstance.game.scene.getScenes();
-  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
-  
-  if (!clashScene) {
-    console.error('❌ ClashMenuScene non trouvée');
-    return;
-  }
-  
-  console.log('🏆 ClashMenuScene trouvée');
-  
-  // 1. Essayer d'accéder au colyseusManager via l'import dans la scène
-  console.log('🔍 Recherche colyseusManager...');
-  
-  // Le colyseusManager est importé dans ClashMenuScene.js comme :
-  // import colyseusManager from '../managers/ColyseusManager';
-  
-  // On va essayer de déclencher la méthode setupColyseus() directement
-  if (typeof clashScene.setupColyseus === 'function') {
-    console.log('🎯 setupColyseus trouvée, tentative d\'exécution...');
-    try {
-      clashScene.setupColyseus();
-      console.log('✅ setupColyseus exécutée');
-    } catch (error) {
-      console.error('❌ Erreur setupColyseus:', error);
-    }
-  } else {
-    console.log('⚠️ setupColyseus non trouvée');
-  }
-  
-  // 2. Vérifier l'état de connexion
-  console.log('📊 État actuel scène:', {
-    colyseusConnected: clashScene.colyseusConnected,
-    realtimeProfile: clashScene.realtimeProfile,
-    globalStats: clashScene.globalStats
-  });
-  
-  // 3. Essayer de simuler la connexion manuellement
-  console.log('🔧 Tentative de connexion manuelle...');
-  
-  // Si on peut accéder à colyseusManager via une propriété de la scène
-  const possibleManagers = [
-    'colyseusManager',
-    'manager', 
-    'wsManager',
-    'connectionManager'
-  ];
-  
-  let foundManager = null;
-  for (const prop of possibleManagers) {
-    if (clashScene[prop]) {
-      console.log(`✅ Manager trouvé: ${prop}`);
-      foundManager = clashScene[prop];
-      break;
-    }
-  }
-  
-  if (!foundManager) {
-    console.log('⚠️ Aucun manager trouvé dans la scène');
-    console.log('🔍 Propriétés de la scène contenant "manager":', 
-      Object.keys(clashScene).filter(k => k.toLowerCase().includes('manager'))
-    );
-  } else {
-    console.log('🎯 Test connexion via manager trouvé...');
-    if (typeof foundManager.connect === 'function') {
-      foundManager.connect().then(result => {
-        console.log('📡 Résultat connexion:', result);
-      }).catch(error => {
-        console.error('❌ Erreur connexion:', error);
-      });
-    }
-  }
-  
-  console.groupEnd();
-};
-
-// Test du bouton bataille
-window.testBattleButton = () => {
-  console.group('⚔️ TEST BOUTON BATAILLE');
-  
-  const gameInstance = window.ChimArenaInstance;
-  const scenes = gameInstance.game.scene.getScenes();
-  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
-  
-  if (!clashScene) {
-    console.error('❌ ClashMenuScene non trouvée');
-    return;
-  }
-  
-  // Simuler le clic sur le bouton bataille
-  if (typeof clashScene.handleBattleClick === 'function') {
-    console.log('🎯 Simulation clic bouton bataille...');
-    try {
-      clashScene.handleBattleClick();
-      console.log('✅ Clic simulé');
-    } catch (error) {
-      console.error('❌ Erreur simulation:', error);
-    }
-  } else {
-    console.log('❌ handleBattleClick non trouvée');
-  }
-  
-  console.groupEnd();
-};
-
-// Forcer la connexion Colyseus avec URL directe
-window.forceColyseusConnection = () => {
-  console.group('🚀 FORCE CONNEXION COLYSEUS');
-  
-  // Test avec l'URL correcte
-  const url = 'wss://chimarena.cloud:2567';
-  console.log(`🔗 Test connexion directe: ${url}`);
-  
-  try {
-    const ws = new WebSocket(url);
-    
-    ws.onopen = () => {
-      console.log('✅ WebSocket connecté !');
-      
-      // Envoyer un message de test (format Colyseus)
-      const joinMessage = {
-        method: 'joinOrCreate',
-        roomName: 'world',
-        options: {
-          token: 'test' // Tu devras mettre le vrai token ici
-        }
-      };
-      
-      ws.send(JSON.stringify(joinMessage));
-      console.log('📤 Message envoyé:', joinMessage);
-    };
-    
-    ws.onmessage = (event) => {
-      console.log('📨 Message reçu:', event.data);
-    };
-    
-    ws.onerror = (error) => {
-      console.error('❌ Erreur WebSocket:', error);
-    };
-    
-    ws.onclose = (event) => {
-      console.log(`🔌 WebSocket fermé: ${event.code} - ${event.reason}`);
-    };
-    
-  } catch (error) {
-    console.error('❌ Erreur création WebSocket:', error);
-  }
-  
-  console.groupEnd();
-};
-
-console.log(`
-🎯 === TESTS DIRECTS DISPONIBLES ===
-
-▶️ testDirectColyseus() - Test via scène ClashMenu
-▶️ testBattleButton() - Simuler clic bataille  
-▶️ forceColyseusConnection() - Force connexion directe
-
-COMMENCE PAR: testDirectColyseus()
-`);
 }
