@@ -9,29 +9,54 @@ import { configManager } from '../config/ConfigManager';
 
 const router = Router();
 
-// 🚫 RATE LIMITS DYNAMIQUES depuis la configuration
+// Helpers
+const toPosInt = (v: any, def: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : def;
+};
+
 const createCryptoLimiter = () => {
-  const config = configManager.get('security.rateLimits.crypto');
+  // Essaie la config, sinon ENV, sinon valeurs par défaut
+  const cfg = ((): any => {
+    try { return configManager?.get?.('security.rateLimits.crypto'); }
+    catch { return undefined; }
+  })() || {};
+
+  const windowMs = toPosInt(
+    cfg.windowMs ?? process.env.CRYPTO_RATE_WINDOW_MS, 
+    60_000 // 1 minute par défaut
+  );
+
+  const max = toPosInt(
+    cfg.max ?? process.env.CRYPTO_RATE_MAX, 
+    10 // 10 req/min par défaut
+  );
+
+  const message =
+    (cfg.message as string) ||
+    process.env.CRYPTO_RATE_MESSAGE ||
+    "Trop de requêtes sur l'API crypto. Réessaie plus tard.";
+
   return rateLimit({
-    windowMs: config.windowMs,
-    max: config.max,
-    message: { error: config.message },
+    windowMs,
+    max,
     standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: message, retryAfter: Math.ceil(windowMs / 1000) },
     handler: (req: Request, res: Response) => {
       const requestLogger = logger.crypto.withRequest(
-        (req as any).requestId, 
-        req.ip, 
+        (req as any).requestId,
+        req.ip,
         req.get('User-Agent')
       );
-      
       requestLogger.warn('Rate limit crypto atteint', {
         userId: (req as any).user?.id,
         path: req.path,
         method: req.method
       });
-      
-      res.status(429).json({ error: config.message });
-    }
+      res.status(429).json({ error: message });
+    },
+    skip: (req) => req.path === "/health",
   });
 };
 
