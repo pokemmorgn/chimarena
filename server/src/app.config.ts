@@ -1,12 +1,10 @@
 // server/src/app.config.ts
-import { defineConfig } from "@colyseus/tools";
-import { monitor } from "@colyseus/monitor";
-
-// 🌍 Rooms
+import defineConfig from "@colyseus/tools";
 import { WorldRoom } from "./rooms/WorldRoom";
+import express, { Request, Response, Application } from "express";
+
 
 // 🔧 Routes API
-import express from "express";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
 import cryptoRoutes from "./routes/cryptoRoutes";
