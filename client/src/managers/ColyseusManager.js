@@ -48,15 +48,12 @@ class ColyseusManager {
     /**
      * 🔐 OBTENIR LE TOKEN JWT
      */
-    getAuthToken() {
-        const token = tokenManager.getToken();
-        if (token) {
-            console.log("🔑 Token récupéré depuis tokenManager");
-            return token;
-        }
-        console.error("❌ Aucun token disponible !");
-        return null;
+getAuthToken() {
+    if (auth.isAuthenticated()) {
+        return tokenManager.getToken();
     }
+    return null;
+}
     
     /**
      * Obtenir l'URL du serveur Colyseus
