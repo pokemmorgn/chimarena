@@ -23,6 +23,8 @@ export default defineConfig({
    * Configure the Express app (middlewares, routes, health, monitor, ...).
    */
   initializeExpress: (app: express.Application) => {
+    console.log("✅ initializeExpress exécuté");
+
     // === API ROUTES ===
     app.use("/api/auth", authRoutes);
     app.use("/api/user", userRoutes);
