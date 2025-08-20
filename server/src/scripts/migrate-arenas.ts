@@ -1,6 +1,8 @@
 // server/src/scripts/migrate-arenas.ts - MIGRATION SIMPLE VERS LES ARÈNES
-const mongoose = require('mongoose');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 console.log('🏟️ Migration vers le système d\'arènes ChimArena');
 console.log('===============================================');
