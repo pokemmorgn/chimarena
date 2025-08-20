@@ -211,7 +211,8 @@ export class WorldRoom extends Room<WorldState> {
       
     } catch (error) {
       console.error(`❌ Erreur connexion WorldRoom:`, error);
-      client.leave(4000, `Erreur d'authentification: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      client.leave(4000, `Erreur d'authentification: ${errorMessage}`);
     }
   }
 
