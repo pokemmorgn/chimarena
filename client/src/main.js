@@ -4,6 +4,7 @@ import AuthScene from './scenes/AuthScene';
 import WelcomeScene from './scenes/WelcomeScene';
 import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
+import { LoadingManager } from './utils/LoadingManager.js';
 
 // 📱 DÉTECTION DE L'APPAREIL
 const isMobile = () => {
@@ -365,7 +366,7 @@ class ChimArenaGame {
         progress = 100;
         clearInterval(interval);
       }
-      window.LoadingManager.updateProgress(progress, 100);
+LoadingManager.updateProgress(progress, 100);
     }, 200);
   }
 
