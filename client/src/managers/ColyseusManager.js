@@ -48,28 +48,44 @@ class ColyseusManager {
      * 🔐 OBTENIR LE TOKEN JWT (même méthode que l'API HTTP)
      */
     getAuthToken() {
-        try {
-            // Le plus simple : utiliser la même méthode que l'API HTTP
-            // Dans auth.js, il y a apiClient.getHeaders() qui retourne les headers avec Authorization
-            if (auth.apiClient && typeof auth.apiClient.getHeaders === 'function') {
-                const headers = auth.apiClient.getHeaders();
-                const authHeader = headers.Authorization;
-                
-                if (authHeader && authHeader.startsWith('Bearer ')) {
-                    const token = authHeader.substring(7); // Enlever "Bearer "
-                    console.log('🔐 Token JWT récupéré depuis apiClient');
-                    return token;
-                }
-            }
-            
-            console.warn('⚠️ Impossible d\'obtenir le token JWT depuis apiClient');
-            return null;
-            
-        } catch (error) {
-            console.error('❌ Erreur récupération token:', error);
-            return null;
+    try {
+        console.log("🔍 Vérification du token JWT...");
+
+        // Vérifier d'abord auth.getToken()
+        if (auth && typeof auth.getToken === 'function') {
+            const directToken = auth.getToken();
+            console.log("🔑 Token via auth.getToken():", directToken ? "[OK]" : "[VIDE]");
+            if (directToken) return directToken;
+        } else {
+            console.warn("⚠️ auth.getToken() n'existe pas");
         }
+
+        // Vérifier via apiClient headers
+        if (auth.apiClient && typeof auth.apiClient.getHeaders === 'function') {
+            const headers = auth.apiClient.getHeaders();
+            console.log("📦 Headers récupérés:", headers);
+
+            const authHeader = headers.Authorization || headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                console.log("🔑 Token via apiClient headers: [OK]");
+                return token;
+            } else {
+                console.warn("⚠️ Pas de header Authorization valide:", authHeader);
+            }
+        } else {
+            console.warn("⚠️ apiClient.getHeaders() n'existe pas");
+        }
+
+        console.error("❌ Aucun token trouvé !");
+        return null;
+
+    } catch (error) {
+        console.error("❌ Erreur récupération token:", error);
+        return null;
     }
+}
+
     
     /**
      * Obtenir l'URL du serveur Colyseus
