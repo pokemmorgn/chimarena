@@ -2,21 +2,21 @@
 import { defineConfig } from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
 
-// 🌍 Tes rooms
+// 🌍 Rooms
 import { WorldRoom } from "./rooms/WorldRoom";
 
-// 🔧 Tes routes API
+// 🔧 Routes API
 import express from "express";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
-// (ajoute cryptoRoutes si nécessaire)
+import cryptoRoutes from "./routes/cryptoRoutes";
 
 export default defineConfig({
   initialize: (app) => {
-    // API routes
+    // === API ROUTES ===
     app.use("/api/auth", authRoutes);
     app.use("/api/user", userRoutes);
-    // app.use("/api/crypto", cryptoRoutes); // si activé
+    app.use("/api/crypto", cryptoRoutes);
 
     // Health
     app.get("/health", (req, res) => {
@@ -27,13 +27,13 @@ export default defineConfig({
       });
     });
 
-    // Monitor Colyseus (dev uniquement)
+    // Colyseus Monitor (dev only)
     if (process.env.NODE_ENV !== "production") {
       app.use("/colyseus", monitor());
     }
   },
 
-  // 🎮 Définition des rooms Colyseus
+  // === ROOMS ===
   options: {
     world: (room) => room.define("world", WorldRoom),
   },
