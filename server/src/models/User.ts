@@ -1,8 +1,33 @@
 import mongoose, { Document, Model } from "mongoose";
 import bcrypt from "bcrypt";
 import validator from "validator";
+import { Arena, ArenaManager } from "../config/arenas";
 
-// 🔐 CHAMPS SÉCURITÉ AJOUTÉS
+// 🏟️ NOUVEAUX TYPES POUR LE SYSTÈME D'ARÈNES
+export interface ArenaHistoryEntry {
+  fromArenaId: number;
+  toArenaId: number;
+  trophiesChange: number;
+  timestamp: Date;
+  reason: 'win' | 'loss' | 'season_reset' | 'manual';
+}
+
+export interface SeasonStats {
+  seasonId: string; // Format: "2024-01" par exemple
+  startDate: Date;
+  wins: number;
+  losses: number;
+  draws: number;
+  highestTrophies: number;
+  finalTrophies?: number; // À la fin de saison
+  rewards?: {
+    gold: number;
+    gems: number;
+    cards: number;
+  };
+}
+
+// 🔐 INTERFACE USER MISE À JOUR AVEC ARÈNES
 export interface IUser extends Document {
   username: string;
   email: string;
@@ -13,6 +38,12 @@ export interface IUser extends Document {
     trophies: number;
     highestTrophies: number;
   };
+  
+  // 🏟️ NOUVEAU : SYSTÈME D'ARÈNES
+  currentArenaId: number; // ID de l'arène actuelle
+  arenaHistory: ArenaHistoryEntry[]; // Historique des changements
+  seasonStats: SeasonStats; // Stats de la saison en cours
+  
   resources: {
     gold: number;
     gems: number;
@@ -35,7 +66,7 @@ export interface IUser extends Document {
     banExpires?: Date;
     lastLogin: Date;
     loginCount: number;
-    // 🔐 NOUVEAUX CHAMPS SÉCURITÉ
+    // 🔐 CHAMPS SÉCURITÉ
     failedLoginAttempts: number;
     lastFailedLogin?: Date;
     accountLockedUntil?: Date;
@@ -48,37 +79,29 @@ export interface IUser extends Document {
     deviceFingerprints: string[];
   };
 
-  // 💰 NOUVELLES MÉTHODES CRYPTO
-connectWallet(address: string, network: number, ip: string): Promise<void>;
-disconnectWallet(): Promise<void>;
-isWalletConnected(): boolean;
-addUsedNonce(nonce: string): Promise<void>;
-isNonceUsed(nonce: string): boolean;
-incrementCryptoSuspicion(amount?: number): Promise<void>;
-banWallet(reason: string): Promise<void>;
-  
-cryptoWallet: {
-  address: { type: String },
-  connectedAt: { type: Date },
-  lastActivity: { type: Date },
-  connectionCount: { type: Number, default: 0, min: 0 },
-  network: { type: Number }, // Chain ID
-  balance: { type: Number, default: 0, min: 0 },
-  lastWithdrawal: { type: Date },
-  withdrawalCount: { type: Number, default: 0, min: 0 },
-  kycStatus: { 
-    type: String, 
-    enum: ['NONE', 'PENDING', 'VERIFIED', 'REJECTED'], 
-    default: 'NONE' 
-  },
-  kycLevel: { type: Number, default: 0, min: 0, max: 3 },
-  lastSignatureTimestamp: { type: Date },
-  usedNonces: { type: [String], default: [], maxlength: 100 },
-  suspiciousCryptoActivity: { type: Number, default: 0, min: 0, max: 100 },
-  lastKnownIP: { type: String },
-  isWalletBanned: { type: Boolean, default: false },
-  banReason: { type: String },
-},
+  // 💰 CRYPTO WALLET
+  cryptoWallet: {
+    address: { type: String },
+    connectedAt: { type: Date },
+    lastActivity: { type: Date },
+    connectionCount: { type: Number, default: 0, min: 0 },
+    network: { type: Number }, // Chain ID
+    balance: { type: Number, default: 0, min: 0 },
+    lastWithdrawal: { type: Date },
+    withdrawalCount: { type: Number, default: 0, min: 0 },
+    kycStatus: { 
+      type: String, 
+      enum: ['NONE', 'PENDING', 'VERIFIED', 'REJECTED'], 
+      default: 'NONE' 
+    },
+    kycLevel: { type: Number, default: 0, min: 0, max: 3 },
+    lastSignatureTimestamp: { type: Date },
+    usedNonces: { type: [String], default: [], maxlength: 100 },
+    suspiciousCryptoActivity: { type: Number, default: 0, min: 0, max: 100 },
+    lastKnownIP: { type: String },
+    isWalletBanned: { type: Boolean, default: false },
+    banReason: { type: String },
+  };
 
   isAdmin: boolean;
 
@@ -87,7 +110,14 @@ cryptoWallet: {
   cardsOwned: number;
   isAccountLocked: boolean;
   
-  // 🔐 NOUVELLES MÉTHODES SÉCURITÉ
+  // 🏟️ NOUVELLES MÉTHODES ARÈNES
+  getCurrentArena(): Arena;
+  updateArena(newTrophies: number, reason?: 'win' | 'loss'): Promise<{ arenaChanged: boolean; newArena?: Arena; unlockedCards?: string[] }>;
+  addArenaHistory(fromArenaId: number, toArenaId: number, trophiesChange: number, reason: ArenaHistoryEntry['reason']): Promise<void>;
+  getCurrentSeasonStats(): SeasonStats;
+  initializeCurrentSeason(): Promise<void>;
+  
+  // 🔐 MÉTHODES SÉCURITÉ EXISTANTES
   comparePassword(candidatePassword: string): Promise<boolean>;
   getPublicProfile(): object;
   incrementFailedLogins(): Promise<void>;
@@ -98,9 +128,18 @@ cryptoWallet: {
   addKnownIP(ip: string): Promise<void>;
   addDeviceFingerprint(fingerprint: string): Promise<void>;
   isKnownDevice(fingerprint: string): boolean;
+  
+  // 💰 MÉTHODES CRYPTO EXISTANTES
+  connectWallet(address: string, network: number, ip: string): Promise<void>;
+  disconnectWallet(): Promise<void>;
+  isWalletConnected(): boolean;
+  addUsedNonce(nonce: string): Promise<void>;
+  isNonceUsed(nonce: string): boolean;
+  incrementCryptoSuspicion(amount?: number): Promise<void>;
+  banWallet(reason: string): Promise<void>;
 }
 
-// 🛡️ SCHÉMA AVEC SÉCURITÉ RENFORCÉE
+// 🏟️ SCHÉMA AVEC SYSTÈME D'ARÈNES INTÉGRÉ
 const userSchema = new mongoose.Schema<IUser>(
   {
     username: {
@@ -134,6 +173,43 @@ const userSchema = new mongoose.Schema<IUser>(
       trophies: { type: Number, default: 0, min: 0 },
       highestTrophies: { type: Number, default: 0, min: 0 }
     },
+    
+    // 🏟️ NOUVEAUX CHAMPS ARÈNES
+    currentArenaId: { 
+      type: Number, 
+      default: 0, 
+      min: 0, 
+      max: 9 // ID max des arènes définies
+    },
+    arenaHistory: [{
+      fromArenaId: { type: Number, required: true, min: 0 },
+      toArenaId: { type: Number, required: true, min: 0 },
+      trophiesChange: { type: Number, required: true },
+      timestamp: { type: Date, default: Date.now },
+      reason: { 
+        type: String, 
+        enum: ['win', 'loss', 'season_reset', 'manual'], 
+        required: true 
+      }
+    }],
+    seasonStats: {
+      seasonId: { type: String, required: true, default: () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      }},
+      startDate: { type: Date, default: Date.now },
+      wins: { type: Number, default: 0, min: 0 },
+      losses: { type: Number, default: 0, min: 0 },
+      draws: { type: Number, default: 0, min: 0 },
+      highestTrophies: { type: Number, default: 0, min: 0 },
+      finalTrophies: { type: Number, min: 0 },
+      rewards: {
+        gold: { type: Number, default: 0, min: 0 },
+        gems: { type: Number, default: 0, min: 0 },
+        cards: { type: Number, default: 0, min: 0 }
+      }
+    },
+    
     resources: {
       gold: { type: Number, default: 1000, min: 0 },
       gems: { type: Number, default: 50, min: 0 },
@@ -167,7 +243,7 @@ const userSchema = new mongoose.Schema<IUser>(
       lastLogin: { type: Date, default: Date.now },
       loginCount: { type: Number, default: 1 },
       
-      // 🔐 NOUVEAUX CHAMPS SÉCURITÉ
+      // 🔐 CHAMPS SÉCURITÉ
       failedLoginAttempts: { type: Number, default: 0, min: 0 },
       lastFailedLogin: { type: Date },
       accountLockedUntil: { type: Date },
@@ -180,14 +256,17 @@ const userSchema = new mongoose.Schema<IUser>(
         default: 'BASIC' 
       },
       suspiciousActivityScore: { type: Number, default: 0, min: 0, max: 100 },
-      lastKnownIPs: { type: [String], default: [], maxlength: 10 }, // Garder 10 dernières IPs
-      deviceFingerprints: { type: [String], default: [], maxlength: 5 }, // 5 appareils max
+      lastKnownIPs: { type: [String], default: [], maxlength: 10 },
+      deviceFingerprints: { type: [String], default: [], maxlength: 5 },
     },
     
-    // 💰 CHAMPS CRYPTO (optionnels pour l'instant)
+    // 💰 CHAMPS CRYPTO
     cryptoWallet: {
       address: { type: String },
-      encryptedPrivateKey: { type: String, select: false },
+      connectedAt: { type: Date },
+      lastActivity: { type: Date },
+      connectionCount: { type: Number, default: 0, min: 0 },
+      network: { type: Number },
       balance: { type: Number, default: 0, min: 0 },
       lastWithdrawal: { type: Date },
       withdrawalCount: { type: Number, default: 0, min: 0 },
@@ -197,34 +276,59 @@ const userSchema = new mongoose.Schema<IUser>(
         default: 'NONE' 
       },
       kycLevel: { type: Number, default: 0, min: 0, max: 3 },
+      lastSignatureTimestamp: { type: Date },
+      usedNonces: { type: [String], default: [], maxlength: 100 },
+      suspiciousCryptoActivity: { type: Number, default: 0, min: 0, max: 100 },
+      lastKnownIP: { type: String },
+      isWalletBanned: { type: Boolean, default: false },
+      banReason: { type: String },
     },
 
     isAdmin: { type: Boolean, default: false }
   },
   { 
     timestamps: true,
-    // Optimisations
     autoIndex: process.env.NODE_ENV !== 'production',
   }
 );
 
-// 📊 INDEX OPTIMISÉS POUR LA SÉCURITÉ
+// 📊 INDEX OPTIMISÉS (avec arènes)
 userSchema.index({ email: 1 });
 userSchema.index({ username: 1 });
 userSchema.index({ "playerStats.trophies": -1 });
+userSchema.index({ currentArenaId: 1 }); // 🏟️ NOUVEAU
+userSchema.index({ "seasonStats.seasonId": 1 }); // 🏟️ NOUVEAU
 userSchema.index({ "accountInfo.lastLogin": -1 });
 userSchema.index({ "accountInfo.isBanned": 1 });
-userSchema.index({ "accountInfo.failedLoginAttempts": 1 });
-userSchema.index({ "accountInfo.accountLockedUntil": 1 });
-userSchema.index({ "accountInfo.securityLevel": 1 });
 userSchema.index({ "cryptoWallet.address": 1 });
-userSchema.index({ "cryptoWallet.isWalletBanned": 1 });
-userSchema.index({ "cryptoWallet.suspiciousCryptoActivity": 1 });
 
 // 🔐 MIDDLEWARE HASH MOT DE PASSE (inchangé)
 userSchema.pre<IUser>("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+// 🏟️ MIDDLEWARE MISE À JOUR AUTOMATIQUE DE L'ARÈNE
+userSchema.pre<IUser>("save", async function (next) {
+  // Mettre à jour l'arène si les trophées ont changé
+  if (this.isModified("playerStats.trophies")) {
+    const currentArena = ArenaManager.getCurrentArena(this.playerStats.trophies);
+    const oldArenaId = this.currentArenaId;
+    
+    if (currentArena.id !== oldArenaId) {
+      this.currentArenaId = currentArena.id;
+      
+      // Ajouter à l'historique (sera fait via la méthode pour avoir la logique complète)
+      // On ne fait que mettre à jour l'ID ici, l'historique sera géré par updateArena()
+    }
+    
+    // Mettre à jour les stats de saison
+    if (this.playerStats.trophies > this.seasonStats.highestTrophies) {
+      this.seasonStats.highestTrophies = this.playerStats.trophies;
+    }
+  }
+  
   next();
 });
 
@@ -244,12 +348,105 @@ userSchema.virtual("isAccountLocked").get(function (this: IUser) {
     new Date() < this.accountInfo.accountLockedUntil : false;
 });
 
-// 🔐 MÉTHODES DE SÉCURITÉ
+// 🏟️ NOUVELLES MÉTHODES ARÈNES
+userSchema.methods.getCurrentArena = function (): Arena {
+  return ArenaManager.getCurrentArena(this.playerStats.trophies);
+};
+
+userSchema.methods.updateArena = async function (
+  newTrophies: number, 
+  reason: 'win' | 'loss' = 'win'
+): Promise<{ arenaChanged: boolean; newArena?: Arena; unlockedCards?: string[] }> {
+  const oldTrophies = this.playerStats.trophies;
+  const oldArenaId = this.currentArenaId;
+  
+  // Mettre à jour les trophées
+  this.playerStats.trophies = Math.max(0, newTrophies);
+  
+  // Mettre à jour highest trophies
+  if (this.playerStats.trophies > this.playerStats.highestTrophies) {
+    this.playerStats.highestTrophies = this.playerStats.trophies;
+  }
+  
+  // Calculer la nouvelle arène
+  const newArena = ArenaManager.getCurrentArena(this.playerStats.trophies);
+  const arenaChanged = newArena.id !== oldArenaId;
+  
+  if (arenaChanged) {
+    this.currentArenaId = newArena.id;
+    
+    // Ajouter à l'historique
+    await this.addArenaHistory(
+      oldArenaId, 
+      newArena.id, 
+      this.playerStats.trophies - oldTrophies, 
+      reason
+    );
+    
+    // Vérifier les cartes débloquées
+    const unlockedCards = ArenaManager.getUnlockedCards(oldTrophies, this.playerStats.trophies);
+    
+    return { 
+      arenaChanged: true, 
+      newArena, 
+      unlockedCards: unlockedCards.length > 0 ? unlockedCards : undefined 
+    };
+  }
+  
+  return { arenaChanged: false };
+};
+
+userSchema.methods.addArenaHistory = async function (
+  fromArenaId: number, 
+  toArenaId: number, 
+  trophiesChange: number, 
+  reason: ArenaHistoryEntry['reason']
+): Promise<void> {
+  const historyEntry: ArenaHistoryEntry = {
+    fromArenaId,
+    toArenaId,
+    trophiesChange,
+    timestamp: new Date(),
+    reason
+  };
+  
+  this.arenaHistory.unshift(historyEntry);
+  
+  // Garder seulement les 50 dernières entrées
+  if (this.arenaHistory.length > 50) {
+    this.arenaHistory = this.arenaHistory.slice(0, 50);
+  }
+};
+
+userSchema.methods.getCurrentSeasonStats = function (): SeasonStats {
+  return this.seasonStats;
+};
+
+userSchema.methods.initializeCurrentSeason = async function (): Promise<void> {
+  const now = new Date();
+  const currentSeasonId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  if (this.seasonStats.seasonId !== currentSeasonId) {
+    // Nouvelle saison
+    this.seasonStats = {
+      seasonId: currentSeasonId,
+      startDate: now,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      highestTrophies: this.playerStats.trophies,
+      rewards: { gold: 0, gems: 0, cards: 0 }
+    };
+  }
+};
+
+// 🔐 MÉTHODES DE SÉCURITÉ (inchangées)
 userSchema.methods.comparePassword = function (candidatePassword: string) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
 userSchema.methods.getPublicProfile = function () {
+  const currentArena = this.getCurrentArena();
   return {
     id: this._id,
     username: this.username,
@@ -259,9 +456,23 @@ userSchema.methods.getPublicProfile = function () {
     cardsOwned: this.cardsOwned,
     createdAt: this.createdAt,
     securityLevel: this.accountInfo.securityLevel,
+    // 🏟️ NOUVEAU : Info arène publique
+    arena: {
+      id: currentArena.id,
+      nameId: currentArena.nameId,
+      icon: currentArena.icon,
+      progress: ArenaManager.getArenaProgress(this.playerStats.trophies),
+      rank: ArenaManager.getArenaRank(this.playerStats.trophies)
+    },
+    seasonStats: {
+      wins: this.seasonStats.wins,
+      losses: this.seasonStats.losses,
+      highestTrophies: this.seasonStats.highestTrophies
+    }
   };
 };
 
+// [TOUTES LES AUTRES MÉTHODES EXISTANTES INCHANGÉES]
 userSchema.methods.incrementFailedLogins = async function () {
   const maxAttempts = 5;
   const lockDurationMinutes = 30;
@@ -269,7 +480,6 @@ userSchema.methods.incrementFailedLogins = async function () {
   this.accountInfo.failedLoginAttempts += 1;
   this.accountInfo.lastFailedLogin = new Date();
 
-  // Verrouiller le compte après 5 tentatives échouées
   if (this.accountInfo.failedLoginAttempts >= maxAttempts) {
     this.accountInfo.accountLockedUntil = new Date(
       Date.now() + lockDurationMinutes * 60 * 1000
@@ -314,7 +524,6 @@ userSchema.methods.unlockAccount = async function () {
 userSchema.methods.updateSecurityLevel = async function () {
   let newLevel: 'BASIC' | 'ENHANCED' | 'CRYPTO_GRADE' = 'BASIC';
   
-  // Critères pour ENHANCED
   if (
     this.accountInfo.isEmailVerified &&
     this.accountInfo.loginCount > 10 &&
@@ -323,7 +532,6 @@ userSchema.methods.updateSecurityLevel = async function () {
     newLevel = 'ENHANCED';
   }
   
-  // Critères pour CRYPTO_GRADE
   if (
     newLevel === 'ENHANCED' &&
     this.accountInfo.twoFactorEnabled &&
@@ -342,7 +550,6 @@ userSchema.methods.updateSecurityLevel = async function () {
 userSchema.methods.addKnownIP = async function (ip: string) {
   if (!this.accountInfo.lastKnownIPs.includes(ip)) {
     this.accountInfo.lastKnownIPs.unshift(ip);
-    // Garder seulement les 10 dernières IPs
     this.accountInfo.lastKnownIPs = this.accountInfo.lastKnownIPs.slice(0, 10);
     await this.save();
   }
@@ -351,7 +558,6 @@ userSchema.methods.addKnownIP = async function (ip: string) {
 userSchema.methods.addDeviceFingerprint = async function (fingerprint: string) {
   if (!this.accountInfo.deviceFingerprints.includes(fingerprint)) {
     this.accountInfo.deviceFingerprints.unshift(fingerprint);
-    // Garder seulement 5 appareils
     this.accountInfo.deviceFingerprints = this.accountInfo.deviceFingerprints.slice(0, 5);
     await this.save();
   }
@@ -361,80 +567,7 @@ userSchema.methods.isKnownDevice = function (fingerprint: string): boolean {
   return this.accountInfo.deviceFingerprints.includes(fingerprint);
 };
 
-// 🔍 MÉTHODES STATIQUES POUR ADMIN/ANALYTICS
-userSchema.statics.findSuspiciousAccounts = function (threshold: number = 50) {
-  return this.find({
-    'accountInfo.suspiciousActivityScore': { $gte: threshold },
-    'accountInfo.isBanned': false
-  }).select('username email accountInfo.suspiciousActivityScore accountInfo.lastLogin');
-};
-
-userSchema.statics.findLockedAccounts = function () {
-  return this.find({
-    'accountInfo.accountLockedUntil': { $gt: new Date() }
-  }).select('username email accountInfo.accountLockedUntil accountInfo.failedLoginAttempts');
-};
-
-userSchema.statics.getSecurityStats = async function () {
-  const stats = await this.aggregate([
-    {
-      $group: {
-        _id: '$accountInfo.securityLevel',
-        count: { $sum: 1 }
-      }
-    }
-  ]);
-  
-  const bannedCount = await this.countDocuments({ 'accountInfo.isBanned': true });
-  const lockedCount = await this.countDocuments({ 
-    'accountInfo.accountLockedUntil': { $gt: new Date() } 
-  });
-  const twoFactorCount = await this.countDocuments({ 
-    'accountInfo.twoFactorEnabled': true 
-  });
-  
-  return {
-    securityLevels: stats,
-    bannedAccounts: bannedCount,
-    lockedAccounts: lockedCount,
-    twoFactorEnabled: twoFactorCount,
-  };
-};
-
-// 🧹 MIDDLEWARE DE NETTOYAGE AUTOMATIQUE
-userSchema.pre('save', function(next) {
-  // Auto-déblocage des comptes expirés
-  if (this.accountInfo.accountLockedUntil && new Date() > this.accountInfo.accountLockedUntil) {
-    this.accountInfo.accountLockedUntil = undefined;
-    this.accountInfo.failedLoginAttempts = 0;
-  }
-  
-  // Auto-débannissement des comptes expirés
-  if (this.accountInfo.banExpires && new Date() > this.accountInfo.banExpires) {
-    this.accountInfo.isBanned = false;
-    this.accountInfo.banReason = undefined;
-    this.accountInfo.banExpires = undefined;
-  }
-  
-  next();
-});
-
-// 📊 HOOKS POST-SAVE POUR ANALYTICS
-userSchema.post('save', function(doc) {
-  // Log des changements de niveau de sécurité
-  if (doc.isModified('accountInfo.securityLevel')) {
-    console.log(`🔐 Niveau sécurité mis à jour: ${doc.username} -> ${doc.accountInfo.securityLevel}`);
-  }
-  
-  // Log des bannissements
-  if (doc.isModified('accountInfo.isBanned') && doc.accountInfo.isBanned) {
-    console.log(`🚫 Compte banni: ${doc.username} - ${doc.accountInfo.banReason}`);
-  }
-});
-
-// Export du modèle
-const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
-// 💰 MÉTHODES CRYPTO SÉCURISÉES
+// 💰 MÉTHODES CRYPTO (inchangées)
 userSchema.methods.connectWallet = async function (address: string, network: number, ip: string) {
   this.cryptoWallet = {
     ...this.cryptoWallet,
@@ -465,8 +598,6 @@ userSchema.methods.addUsedNonce = async function (nonce: string) {
   
   this.cryptoWallet.usedNonces = this.cryptoWallet.usedNonces || [];
   this.cryptoWallet.usedNonces.unshift(nonce);
-  
-  // Garder seulement les 100 derniers nonces
   this.cryptoWallet.usedNonces = this.cryptoWallet.usedNonces.slice(0, 100);
   await this.save();
 };
@@ -483,7 +614,6 @@ userSchema.methods.incrementCryptoSuspicion = async function (amount: number = 1
     100
   );
   
-  // Auto-ban si score trop élevé
   if (this.cryptoWallet.suspiciousCryptoActivity >= 80) {
     await this.banWallet('Activité crypto suspecte automatique');
   }
@@ -499,4 +629,8 @@ userSchema.methods.banWallet = async function (reason: string) {
   this.cryptoWallet.suspiciousCryptoActivity = 100;
   await this.save();
 };
+
+// Export du modèle
+const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
+
 export default User;
