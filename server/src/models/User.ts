@@ -116,6 +116,7 @@ export interface IUser extends Document {
   addArenaHistory(fromArenaId: number, toArenaId: number, trophiesChange: number, reason: ArenaHistoryEntry['reason']): Promise<void>;
   getCurrentSeasonStats(): SeasonStats;
   initializeCurrentSeason(): Promise<void>;
+  autoMigrateToArenaSystem(): Promise<void>; // 🔄 NOUVELLE : Auto-migration
   
   // 🔐 MÉTHODES SÉCURITÉ EXISTANTES
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -309,8 +310,19 @@ userSchema.pre<IUser>("save", async function (next) {
   next();
 });
 
-// 🏟️ MIDDLEWARE MISE À JOUR AUTOMATIQUE DE L'ARÈNE
+// 🏟️ MIDDLEWARE MIGRATION AUTOMATIQUE + MISE À JOUR ARÈNE
 userSchema.pre<IUser>("save", async function (next) {
+  // 🔄 FALLBACK: Auto-migration pour les anciens users
+  if (!this.currentArenaId && this.currentArenaId !== 0) {
+    console.log(`🔄 Auto-migration user ${this.username} vers le système d'arènes`);
+    await this.autoMigrateToArenaSystem();
+  }
+  
+  // Vérifier et initialiser la saison si nécessaire
+  if (!this.seasonStats?.seasonId) {
+    await this.initializeCurrentSeason();
+  }
+  
   // Mettre à jour l'arène si les trophées ont changé
   if (this.isModified("playerStats.trophies")) {
     const currentArena = ArenaManager.getCurrentArena(this.playerStats.trophies);
@@ -324,7 +336,7 @@ userSchema.pre<IUser>("save", async function (next) {
     }
     
     // Mettre à jour les stats de saison
-    if (this.playerStats.trophies > this.seasonStats.highestTrophies) {
+    if (this.seasonStats && this.playerStats.trophies > this.seasonStats.highestTrophies) {
       this.seasonStats.highestTrophies = this.playerStats.trophies;
     }
   }
@@ -426,7 +438,7 @@ userSchema.methods.initializeCurrentSeason = async function (): Promise<void> {
   const now = new Date();
   const currentSeasonId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   
-  if (this.seasonStats.seasonId !== currentSeasonId) {
+  if (!this.seasonStats || this.seasonStats.seasonId !== currentSeasonId) {
     // Nouvelle saison
     this.seasonStats = {
       seasonId: currentSeasonId,
@@ -438,6 +450,42 @@ userSchema.methods.initializeCurrentSeason = async function (): Promise<void> {
       rewards: { gold: 0, gems: 0, cards: 0 }
     };
   }
+};
+
+// 🔄 MÉTHODE D'AUTO-MIGRATION POUR LES ANCIENS USERS
+userSchema.methods.autoMigrateToArenaSystem = async function (): Promise<void> {
+  console.log(`🔄 Auto-migration du user ${this.username} vers le système d'arènes`);
+  
+  const trophies = this.playerStats?.trophies || 0;
+  const currentArena = ArenaManager.getCurrentArena(trophies);
+  
+  // Définir l'arène actuelle
+  this.currentArenaId = currentArena.id;
+  
+  // Créer un historique initial
+  if (!this.arenaHistory) {
+    this.arenaHistory = [];
+  }
+  
+  // Ajouter une entrée d'historique de migration si pas déjà présente
+  const hasMigrationEntry = this.arenaHistory.some((entry: ArenaHistoryEntry) => entry.reason === 'manual');
+  
+  if (!hasMigrationEntry) {
+    const migrationEntry: ArenaHistoryEntry = {
+      fromArenaId: 0,
+      toArenaId: currentArena.id,
+      trophiesChange: trophies,
+      timestamp: this.createdAt || new Date(),
+      reason: 'manual'
+    };
+    
+    this.arenaHistory.unshift(migrationEntry);
+  }
+  
+  // Initialiser la saison si nécessaire
+  await this.initializeCurrentSeason();
+  
+  console.log(`✅ User ${this.username} migré vers l'arène ${currentArena.id} (${currentArena.nameId})`);
 };
 
 // 🔐 MÉTHODES DE SÉCURITÉ (inchangées)
