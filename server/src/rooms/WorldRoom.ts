@@ -1,32 +1,78 @@
-// server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
+// 📨 GESTION DES MESSAGES DU CLIENT
+  onMessage(client: Client, type: any, message?: any) {
+    console.log(`📨 Message reçu de ${client.sessionId}: ${type}`, message);
+    
+    const player = this.state.players.get(client.sessionId);
+    if (!player) {
+      console.warn(`❌ Joueur ${client.sessionId} non trouvé pour le message ${type}`);
+      return;
+    }
+    
+    switch (type) {
+      case "get_arena_info":
+        this.handleGetArenaInfo(client, player);
+        break;
+        
+      case "search_battle":
+        this.handleSearchBattle(client, player);
+        break;
+        
+      case "cancel_search":
+        this.handleCancelSearch(client, player);
+        break;
+        
+      case "get_leaderboard":
+        this.handleGetLeaderboard(client, message);
+        break;
+        // server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
 import { Room, Client } from "@colyseus/core";
-import { Schema, MapSchema, type } from "@colyseus/schema";
-import User, { IUser } from "../models/User";
+import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
+import User, { type IUser } from "../models/User";
 import { ArenaManager } from "../config/arenas";
 
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE
 export class WorldPlayer extends Schema {
-  @type("string") userId: string = "";
-  @type("string") username: string = "";
-  @type("number") level: number = 1;
-  @type("number") trophies: number = 0;
-  @type("number") currentArenaId: number = 0;
-  @type("string") status: string = "idle"; // idle, searching, in_battle
-  @type("number") lastSeen: number = Date.now();
+  userId: string = "";
+  username: string = "";
+  level: number = 1;
+  trophies: number = 0;
+  currentArenaId: number = 0;
+  status: string = "idle"; // idle, searching, in_battle
+  lastSeen: number = Date.now();
   
   // Stats rapides pour l'affichage
-  @type("number") wins: number = 0;
-  @type("number") losses: number = 0;
-  @type("number") winRate: number = 0;
+  wins: number = 0;
+  losses: number = 0;
+  winRate: number = 0;
 }
+
+defineTypes(WorldPlayer, {
+  userId: "string",
+  username: "string", 
+  level: "number",
+  trophies: "number",
+  currentArenaId: "number",
+  status: "string",
+  lastSeen: "number",
+  wins: "number",
+  losses: "number",
+  winRate: "number"
+});
 
 // 🌍 ÉTAT DE LA WORLD ROOM
 export class WorldState extends Schema {
-  @type({ map: WorldPlayer }) players = new MapSchema<WorldPlayer>();
-  @type("number") totalPlayers: number = 0;
-  @type("number") playersOnline: number = 0;
-  @type("number") playersSearching: number = 0;
+  players = new MapSchema<WorldPlayer>();
+  totalPlayers: number = 0;
+  playersOnline: number = 0;
+  playersSearching: number = 0;
 }
+
+defineTypes(WorldState, {
+  players: { map: WorldPlayer },
+  totalPlayers: "number",
+  playersOnline: "number", 
+  playersSearching: "number"
+});
 
 // 🌍 WORLD ROOM - Hub central de tous les joueurs
 export class WorldRoom extends Room<WorldState> {
