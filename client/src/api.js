@@ -570,3 +570,5 @@ export default {
 window.addEventListener('unload', () => {
   tokenManager.clearToken();
 });
+
+export { tokenManager };
