@@ -2,6 +2,25 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
+// Définir un schéma User basique pour la migration
+const userSchema = new mongoose.Schema({
+  username: String,
+  playerStats: {
+    trophies: { type: Number, default: 0 },
+    highestTrophies: { type: Number, default: 0 }
+  },
+  gameStats: {
+    wins: { type: Number, default: 0 },
+    losses: { type: Number, default: 0 },
+    draws: { type: Number, default: 0 }
+  },
+  currentArenaId: Number,
+  arenaHistory: [mongoose.Schema.Types.Mixed],
+  seasonStats: mongoose.Schema.Types.Mixed
+}, { timestamps: true, strict: false });
+
+const User = mongoose.model('User', userSchema);
+
 console.log('🏟️ Migration vers le système d\'arènes ChimArena');
 console.log('===============================================');
 
@@ -24,8 +43,6 @@ async function migrate() {
     // Connexion
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/chimarena');
     console.log('✅ Connecté à la base de données');
-
-    const User = mongoose.model('User');
     
     // Compter les users à migrer
     const total = await User.countDocuments();
