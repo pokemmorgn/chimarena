@@ -253,7 +253,7 @@ function getServerConfig() {
 async function setupSecureMiddlewares(app: express.Application, config: any): Promise<void> {
   app.set('trust proxy', 1);
 
-  const helmet = require('helmet');
+const helmet = require('helmet');
 app.use(
   helmet({
     contentSecurityPolicy: config.debug
@@ -265,15 +265,29 @@ app.use(
             fontSrc: ["'self'", 'https://fonts.gstatic.com'],
             imgSrc: ["'self'", 'data:', 'https:'],
             scriptSrc: ["'self'"],
-            // ✅ FIX : Autoriser Colyseus WebSocket avec port
+            // ✅ FIX COMPLET : Autoriser Colyseus WebSocket avec TOUS les ports et protocoles
             connectSrc: [
               "'self'", 
               'wss:', 
+              'ws:',
               'https:', 
-              'ws://chimarena.cloud:2567',      // ✅ Ajouter port 2567
-              'wss://chimarena.cloud:2567',     // ✅ Ajouter port 2567 SSL
-              'ws://localhost:2567',            // ✅ Pour dev local
-              'wss://localhost:2567'            // ✅ Pour dev local SSL
+              'http:',
+              // Production - avec et sans port explicite
+              'wss://chimarena.cloud',           
+              'wss://chimarena.cloud:2567',      // ✅ Port WebSocket Colyseus
+              'wss://chimarena.cloud:443',       // ✅ Port HTTPS standard
+              'https://chimarena.cloud',         
+              'https://chimarena.cloud:443',     
+              'ws://chimarena.cloud:2567',       // ✅ Fallback HTTP
+              // Développement local
+              'ws://localhost:2567',             
+              'wss://localhost:2567',            
+              'ws://127.0.0.1:2567',
+              'wss://127.0.0.1:2567',
+              'http://localhost:3000',           // ✅ API locale
+              'ws://localhost:3000',
+              // Wildcard pour les ports dynamiques en dev
+              ...(config.debug ? ['ws://*:*', 'wss://*:*'] : [])
             ],
           },
         },
