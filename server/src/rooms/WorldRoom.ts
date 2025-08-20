@@ -1,8 +1,31 @@
 // server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
-import User, { type IUser } from "../models/User";
+import User from "../models/User";
 import { ArenaManager } from "../config/arenas";
+
+// Interface pour typer IUser
+interface IUser {
+  _id: any;
+  username: string;
+  playerStats: {
+    level: number;
+    experience: number;
+    trophies: number;
+    highestTrophies: number;
+  };
+  gameStats: {
+    wins: number;
+    losses: number;
+    totalGames: number;
+  };
+  currentArenaId: number;
+  resources: any;
+  seasonStats: any;
+  autoMigrateToArenaSystem(): Promise<void>;
+  updateArena(trophies: number, reason: 'win' | 'loss'): Promise<any>;
+  save(): Promise<void>;
+}
 
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE
 export class WorldPlayer extends Schema {
@@ -58,6 +81,31 @@ export class WorldRoom extends Room<WorldState> {
   onCreate(options: any) {
     console.log('🌍 WorldRoom créée avec options:', options);
     this.setState(new WorldState());
+    
+    // 📨 HANDLERS DE MESSAGES
+    this.onMessage("get_arena_info", (client, message) => {
+      this.handleGetArenaInfo(client, this.state.players.get(client.sessionId)!);
+    });
+    
+    this.onMessage("search_battle", (client, message) => {
+      this.handleSearchBattle(client, this.state.players.get(client.sessionId)!);
+    });
+    
+    this.onMessage("cancel_search", (client, message) => {
+      this.handleCancelSearch(client, this.state.players.get(client.sessionId)!);
+    });
+    
+    this.onMessage("get_leaderboard", (client, message) => {
+      this.handleGetLeaderboard(client, message);
+    });
+    
+    this.onMessage("update_status", (client, message) => {
+      this.handleUpdateStatus(client, this.state.players.get(client.sessionId)!, message);
+    });
+    
+    this.onMessage("heartbeat", (client, message) => {
+      this.handleHeartbeat(client, this.state.players.get(client.sessionId)!);
+    });
     
     // Mise à jour périodique des stats
     this.clock.setInterval(() => {
@@ -146,46 +194,6 @@ export class WorldRoom extends Room<WorldState> {
     
     // Mettre à jour les stats
     this.updateGlobalStats();
-  }
-
-  // 📨 GESTION DES MESSAGES DU CLIENT
-  onMessage(client: Client, type: any, message?: any) {
-    console.log(`📨 Message reçu de ${client.sessionId}: ${type}`, message);
-    
-    const player = this.state.players.get(client.sessionId);
-    if (!player) {
-      console.warn(`❌ Joueur ${client.sessionId} non trouvé pour le message ${type}`);
-      return;
-    }
-    
-    switch (type) {
-      case "get_arena_info":
-        this.handleGetArenaInfo(client, player);
-        break;
-        
-      case "search_battle":
-        this.handleSearchBattle(client, player);
-        break;
-        
-      case "cancel_search":
-        this.handleCancelSearch(client, player);
-        break;
-        
-      case "get_leaderboard":
-        this.handleGetLeaderboard(client, message);
-        break;
-        
-      case "update_status":
-        this.handleUpdateStatus(client, player, message);
-        break;
-        
-      case "heartbeat":
-        this.handleHeartbeat(client, player);
-        break;
-        
-      default:
-        console.warn(`❓ Type de message inconnu: ${type}`);
-    }
   }
 
   // 🏟️ INFORMATIONS SUR L'ARÈNE
