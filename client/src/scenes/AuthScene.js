@@ -428,76 +428,86 @@ export default class AuthScene extends Phaser.Scene {
   // ---------- Submit (MODIFIÉ POUR WELCOMESCENE) ----------
 
   async handleSubmit() {
-    if (this.isLoading) return;
+  if (this.isLoading) return;
 
-    this.updateFormData();
-    const v = this.validateForm();
-    if (!v.isValid) {
-      this.showMessage(v.message, 'error');
-      return;
-    }
-
-    this.setLoading(true);
-    
-    try {
-      let response;
-      
-      if (this.isLoginMode) {
-        console.log('🔐 Tentative de connexion sécurisée...');
-        response = await auth.login(this.formData.email, this.formData.password);
-      } else {
-        console.log('🔐 Tentative d\'inscription sécurisée...');
-        response = await auth.register({
-          email: this.formData.email,
-          password: this.formData.password,
-          username: this.formData.username
-        });
-      }
-
-      if (response.success) {
-        console.log('✅ Authentification réussie');
-        
-        if (response.user) {
-          this.gameInstance.setCurrentUser(response.user);
-        }
-
-        // Récupérer les données complètes
-        try {
-          const userData = await auth.getMe();
-          if (userData.success && userData.user) {
-            this.gameInstance.setCurrentUser(userData.user);
-          }
-        } catch (error) {
-          console.warn('⚠️ Impossible de récupérer les données utilisateur:', error);
-        }
-
-        this.showMessage(
-          this.isLoginMode ? 'Connexion sécurisée réussie !' : 'Inscription sécurisée réussie !', 
-          'success'
-        );
-
-        // 🆕 REDIRECTION VERS WELCOMESCENE
-        console.log('🏠 Redirection vers WelcomeScene après authentification');
-        setTimeout(() => this.scene.start('WelcomeScene'), 800);
-      } else {
-        throw new Error(response.message || 'Échec de l\'authentification');
-      }
-
-    } catch (error) {
-      console.error('❌ Erreur authentification:', error);
-      
-      let errorMessage = error.message;
-      if (error.message.includes('réseau') || error.message.includes('Network')) {
-        errorMessage = 'Problème de connexion réseau';
-      } else if (error.status === 429) {
-        errorMessage = 'Trop de tentatives, attendez quelques minutes';
-      }
-      
-      this.showMessage(errorMessage, 'error');
-    } finally {
-      this.setLoading(false);
-    }
+  this.updateFormData();
+  const v = this.validateForm();
+  if (!v.isValid) {
+    this.showMessage(v.message, 'error');
+    return;
   }
+
+  this.setLoading(true);
+  
+  try {
+    let response;
+    
+    if (this.isLoginMode) {
+      console.log('🔐 Tentative de connexion sécurisée...');
+      response = await auth.login(this.formData.email, this.formData.password);
+    } else {
+      console.log('🔐 Tentative d\'inscription sécurisée...');
+      response = await auth.register({
+        email: this.formData.email,
+        password: this.formData.password,
+        username: this.formData.username
+      });
+    }
+
+    if (response.success) {
+      console.log('✅ Authentification réussie');
+      
+      if (response.user) {
+        this.gameInstance.setCurrentUser(response.user);
+      }
+
+      // Récupérer les données complètes
+      try {
+        const userData = await auth.getMe();
+        if (userData.success && userData.user) {
+          this.gameInstance.setCurrentUser(userData.user);
+        }
+      } catch (error) {
+        console.warn('⚠️ Impossible de récupérer les données utilisateur:', error);
+      }
+
+      // 🌐 Connexion Colyseus après authentification
+      try {
+        console.log("🌐 Connexion Colyseus après login...");
+        await colyseusManager.connect();
+        console.log("🌐 Connexion Colyseus OK");
+      } catch (err) {
+        console.error("❌ Connexion Colyseus échouée:", err.message);
+      }
+
+      this.showMessage(
+        this.isLoginMode ? 'Connexion sécurisée réussie !' : 'Inscription sécurisée réussie !', 
+        'success'
+      );
+
+      // 🆕 REDIRECTION VERS WELCOMESCENE
+      console.log('🏠 Redirection vers WelcomeScene après authentification');
+      setTimeout(() => this.scene.start('WelcomeScene'), 800);
+    } else {
+      throw new Error(response.message || 'Échec de l\'authentification');
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur authentification:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('réseau') || error.message.includes('Network')) {
+      errorMessage = 'Problème de connexion réseau';
+    } else if (error.status === 429) {
+      errorMessage = 'Trop de tentatives, attendez quelques minutes';
+    }
+    
+    this.showMessage(errorMessage, 'error');
+  } finally {
+    this.setLoading(false);
+  }
+}
+
 
   validateForm() {
     const { email, password, username } = this.formData;
