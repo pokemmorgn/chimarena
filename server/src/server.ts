@@ -220,10 +220,10 @@ function getServerConfig() {
     host: configManager.get('server.host'),
     corsOrigins: configManager.get('server.corsOrigins'),
 
-    // 🎮 COLYSEUS CONFIG SUR LE MÊME PORT QUE L'API
+    // 🎮 COLYSEUS CONFIG
     colyseus: {
       enabled: process.env.COLYSEUS_ENABLED !== 'false', // Activé par défaut
-      port: Number(process.env.COLYSEUS_PORT) || 3000, // ✅ MÊME PORT QUE L'API
+      port: Number(process.env.COLYSEUS_PORT) || 2567,
       monitor: process.env.COLYSEUS_MONITOR !== 'false', // Activé en dev
     },
 
@@ -661,7 +661,7 @@ function setupErrorHandling(app: express.Application, config: any): void {
 }
 
 /**
- * 🌐 SERVEURS MODIFIÉS : COLYSEUS ET API SUR LE MÊME PORT
+ * 🌐 SERVEURS MODIFIÉS POUR COLYSEUS (CORRIGÉ)
  */
 async function startWebServers(app: express.Application, config: any): Promise<void> {
   const tasks: Promise<void>[] = [];
@@ -684,7 +684,7 @@ async function startWebServers(app: express.Application, config: any): Promise<v
       );
     }
     
-    // Serveur HTTP pour redirection (séparé)
+    // Serveur HTTP pour redirection (séparé de Colyseus)
     tasks.push(
       new Promise((resolve) => {
         const redirectServer = http.createServer(app);
@@ -695,16 +695,22 @@ async function startWebServers(app: express.Application, config: any): Promise<v
       }),
     );
   } else {
-    // ✅ EN DÉVELOPPEMENT : PAS DE SERVEUR EXPRESS SÉPARÉ
-    // Colyseus utilise déjà httpServer sur le port 3000 avec Express
-    console.log(`✅ Serveur unifié Express + Colyseus sur le port ${config.colyseus.port}`);
-    logger.general.info('🚀 Serveur unifié démarré', {
-      port: config.colyseus.port,
-      host: config.host,
-      httpUrl: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
-      wsUrl: `ws://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
-      debug: config.debug,
-    });
+    // ✅ EN DÉVELOPPEMENT : Colyseus utilise déjà httpServer sur le port 2567
+    // On démarre juste un serveur Express séparé pour l'API REST
+    tasks.push(
+      new Promise((resolve) => {
+        const expressServer = http.createServer(app);
+        expressServer.listen(config.port, config.host, () => {
+          logger.general.info('🚀 Serveur Express (API REST) démarré', {
+            port: config.port,
+            host: config.host,
+            url: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`,
+            debug: config.debug,
+          });
+          resolve();
+        });
+      }),
+    );
   }
   
   await Promise.all(tasks);
