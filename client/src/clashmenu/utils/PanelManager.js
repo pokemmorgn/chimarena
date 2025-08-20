@@ -30,8 +30,7 @@ export default class PanelManager {
         this.navigation = null;
         this.tabDefinitions = [
             { id: 'battle', name: 'Bataille', icon: '⚔️', module: null },
-            { id: 'collection', name: 'Collection', icon: '🃏', module: null },
-            { id: 'deck', name: 'Deck', icon: '🛡️', module: null },
+            { id: 'cards', name: 'Cartes', icon: '🃏', module: null },
             { id: 'clan', name: 'Clan', icon: '🏰', module: null },
             { id: 'profile', name: 'Profil', icon: '👤', module: null }
         ];
@@ -77,24 +76,19 @@ export default class PanelManager {
             icon: '⚔️',
             module: 'battle/BattlePanel',
             className: 'BattlePanel',
-            contentStartY: 180,
+            contentStartY: 120,
             enableColyseus: true
         });
         
-        this.panelConfigs.set('collection', {
-            title: 'COLLECTION',
+        this.panelConfigs.set('cards', {
+            title: 'CARTES',
             icon: '🃏',
-            module: 'collection/CollectionPanel',
-            className: 'CollectionPanel',
-            contentStartY: 180
-        });
-        
-        this.panelConfigs.set('deck', {
-            title: 'DECK',
-            icon: '🛡️',
             module: 'deck/DeckPanel',
             className: 'DeckPanel',
-            contentStartY: 180
+            contentStartY: 120,
+            hasSubTabs: true,
+            subTabs: ['collection', 'deck', 'defis'],
+            defaultSubTab: 'collection'
         });
         
         this.panelConfigs.set('clan', {
@@ -218,10 +212,30 @@ export default class PanelManager {
      */
     async loadPanelModule(panelId, panelConfig) {
         try {
+            let modulePath;
+            let PanelClass;
+            
+            // Chemins spécifiques selon le panel
+            switch (panelId) {
+                case 'battle':
+                    modulePath = '../battle/BattlePanel.js';
+                    break;
+                case 'cards':
+                    modulePath = '../deck/DeckPanel.js'; // Panel cartes = DeckPanel
+                    break;
+                case 'clan':
+                    // Pour l'instant, créer un panel placeholder
+                    return this.createPlaceholderPanel(panelId, panelConfig);
+                case 'profile':
+                    // Pour l'instant, créer un panel placeholder
+                    return this.createPlaceholderPanel(panelId, panelConfig);
+                default:
+                    throw new Error(`Panel ${panelId} non supporté`);
+            }
+            
             // Import dynamique du module
-            const modulePath = `../../../clashmenu/${panelConfig.module}.js`;
             const module = await import(modulePath);
-            const PanelClass = module.default || module[panelConfig.className];
+            PanelClass = module.default || module[panelConfig.className];
             
             if (!PanelClass) {
                 throw new Error(`Classe ${panelConfig.className} non trouvée`);
@@ -235,6 +249,9 @@ export default class PanelManager {
                 userData: this.config.userData,
                 contentStartY: panelConfig.contentStartY,
                 onAction: (action, data) => this.handlePanelAction(panelId, action, data),
+                hasSubTabs: panelConfig.hasSubTabs,
+                subTabs: panelConfig.subTabs,
+                defaultSubTab: panelConfig.defaultSubTab,
                 ...panelConfig
             });
             
@@ -252,10 +269,59 @@ export default class PanelManager {
     }
     
     /**
+     * Créer un panel placeholder pour les panels pas encore implémentés
+     */
+    createPlaceholderPanel(panelId, panelConfig) {
+        // Import de BasePanel pour créer un placeholder
+        return new (class PlaceholderPanel extends BasePanel {
+            createContent() {
+                this.createText(
+                    this.width / 2, 100,
+                    `${panelConfig.icon} ${panelConfig.title}`,
+                    {
+                        fontSize: '24px',
+                        fontWeight: 'bold',
+                        fill: '#FFD700',
+                        align: 'center'
+                    }
+                ).setOrigin(0.5);
+                
+                this.createText(
+                    this.width / 2, 150,
+                    'Panel en développement\nBientôt disponible !',
+                    {
+                        fontSize: '16px',
+                        fill: '#B0C4DE',
+                        align: 'center'
+                    }
+                ).setOrigin(0.5);
+                
+                this.createButton(
+                    this.width / 2, 220,
+                    140, 40,
+                    '🔄 Actualiser',
+                    '#4682B4',
+                    () => {
+                        this.scene.panelManager?.reloadPanel(panelId);
+                    }
+                );
+            }
+        })(this.scene, {
+            name: panelId,
+            title: panelConfig.title,
+            icon: panelConfig.icon,
+            userData: this.config.userData,
+            contentStartY: panelConfig.contentStartY
+        });
+    }
+    
+    /**
      * Créer un panel d'erreur en cas d'échec de chargement
      */
     createErrorPanel(panelId, panelConfig, errorMessage) {
         // Import de BasePanel pour créer un panel d'erreur basique
+        const BasePanel = this.getBasePanel();
+        
         return new (class ErrorPanel extends BasePanel {
             createContent() {
                 this.createText(
@@ -296,6 +362,68 @@ export default class PanelManager {
             userData: this.config.userData,
             contentStartY: panelConfig.contentStartY
         });
+    }
+    
+    /**
+     * Obtenir BasePanel pour les panels d'erreur/placeholder
+     */
+    getBasePanel() {
+        // Référence vers BasePanel (sera disponible via import)
+        if (typeof BasePanel !== 'undefined') {
+            return BasePanel;
+        }
+        
+        // Fallback simple si BasePanel pas disponible
+        return class SimpleBasePanel {
+            constructor(scene, config) {
+                this.scene = scene;
+                this.config = config;
+                this.container = scene.add.container(0, 0);
+                this.width = scene.scale.width;
+                this.height = scene.scale.height;
+                this.init();
+            }
+            
+            init() {
+                this.createContent();
+            }
+            
+            createContent() {
+                // À override
+            }
+            
+            createText(x, y, text, style) {
+                return this.scene.add.text(x, y, text, style);
+            }
+            
+            createButton(x, y, width, height, text, color, callback) {
+                const button = this.scene.add.rectangle(x, y, width, height, parseInt(color.replace('#', '0x')));
+                const buttonText = this.scene.add.text(x, y, text, {
+                    fontSize: '14px',
+                    fill: '#FFFFFF'
+                }).setOrigin(0.5);
+                
+                button.setInteractive().on('pointerdown', callback);
+                this.container.add([button, buttonText]);
+                return button;
+            }
+            
+            getContainer() {
+                return this.container;
+            }
+            
+            show() {
+                this.container.setVisible(true);
+            }
+            
+            hide() {
+                this.container.setVisible(false);
+            }
+            
+            destroy() {
+                this.container.destroy();
+            }
+        };
     }
 
     // === ANIMATIONS DE TRANSITION ===
@@ -588,9 +716,74 @@ export default class PanelManager {
                 this.updatePanelData(panelId, data);
                 break;
                 
+            // === ACTIONS SPÉCIFIQUES DECK ===
+            case 'switch_subtab':
+                // Action interne au DeckPanel, on la laisse passer
+                break;
+                
+            case 'save_deck':
+                this.handleSaveDeck(panelId, data);
+                break;
+                
+            case 'deck_updated':
+                this.handleDeckUpdated(panelId, data);
+                break;
+                
+            // === ACTIONS SPÉCIFIQUES BATAILLE ===
+            case 'battle':
+            case 'cancel_search':
+            case 'training':
+            case 'tournament':
+            case 'leaderboard':
+                // Transmettre directement à la scène pour Colyseus
+                this.config.onAction(action, { ...data, fromPanel: panelId });
+                break;
+                
             default:
                 // Transmettre l'action à la scène parent
                 this.config.onAction(action, { ...data, fromPanel: panelId });
+        }
+    }
+    
+    /**
+     * Gérer la sauvegarde d'un deck
+     */
+    handleSaveDeck(panelId, data) {
+        console.log(`💾 Sauvegarde deck depuis panel ${panelId}`, data);
+        
+        // Mettre à jour les données utilisateur
+        const userData = this.config.userData;
+        if (userData) {
+            // Sauvegarder le deck dans les données utilisateur
+            if (!userData.decks) {
+                userData.decks = {};
+            }
+            
+            userData.decks.current = data.deck;
+            userData.lastDeckUpdate = Date.now();
+            
+            // Notifier la scène parent
+            this.config.onAction('user_data_updated', { 
+                userData: userData,
+                source: 'deck_save'
+            });
+            
+            console.log('✅ Deck sauvegardé dans les données utilisateur');
+        }
+    }
+    
+    /**
+     * Gérer la mise à jour d'un deck
+     */
+    handleDeckUpdated(panelId, data) {
+        console.log(`🔄 Deck mis à jour depuis panel ${panelId}`, data);
+        
+        // Mettre à jour le coût élixir dans le header si nécessaire
+        if (data.elixirCost !== undefined) {
+            this.config.onAction('deck_cost_changed', {
+                newCost: data.elixirCost,
+                fromPanel: panelId
+            });
         }
     }
 
