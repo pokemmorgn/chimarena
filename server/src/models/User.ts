@@ -682,4 +682,4 @@ userSchema.methods.banWallet = async function (reason: string) {
 const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
 
 export default User;
-export { IUser };
+export type { IUser };
