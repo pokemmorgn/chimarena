@@ -1,6 +1,8 @@
-// client/src/scenes/AuthScene.js - MODIFIÉ POUR WELCOMESCENE
+// client/src/scenes/AuthScene.js - AVEC GESTION COLYSEUS
+
 import Phaser from 'phaser';
 import { auth } from '../api';
+import colyseusManager from '../managers/ColyseusManager'; // ✅ IMPORT COLYSEUS
 
 export default class AuthScene extends Phaser.Scene {
   constructor() {
@@ -16,19 +18,23 @@ export default class AuthScene extends Phaser.Scene {
     this.formData = { email: '', password: '', username: '' };
   }
 
-preload() {
-  this.createUITextures();
-  this.load.image('mainmenu-bg', 'background/mainmenu.png'); // sans le slash
-}
-
+  preload() {
+    this.createUITextures();
+    this.load.image('mainmenu-bg', 'background/mainmenu.png');
+  }
 
   create() {
+    console.log('🔐 AuthScene créée');
+    
     this.gameInstance = this.registry.get('gameInstance');
+
+    // 🌐 NETTOYAGE COLYSEUS AU DÉMARRAGE (IMPORTANT)
+    this.cleanupColyseus();
 
     // 🔐 VÉRIFICATION AUTHENTIFICATION AVEC NOUVEAU CLIENT
     if (auth.isAuthenticated()) {
         console.log('✅ Utilisateur déjà authentifié - Redirection vers WelcomeScene');
-        this.scene.start('WelcomeScene'); // MODIFIÉ : WelcomeScene au lieu de MenuScene
+        this.scene.start('WelcomeScene');
         return;
     }
 
@@ -46,9 +52,42 @@ preload() {
     this.time.delayedCall(500, () => {
         this.attemptAutoLogin();
     });
-}
+  }
 
-async attemptAutoLogin() {
+  // 🌐 NETTOYAGE COLYSEUS (NOUVEAU)
+  cleanupColyseus() {
+    console.log('🧹 Nettoyage Colyseus dans AuthScene...');
+    
+    try {
+      // Vérifier si Colyseus est connecté
+      if (colyseusManager.isColyseusConnected()) {
+        console.log('🌐 Déconnexion Colyseus (utilisateur non authentifié)');
+        
+        // Déconnexion asynchrone sans attendre
+        colyseusManager.disconnect().catch(error => {
+          console.warn('⚠️ Erreur déconnexion Colyseus:', error);
+        });
+      }
+      
+      // Nettoyer tous les callbacks
+      colyseusManager.off('connected');
+      colyseusManager.off('disconnected');
+      colyseusManager.off('profileUpdated');
+      colyseusManager.off('globalStatsUpdated');
+      colyseusManager.off('playersUpdated');
+      colyseusManager.off('error');
+      
+      // Arrêter le heartbeat
+      colyseusManager.stopHeartbeat();
+      
+      console.log('✅ Nettoyage Colyseus terminé');
+      
+    } catch (error) {
+      console.warn('⚠️ Erreur nettoyage Colyseus:', error);
+    }
+  }
+
+  async attemptAutoLogin() {
     try {
         console.log('🔄 Tentative de récupération de session...');
         
@@ -70,10 +109,10 @@ async attemptAutoLogin() {
     } catch (error) {
         console.log('❌ Impossible de récupérer la session:', error.message);
     }
-}
+  }
   
-// MÉTHODE HOOKS SÉCURITÉ (INCHANGÉE)
-setupSecurityHooks() {
+  // MÉTHODE HOOKS SÉCURITÉ (MODIFIÉE)
+  setupSecurityHooks() {
     // Vérifier que auth et config sont disponibles
     if (!auth || !auth.config) {
         console.warn('⚠️ Client API non encore initialisé');
@@ -85,6 +124,10 @@ setupSecurityHooks() {
         auth.config.onAuthenticationLost((reason) => {
             console.warn('🚨 Authentification perdue:', reason);
             this.gameInstance?.clearAuthData();
+            
+            // 🌐 NETTOYER COLYSEUS AUSSI
+            this.cleanupColyseus();
+            
             window.NotificationManager.error(`Session expirée: ${reason}`);
             
             if (this.scene.key !== 'AuthScene') {
@@ -99,9 +142,9 @@ setupSecurityHooks() {
             console.log('🔄 Token rafraîchi automatiquement');
         });
     }
-}
+  }
   
-  // ---------- UI base ----------
+  // ---------- UI base (INCHANGÉE) ----------
 
   createUITextures() {
     const g = this.add.graphics();
@@ -119,17 +162,16 @@ setupSecurityHooks() {
     g.destroy();
   }
 
-createBackground() {
-  const { width, height } = this.scale;
-  
-  // Ajouter l’image
-  const bg = this.add.image(width / 2, height / 2, 'mainmenu-bg')
-    .setOrigin(0.5)
-    .setDisplaySize(width, height); // occupe tout l’écran
-  
-  // (Optionnel) ajouter encore les petites particules si tu veux garder l’effet
-  this.createBackgroundParticles();
-}
+  createBackground() {
+    const { width, height } = this.scale;
+    
+    // Ajouter l'image
+    const bg = this.add.image(width / 2, height / 2, 'mainmenu-bg')
+      .setOrigin(0.5)
+      .setDisplaySize(width, height);
+    
+    this.createBackgroundParticles();
+  }
 
   createBackgroundParticles() {
     const { width, height } = this.scale;
@@ -166,6 +208,11 @@ createBackground() {
         fontSize: '12px', fontFamily: 'Roboto, sans-serif', fill: '#f39c12'
     }).setOrigin(0.5);
 
+    // 🌐 INDICATEUR COLYSEUS (NOUVEAU)
+    this.colyseusIndicator = this.add.text(width/2, 205, '🌐 Mode hors ligne', {
+        fontSize: '10px', fontFamily: 'Roboto, sans-serif', fill: '#95a5a6'
+    }).setOrigin(0.5);
+
     // Mettre à jour après tentative de récupération
     this.time.delayedCall(1000, () => {
         if (this.securityIndicator) {
@@ -177,7 +224,7 @@ createBackground() {
     const version = (window.GameConfig && window.GameConfig.VERSION) ? `v${window.GameConfig.VERSION}` : '';
     this.add.text(width - 10, height - 10, version, { fontSize: '12px', fill: '#bdc3c7' }).setOrigin(1,1);
 
-    // 💰 NOUVEAU : Indicateur MetaMask
+    // 💰 Indicateur MetaMask
     const metamaskStatus = window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE;
     if (metamaskStatus !== undefined) {
         const metamaskText = metamaskStatus ? '🦊 MetaMask détecté' : '⚠️ MetaMask requis pour crypto';
@@ -187,8 +234,9 @@ createBackground() {
             fontSize: '10px', fontFamily: 'Roboto, sans-serif', fill: metamaskColor
         }).setOrigin(0.5);
     }
-}
-  // ---------- Form ----------
+  }
+
+  // ---------- Form (INCHANGÉE) ----------
 
   createForm() {
     const { width } = this.scale;
@@ -260,7 +308,7 @@ createBackground() {
     textInput.setText(isPassword && container.value ? '•'.repeat(container.value.length) : container.value);
   }
 
-  // ---------- Buttons & Links ----------
+  // ---------- Buttons & Links (INCHANGÉES) ----------
 
   createButtons() {
     const { width } = this.scale;
@@ -294,7 +342,7 @@ createBackground() {
     }).setOrigin(0.5);
   }
 
-  // ---------- Input handling ----------
+  // ---------- Input handling (INCHANGÉES) ----------
 
   setupKeyboardEvents() {
     this.input.keyboard.on('keydown', (e) => {
@@ -377,79 +425,80 @@ createBackground() {
     this.activeInput = null;
   }
 
-  // ---------- Submit MODIFIÉ POUR WELCOMESCENE ----------
+  // ---------- Submit (MODIFIÉ POUR WELCOMESCENE) ----------
 
   async handleSubmit() {
-  if (this.isLoading) return;
+    if (this.isLoading) return;
 
-  this.updateFormData();
-  const v = this.validateForm();
-  if (!v.isValid) {
-    this.showMessage(v.message, 'error');
-    return;
-  }
-
-  this.setLoading(true);
-  
-  try {
-    let response;
-    
-    if (this.isLoginMode) {
-      console.log('🔐 Tentative de connexion sécurisée...');
-      response = await auth.login(this.formData.email, this.formData.password);
-    } else {
-      console.log('🔐 Tentative d\'inscription sécurisée...');
-      response = await auth.register({
-        email: this.formData.email,
-        password: this.formData.password,
-        username: this.formData.username
-      });
+    this.updateFormData();
+    const v = this.validateForm();
+    if (!v.isValid) {
+      this.showMessage(v.message, 'error');
+      return;
     }
 
-    if (response.success) {
-      console.log('✅ Authentification réussie');
+    this.setLoading(true);
+    
+    try {
+      let response;
       
-      if (response.user) {
-        this.gameInstance.setCurrentUser(response.user);
+      if (this.isLoginMode) {
+        console.log('🔐 Tentative de connexion sécurisée...');
+        response = await auth.login(this.formData.email, this.formData.password);
+      } else {
+        console.log('🔐 Tentative d\'inscription sécurisée...');
+        response = await auth.register({
+          email: this.formData.email,
+          password: this.formData.password,
+          username: this.formData.username
+        });
       }
 
-      // Récupérer les données complètes
-      try {
-        const userData = await auth.getMe();
-        if (userData.success && userData.user) {
-          this.gameInstance.setCurrentUser(userData.user);
+      if (response.success) {
+        console.log('✅ Authentification réussie');
+        
+        if (response.user) {
+          this.gameInstance.setCurrentUser(response.user);
         }
-      } catch (error) {
-        console.warn('⚠️ Impossible de récupérer les données utilisateur:', error);
+
+        // Récupérer les données complètes
+        try {
+          const userData = await auth.getMe();
+          if (userData.success && userData.user) {
+            this.gameInstance.setCurrentUser(userData.user);
+          }
+        } catch (error) {
+          console.warn('⚠️ Impossible de récupérer les données utilisateur:', error);
+        }
+
+        this.showMessage(
+          this.isLoginMode ? 'Connexion sécurisée réussie !' : 'Inscription sécurisée réussie !', 
+          'success'
+        );
+
+        // 🆕 REDIRECTION VERS WELCOMESCENE
+        console.log('🏠 Redirection vers WelcomeScene après authentification');
+        setTimeout(() => this.scene.start('WelcomeScene'), 800);
+      } else {
+        throw new Error(response.message || 'Échec de l\'authentification');
       }
 
-      this.showMessage(
-        this.isLoginMode ? 'Connexion sécurisée réussie !' : 'Inscription sécurisée réussie !', 
-        'success'
-      );
-
-      // 🆕 REDIRECTION VERS WELCOMESCENE AU LIEU DE MENUSCENE
-      console.log('🏠 Redirection vers WelcomeScene après authentification');
-      setTimeout(() => this.scene.start('WelcomeScene'), 800);
-    } else {
-      throw new Error(response.message || 'Échec de l\'authentification');
+    } catch (error) {
+      console.error('❌ Erreur authentification:', error);
+      
+      let errorMessage = error.message;
+      if (error.message.includes('réseau') || error.message.includes('Network')) {
+        errorMessage = 'Problème de connexion réseau';
+      } else if (error.status === 429) {
+        errorMessage = 'Trop de tentatives, attendez quelques minutes';
+      }
+      
+      this.showMessage(errorMessage, 'error');
+    } finally {
+      this.setLoading(false);
     }
-
-  } catch (error) {
-    console.error('❌ Erreur authentification:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('réseau') || error.message.includes('Network')) {
-      errorMessage = 'Problème de connexion réseau';
-    } else if (error.status === 429) {
-      errorMessage = 'Trop de tentatives, attendez quelques minutes';
-    }
-    
-    this.showMessage(errorMessage, 'error');
-  } finally {
-    this.setLoading(false);
   }
-}
+
   validateForm() {
     const { email, password, username } = this.formData;
 
@@ -465,7 +514,7 @@ createBackground() {
     return { isValid: true };
   }
 
-  // ---------- UX helpers ----------
+  // ---------- UX helpers (INCHANGÉES) ----------
 
   setLoading(loading) {
     this.isLoading = loading;
@@ -507,8 +556,14 @@ createBackground() {
 
   update() {}
 
-destroy() {
-    // Nettoyage des hooks lors de la destruction de la scène (AVEC VÉRIFICATION)
+  // 🧹 NETTOYAGE FINAL (MODIFIÉ)
+  destroy() {
+    console.log('🔥 Destruction AuthScene...');
+    
+    // 🌐 NETTOYAGE COLYSEUS FINAL
+    this.cleanupColyseus();
+    
+    // Nettoyage des hooks lors de la destruction de la scène
     if (auth && auth.config) {
         if (auth.config.onAuthenticationLost) {
             auth.config.onAuthenticationLost(null);
@@ -517,7 +572,8 @@ destroy() {
             auth.config.onTokenRefreshed(null);
         }
     }
+    
     super.destroy();
-}
-  
+    console.log('✅ AuthScene détruite');
+  }
 }
