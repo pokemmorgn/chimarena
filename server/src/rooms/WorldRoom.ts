@@ -401,7 +401,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 💾 CHARGER LE PROFIL UTILISATEUR
-  private async loadUserProfile(userId: string): Promise<IUser | null> {
+  private async loadUserProfile(userId: string): Promise<any> {
     try {
       const user = await User.findById(userId);
       if (!user) {
