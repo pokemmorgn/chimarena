@@ -1,4 +1,4 @@
-// client/src/managers/ColyseusManager.js - GESTIONNAIRE COLYSEUS WEBSOCKET
+// client/src/managers/ColyseusManager.js - VERSION CORRIGÉE
 import { Client } from 'colyseus.js';
 import { auth, tokenManager } from '../api';
 
@@ -36,6 +36,7 @@ class ColyseusManager {
             onSearchStarted: null,
             onSearchCancelled: null,
             onBattleResult: null,
+            onLeaderboard: null,
             onError: null
         };
         
@@ -45,34 +46,30 @@ class ColyseusManager {
     }
     
     /**
-     * 🔐 OBTENIR LE TOKEN JWT (même méthode que l'API HTTP)
+     * 🔐 OBTENIR LE TOKEN JWT
      */
-   getAuthToken() {
-    const token = tokenManager.getToken();
-    if (token) {
-        console.log("🔑 Token récupéré depuis tokenManager");
-        return token;
+    getAuthToken() {
+        const token = tokenManager.getToken();
+        if (token) {
+            console.log("🔑 Token récupéré depuis tokenManager");
+            return token;
+        }
+        console.error("❌ Aucun token disponible !");
+        return null;
     }
-    console.error("❌ Aucun token disponible !");
-    return null;
-}
-
     
     /**
      * Obtenir l'URL du serveur Colyseus
      */
-getServerUrl() {
-    if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-        return window.GameConfig.COLYSEUS_URL; // tu peux mettre wss://chimarena.cloud/ws dans GameConfig
+    getServerUrl() {
+        if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
+            return window.GameConfig.COLYSEUS_URL;
+        }
+
+        const host = window.location.hostname || 'chimarena.cloud';
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${protocol}://${host}/ws`;
     }
-
-    const host = window.location.hostname || 'chimarena.cloud';
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${host}/ws`;
-}
-
-
-
     
     /**
      * 🔌 CONNEXION À LA WORLDROOM
@@ -104,9 +101,8 @@ getServerUrl() {
             }
             
             // Se connecter à la WorldRoom avec seulement le token
-            // Le serveur extraira userId et username du JWT
             this.worldRoom = await this.client.joinOrCreate('world', {
-                token: token // ✅ SEUL LE TOKEN EST NÉCESSAIRE
+                token: token
             });
             
             console.log('✅ Connecté à la WorldRoom:', this.worldRoom.sessionId);
@@ -136,7 +132,7 @@ getServerUrl() {
     }
     
     /**
-     * 🔧 CONFIGURATION DES HANDLERS DE LA ROOM
+     * 🔧 CONFIGURATION DES HANDLERS DE LA ROOM - VERSION CORRIGÉE
      */
     setupRoomHandlers() {
         if (!this.worldRoom) return;
@@ -150,26 +146,24 @@ getServerUrl() {
             this.updatePlayersMap(state.players);
         });
         
-        // 👤 Ajout de joueur
-        this.worldRoom.state.players.onAdd = (player, sessionId) => {
+        // ✅ CORRECTION : Handlers de joueurs avec vérification
+        this.worldRoom.state.players.onAdd((player, sessionId) => {
             console.log(`👤 Joueur ajouté: ${player.username} (${sessionId})`);
             this.worldPlayers.set(sessionId, player);
             this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-        };
+        });
         
-        // 👤 Suppression de joueur
-        this.worldRoom.state.players.onRemove = (player, sessionId) => {
+        this.worldRoom.state.players.onRemove((player, sessionId) => {
             console.log(`👤 Joueur supprimé: ${player.username} (${sessionId})`);
             this.worldPlayers.delete(sessionId);
             this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-        };
+        });
         
-        // 👤 Changement de joueur
-        this.worldRoom.state.players.onChange = (player, sessionId) => {
+        this.worldRoom.state.players.onChange((player, sessionId) => {
             console.log(`👤 Joueur modifié: ${player.username}`);
             this.worldPlayers.set(sessionId, player);
             this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-        };
+        });
         
         // 📨 Messages du serveur
         this.worldRoom.onMessage("player_profile", (data) => {
@@ -221,6 +215,11 @@ getServerUrl() {
         
         this.worldRoom.onMessage("error", (data) => {
             console.error('📨 Erreur serveur:', data.message);
+            this.triggerCallback('onError', data.message);
+        });
+        
+        this.worldRoom.onMessage("search_error", (data) => {
+            console.error('📨 Erreur recherche:', data.message);
             this.triggerCallback('onError', data.message);
         });
         
@@ -393,16 +392,18 @@ getServerUrl() {
      * 🔧 GESTION DES CALLBACKS
      */
     on(event, callback) {
-        if (this.callbacks.hasOwnProperty('on' + event.charAt(0).toUpperCase() + event.slice(1))) {
-            this.callbacks['on' + event.charAt(0).toUpperCase() + event.slice(1)] = callback;
+        const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
+        if (this.callbacks.hasOwnProperty(callbackName)) {
+            this.callbacks[callbackName] = callback;
         } else {
             console.warn(`⚠️ Événement non reconnu: ${event}`);
         }
     }
     
     off(event) {
-        if (this.callbacks.hasOwnProperty('on' + event.charAt(0).toUpperCase() + event.slice(1))) {
-            this.callbacks['on' + event.charAt(0).toUpperCase() + event.slice(1)] = null;
+        const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
+        if (this.callbacks.hasOwnProperty(callbackName)) {
+            this.callbacks[callbackName] = null;
         }
     }
     
