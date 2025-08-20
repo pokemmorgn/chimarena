@@ -11,7 +11,7 @@
     "name": "ChimArena",
     "version": "1.0.0",
     "env": "auto",
-    "debug": false,
+    "debug": true,
     "maintenance": false
   },
 
