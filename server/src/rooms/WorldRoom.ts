@@ -1,7 +1,7 @@
 // server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, type } from "@colyseus/schema";
-import User from "../models/User";
+import User, { IUser } from "../models/User";
 import { ArenaManager } from "../config/arenas";
 
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE
@@ -68,7 +68,7 @@ export class WorldRoom extends Room<WorldState> {
       
       // Créer le joueur dans l'état
       const worldPlayer = new WorldPlayer();
-      worldPlayer.userId = user._id.toString();
+      worldPlayer.userId = (user._id as any).toString();
       worldPlayer.username = user.username;
       worldPlayer.level = user.playerStats.level;
       worldPlayer.trophies = user.playerStats.trophies;
@@ -93,7 +93,7 @@ export class WorldRoom extends Room<WorldState> {
       // Envoyer les données personnelles au client
       client.send("player_profile", {
         profile: {
-          userId: user._id.toString(),
+          userId: (user._id as any).toString(),
           username: user.username,
           level: user.playerStats.level,
           experience: user.playerStats.experience,
@@ -129,7 +129,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 📨 GESTION DES MESSAGES DU CLIENT
-  onMessage(client: Client, type: string, message: any) {
+  onMessage(client: Client, type: string | number, message?: any) {
     console.log(`📨 Message reçu de ${client.sessionId}: ${type}`, message);
     
     const player = this.state.players.get(client.sessionId);
@@ -373,7 +373,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 💾 CHARGER LE PROFIL UTILISATEUR
-  private async loadUserProfile(userId: string) {
+  private async loadUserProfile(userId: string): Promise<IUser | null> {
     try {
       const user = await User.findById(userId);
       if (!user) {
@@ -394,7 +394,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 💾 METTRE À JOUR L'UTILISATEUR EN BASE
-  private async updateUserInDatabase(userId: string, updates: any) {
+  private async updateUserInDatabase(userId: string, updates: any): Promise<void> {
     try {
       const user = await User.findById(userId);
       if (!user) return;
