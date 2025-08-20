@@ -1,4 +1,4 @@
-// server/src/server.ts - SERVEUR COMPLET CORRIGÉ (init config avant routes + imports dynamiques)
+// server/src/server.ts - SERVEUR COMPLET AVEC COLYSEUS INTÉGRÉ
 import express, { Request, Response, NextFunction } from 'express';
 import https from 'https';
 import http from 'http';
@@ -8,6 +8,11 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
+// 🎮 COLYSEUS IMPORTS
+import { Server as ColyseusServer } from "@colyseus/core";
+import { monitor } from "@colyseus/monitor";
+import { playground } from "@colyseus/playground";
+
 // 🔧 SYSTÈME DE CONFIGURATION
 import { configManager } from './config/ConfigManager';
 import { logger } from './utils/Logger';
@@ -15,14 +20,22 @@ import { logger } from './utils/Logger';
 // DB
 import { connectDatabase } from './config/database';
 
+// 🌍 COLYSEUS ROOMS
+import { WorldRoom } from './rooms/WorldRoom';
+
 const app = express();
 
+// 🎮 VARIABLES GLOBALES COLYSEUS
+let httpServer: http.Server;
+let httpsServer: https.Server | null = null;
+let gameServer: ColyseusServer;
+
 /**
- * 🚀 INITIALISATION COMPLÈTE DU SERVEUR
+ * 🚀 INITIALISATION COMPLÈTE DU SERVEUR AVEC COLYSEUS
  */
 async function initializeServer() {
   try {
-    console.log('🎮 Démarrage ChimArena Server...');
+    console.log('🎮 Démarrage ChimArena Server avec Colyseus...');
 
     // 1) CONFIG D'ABORD
     logger.general.info('🔧 Initialisation du système de configuration...');
@@ -38,6 +51,7 @@ async function initializeServer() {
       debug: config.debug,
       maintenance: config.maintenance,
       cryptoEnabled: config.crypto.enabled,
+      colyseusEnabled: config.colyseus.enabled, // ✅ NOUVEAU
     });
 
     // 4) MIDDLEWARES
@@ -49,18 +63,24 @@ async function initializeServer() {
     await connectDatabase();
     logger.database.info('✅ Base de données connectée');
 
-    // 6) ROUTES (APRÈS INIT) — imports dynamiques
+    // 6) 🎮 COLYSEUS SETUP (AVANT LES ROUTES)
+    if (config.colyseus.enabled) {
+      logger.general.info('🎮 Configuration de Colyseus...');
+      await setupColyseus(app, config);
+    }
+
+    // 7) ROUTES (APRÈS INIT) — imports dynamiques
     logger.general.info('🛣️ Configuration des routes...');
     await setupRoutes(app, config);
 
-    // 7) ERRORS
+    // 8) ERRORS
     setupErrorHandling(app, config);
 
-    // 8) SERVERS
+    // 9) SERVERS
     logger.general.info('🌐 Démarrage des serveurs web...');
     await startWebServers(app, config);
 
-    // 9) HOOKS + MONITORING
+    // 10) HOOKS + MONITORING
     setupConfigurationHooks();
     setupMonitoring(config);
 
@@ -68,6 +88,7 @@ async function initializeServer() {
       pid: process.pid,
       memory: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
       nodeVersion: process.version,
+      colyseusPort: config.colyseus.port,
     });
   } catch (error: any) {
     logger.general.error('❌ Erreur critique lors de l\'initialisation', {
@@ -80,7 +101,74 @@ async function initializeServer() {
 }
 
 /**
- * 🔍 VALIDATION ENV - CORRIGÉE
+ * 🎮 CONFIGURATION COLYSEUS COMPLÈTE
+ */
+async function setupColyseus(app: express.Application, config: any): Promise<void> {
+  try {
+    console.log('🎮 Initialisation de Colyseus...');
+    
+    // Créer le serveur HTTP d'abord (pour Colyseus)
+    httpServer = http.createServer(app);
+    
+    // Créer le serveur Colyseus
+    gameServer = new ColyseusServer({
+      server: httpServer,
+    });
+
+    // 🌍 ENREGISTRER LES ROOMS
+    console.log('🌍 Enregistrement de la WorldRoom...');
+    gameServer.define("world", WorldRoom);
+    
+    logger.general.info('🎮 WorldRoom enregistrée', {
+      roomName: 'world',
+      roomClass: 'WorldRoom'
+    });
+
+    // 📊 MONITOR COLYSEUS (en développement)
+    if (config.environment !== 'production' && config.colyseus.monitor) {
+      app.use("/colyseus", monitor());
+      app.use("/playground", playground);
+      
+      console.log(`📊 Monitor Colyseus: http://localhost:${config.port}/colyseus`);
+      console.log(`🎮 Playground Colyseus: http://localhost:${config.port}/playground`);
+      
+      logger.general.info('📊 Outils de développement Colyseus activés', {
+        monitor: `http://localhost:${config.port}/colyseus`,
+        playground: `http://localhost:${config.port}/playground`
+      });
+    }
+
+    // ✅ DÉMARRER LE SERVEUR COLYSEUS
+    console.log(`🎮 Démarrage du serveur Colyseus sur le port ${config.colyseus.port}...`);
+    
+    await new Promise<void>((resolve, reject) => {
+      try {
+        gameServer.listen(config.colyseus.port, config.host, () => {
+          console.log(`✅ Serveur Colyseus démarré sur ${config.host}:${config.colyseus.port}`);
+          logger.general.info('🎮 Serveur Colyseus opérationnel', {
+            port: config.colyseus.port,
+            host: config.host,
+            wsUrl: `ws://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
+            rooms: ['world']
+          });
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+  } catch (error: any) {
+    logger.general.error('❌ Erreur configuration Colyseus', {
+      error: (error as Error)?.message,
+      stack: (error as Error)?.stack
+    });
+    throw error;
+  }
+}
+
+/**
+ * 🔍 VALIDATION ENV - AVEC COLYSEUS
  */
 async function validateEnvironment(): Promise<void> {
   logger.general.info('🔍 Validation de l\'environnement...');
@@ -110,7 +198,7 @@ async function validateEnvironment(): Promise<void> {
 }
 
 /**
- * ⚙️ CONFIG COURANTE
+ * ⚙️ CONFIG COURANTE AVEC COLYSEUS
  */
 function getServerConfig() {
   return {
@@ -123,6 +211,13 @@ function getServerConfig() {
     httpsPort: configManager.get('server.httpsPort'),
     host: configManager.get('server.host'),
     corsOrigins: configManager.get('server.corsOrigins'),
+
+    // 🎮 COLYSEUS CONFIG
+    colyseus: {
+      enabled: process.env.COLYSEUS_ENABLED !== 'false', // Activé par défaut
+      port: Number(process.env.COLYSEUS_PORT) || 2567,
+      monitor: process.env.COLYSEUS_MONITOR !== 'false', // Activé en dev
+    },
 
     // Features
     crypto: {
@@ -145,7 +240,7 @@ function getServerConfig() {
 }
 
 /**
- * 🛡️ MIDDLEWARES
+ * 🛡️ MIDDLEWARES (inchangé)
  */
 async function setupSecureMiddlewares(app: express.Application, config: any): Promise<void> {
   app.set('trust proxy', 1);
@@ -162,7 +257,7 @@ async function setupSecureMiddlewares(app: express.Application, config: any): Pr
               fontSrc: ["'self'", 'https://fonts.gstatic.com'],
               imgSrc: ["'self'", 'data:', 'https:'],
               scriptSrc: ["'self'"],
-              connectSrc: ["'self'", 'wss:', 'https:'],
+              connectSrc: ["'self'", 'wss:', 'https:'], // ✅ WSS pour Colyseus
             },
           },
       crossOriginEmbedderPolicy: false,
@@ -183,7 +278,7 @@ async function setupSecureMiddlewares(app: express.Application, config: any): Pr
             }
           },
         },
-        skip: (req: Request) => req.path === '/health' || req.path.startsWith('/static'),
+        skip: (req: Request) => req.path === '/health' || req.path.startsWith('/static') || req.path.startsWith('/colyseus'),
       }),
     );
   }
@@ -223,7 +318,7 @@ async function setupSecureMiddlewares(app: express.Application, config: any): Pr
 }
 
 /**
- * 🌐 CORS
+ * 🌐 CORS AVEC COLYSEUS
  */
 async function setupCORS(app: express.Application, config: any): Promise<void> {
   const cors = require('cors');
@@ -250,7 +345,7 @@ async function setupCORS(app: express.Application, config: any): Promise<void> {
 }
 
 /**
- * 🚫 RATE LIMITING
+ * 🚫 RATE LIMITING (inchangé)
  */
 async function setupRateLimiting(app: express.Application): Promise<void> {
   const rateLimit = require('express-rate-limit');
@@ -293,7 +388,7 @@ async function setupRateLimiting(app: express.Application): Promise<void> {
 }
 
 /**
- * 🔒 REDIRECT HTTPS
+ * 🔒 REDIRECT HTTPS (inchangé)
  */
 function setupHTTPSRedirection(app: express.Application): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -306,7 +401,7 @@ function setupHTTPSRedirection(app: express.Application): void {
 }
 
 /**
- * 🛣️ ROUTES — IMPORTS DYNAMIQUES SÉCURISÉS APRÈS INIT
+ * 🛣️ ROUTES AVEC INFO COLYSEUS
  */
 async function setupRoutes(app: express.Application, config: any): Promise<void> {
   // Request ID
@@ -317,7 +412,7 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     next();
   });
 
-  // Health
+  // Health avec info Colyseus
   const healthPath = configManager.get('monitoring.healthCheck.path', '/health');
   app.get(healthPath, (req, res) => {
     res.json({
@@ -328,6 +423,14 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
       environment: config.environment,
       maintenance: config.maintenance,
       uptime: process.uptime(),
+      // ✅ INFO COLYSEUS
+      colyseus: config.colyseus.enabled ? {
+        enabled: true,
+        port: config.colyseus.port,
+        wsUrl: `ws://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.colyseus.port}`,
+        rooms: ['world'],
+        monitor: config.environment !== 'production' ? `http://localhost:${config.port}/colyseus` : null
+      } : { enabled: false }
     });
   });
 
@@ -338,7 +441,7 @@ async function setupRoutes(app: express.Application, config: any): Promise<void>
     // Auth routes
     try {
       const authMod = await import('./routes/authRoutes');
-const authRouter = authMod.default;
+      const authRouter = authMod.default;
       
       app.use('/api/auth', (req, res, next) => {
         if (configManager.isLogModuleEnabled('auth')) {
@@ -358,7 +461,7 @@ const authRouter = authMod.default;
     // User routes
     try {
       const userMod = await import('./routes/userRoutes');
-const userRouter = userMod.default;      
+      const userRouter = userMod.default;      
       app.use('/api/user', (req, res, next) => {
         if (configManager.isLogModuleEnabled('api')) {
           logger.api.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route user', {
@@ -378,7 +481,7 @@ const userRouter = userMod.default;
     if (config.crypto.enabled) {
       try {
         const cryptoMod = await import('./routes/cryptoRoutes');
-const cryptoRouter = cryptoMod.default;        
+        const cryptoRouter = cryptoMod.default;        
         app.use('/api/crypto', (req, res, next) => {
           if (configManager.isLogModuleEnabled('crypto')) {
             logger.crypto.withRequest((req as any).requestId, req.ip, req.get('User-Agent')).debug('Route crypto', {
@@ -437,7 +540,7 @@ const cryptoRouter = cryptoMod.default;
 }
 
 /**
- * 🔧 API CONFIG (dev tools)
+ * 🔧 API CONFIG (dev tools) - AVEC INFO COLYSEUS
  */
 function setupConfigAPI(app: express.Application): void {
   const router = express.Router();
@@ -451,6 +554,14 @@ function setupConfigAPI(app: express.Application): void {
         maintenance: configManager.isMaintenanceMode(),
         backups: configManager.getBackups().length,
       },
+      // ✅ INFO COLYSEUS
+      colyseus: gameServer ? {
+        enabled: true,
+        rooms: ['world'],
+        stats: {
+          // Vous pouvez ajouter des stats ici
+        }
+      } : { enabled: false }
     });
   });
 
@@ -476,7 +587,7 @@ function setupConfigAPI(app: express.Application): void {
 }
 
 /**
- * 📁 STATIC
+ * 📁 STATIC (inchangé)
  */
 function setupStaticFiles(app: express.Application, config: any): void {
   if (config.environment === 'production' && configManager.get('server.staticFiles.enabled', true)) {
@@ -499,7 +610,7 @@ function setupStaticFiles(app: express.Application, config: any): void {
 }
 
 /**
- * 🚨 ERRORS
+ * 🚨 ERRORS (inchangé)
  */
 function setupErrorHandling(app: express.Application, config: any): void {
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
@@ -542,16 +653,18 @@ function setupErrorHandling(app: express.Application, config: any): void {
 }
 
 /**
- * 🌐 SERVEURS
+ * 🌐 SERVEURS MODIFIÉS POUR COLYSEUS
  */
 async function startWebServers(app: express.Application, config: any): Promise<void> {
   const tasks: Promise<void>[] = [];
+  
   if (config.environment === 'production') {
-    const httpsServer = createHTTPSServer(app);
-    if (httpsServer) {
+    const httpsServerInstance = createHTTPSServer(app);
+    if (httpsServerInstance) {
+      httpsServer = httpsServerInstance;
       tasks.push(
         new Promise((resolve) => {
-          httpsServer.listen(config.httpsPort, () => {
+          httpsServer!.listen(config.httpsPort, () => {
             logger.general.info('🔐 Serveur HTTPS démarré', {
               port: config.httpsPort,
               host: config.host,
@@ -562,21 +675,25 @@ async function startWebServers(app: express.Application, config: any): Promise<v
         }),
       );
     }
+    
+    // Serveur HTTP pour redirection (séparé de Colyseus)
     tasks.push(
       new Promise((resolve) => {
-        const httpServer = http.createServer(app);
-        httpServer.listen(80, () => {
+        const redirectServer = http.createServer(app);
+        redirectServer.listen(80, () => {
           logger.general.info('🔄 Serveur HTTP (redirection) démarré', { port: 80 });
           resolve();
         });
       }),
     );
   } else {
+    // En développement, le serveur HTTP principal est déjà créé pour Colyseus
+    // On démarre juste le serveur Express normal sur un autre port
     tasks.push(
       new Promise((resolve) => {
-        const server = http.createServer(app);
-        server.listen(config.port, config.host, () => {
-          logger.general.info('🚀 Serveur développement démarré', {
+        const expressServer = http.createServer(app);
+        expressServer.listen(config.port, config.host, () => {
+          logger.general.info('🚀 Serveur Express démarré', {
             port: config.port,
             host: config.host,
             url: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`,
@@ -587,11 +704,12 @@ async function startWebServers(app: express.Application, config: any): Promise<v
       }),
     );
   }
+  
   await Promise.all(tasks);
 }
 
 /**
- * 🔐 HTTPS
+ * 🔐 HTTPS (inchangé)
  */
 function createHTTPSServer(app: express.Application) {
   try {
@@ -614,7 +732,7 @@ function createHTTPSServer(app: express.Application) {
 }
 
 /**
- * 🔄 HOOKS CONFIG
+ * 🔄 HOOKS CONFIG (inchangé)
  */
 function setupConfigurationHooks(): void {
   configManager.on('configChanged', (change) => {
@@ -629,7 +747,7 @@ function setupConfigurationHooks(): void {
 }
 
 /**
- * 📊 MONITORING
+ * 📊 MONITORING (inchangé)
  */
 function setupMonitoring(config: any): void {
   if (!configManager.get('monitoring.enabled', false)) return;
@@ -650,11 +768,30 @@ function setupMonitoring(config: any): void {
 }
 
 /**
- * 🛑 ARRÊT PROPRE
+ * 🛑 ARRÊT PROPRE AVEC COLYSEUS
  */
 async function gracefulShutdown(): Promise<void> {
   logger.general.info('🛑 Arrêt propre du serveur en cours...');
   try {
+    // Arrêter Colyseus en premier
+    if (gameServer) {
+      console.log('🎮 Arrêt du serveur Colyseus...');
+      await gameServer.gracefullyShutdown();
+      logger.general.info('✅ Serveur Colyseus arrêté');
+    }
+    
+    // Arrêter les serveurs HTTP
+    if (httpServer) {
+      httpServer.close();
+      logger.general.info('✅ Serveur HTTP arrêté');
+    }
+    
+    if (httpsServer) {
+      httpsServer.close();
+      logger.general.info('✅ Serveur HTTPS arrêté');
+    }
+    
+    // Fermer la configuration
     configManager.close();
     logger.general.info('✅ Arrêt propre terminé');
   } catch (error: any) {
