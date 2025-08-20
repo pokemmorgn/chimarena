@@ -1,7 +1,8 @@
 // client/src/scenes/ClashMenuScene.js - NOUVELLE VERSION AVEC SYSTÈME MODULAIRE
 import Phaser from 'phaser';
 import { auth } from '../api';
-import { ClashHeader, PanelManager } from '../clashmenu';
+import { ClashHeader } from '../clashmenu';
+import PanelManager from '../clashmenu/utils/PanelManager.js';
 
 export default class ClashMenuScene extends Phaser.Scene {
     constructor() {
