@@ -1,6 +1,6 @@
 // client/src/managers/ColyseusManager.js - GESTIONNAIRE COLYSEUS WEBSOCKET
 import { Client } from 'colyseus.js';
-import { auth } from '../api';
+import { auth, tokenManager } from '../api';
 
 /**
  * 🌐 GESTIONNAIRE COLYSEUS - Connexion WebSocket temps réel
@@ -47,43 +47,14 @@ class ColyseusManager {
     /**
      * 🔐 OBTENIR LE TOKEN JWT (même méthode que l'API HTTP)
      */
-    getAuthToken() {
-    try {
-        console.log("🔍 Vérification du token JWT...");
-
-        // Vérifier d'abord auth.getToken()
-        if (auth && typeof auth.getToken === 'function') {
-            const directToken = auth.getToken();
-            console.log("🔑 Token via auth.getToken():", directToken ? "[OK]" : "[VIDE]");
-            if (directToken) return directToken;
-        } else {
-            console.warn("⚠️ auth.getToken() n'existe pas");
-        }
-
-        // Vérifier via apiClient headers
-        if (auth.apiClient && typeof auth.apiClient.getHeaders === 'function') {
-            const headers = auth.apiClient.getHeaders();
-            console.log("📦 Headers récupérés:", headers);
-
-            const authHeader = headers.Authorization || headers.authorization;
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.substring(7);
-                console.log("🔑 Token via apiClient headers: [OK]");
-                return token;
-            } else {
-                console.warn("⚠️ Pas de header Authorization valide:", authHeader);
-            }
-        } else {
-            console.warn("⚠️ apiClient.getHeaders() n'existe pas");
-        }
-
-        console.error("❌ Aucun token trouvé !");
-        return null;
-
-    } catch (error) {
-        console.error("❌ Erreur récupération token:", error);
-        return null;
+   getAuthToken() {
+    const token = tokenManager.getToken();
+    if (token) {
+        console.log("🔑 Token récupéré depuis tokenManager");
+        return token;
     }
+    console.error("❌ Aucun token disponible !");
+    return null;
 }
 
     
