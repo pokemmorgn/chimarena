@@ -630,6 +630,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const mobile = isMobile();
   console.log(`📱 Appareil détecté: ${mobile ? 'MOBILE' : 'PC'} - Mode PORTRAIT activé`);
   
+   // 🌐 CONFIGURATION GLOBALE DU JEU
+  window.GameConfig = {
+    // URLs selon l'environnement
+    API_URL: import.meta.env.VITE_API_URL || 'https://chimarena.cloud/api',
+    COLYSEUS_URL: import.meta.env.VITE_COLYSEUS_URL || 'wss://chimarena.cloud:2567',
+    
+    // Pour développement local, décommenter :
+    // API_URL: 'http://localhost:3000/api',
+    // COLYSEUS_URL: 'ws://localhost:2567',
+    
+    // Optimisations mobile
+    MOBILE_OPTIMIZED: isMobile(),
+    
+    // Features
+    FEATURES: {
+      COLYSEUS_ENABLED: true,
+      CRYPTO_ENABLED: true,
+      DEBUG_ENABLED: import.meta.env.DEV
+    }
+  };
+  
+  console.log('⚙️ GameConfig initialisé:', window.GameConfig); 
   // Créer l'instance de jeu sécurisée
   window.ChimArenaInstance = new ChimArenaGame();
   
