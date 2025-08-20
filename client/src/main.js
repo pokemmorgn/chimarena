@@ -6,6 +6,8 @@ import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 import { LoadingManager } from './utils/LoadingManager.js';
 
+window.GameConfig.DEBUG = import.meta.env.DEV;
+
 // 📱 DÉTECTION DE L'APPAREIL
 const isMobile = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
