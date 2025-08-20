@@ -61,15 +61,16 @@ class ColyseusManager {
     /**
      * Obtenir l'URL du serveur Colyseus
      */
-  getServerUrl() {
+getServerUrl() {
     if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-        return window.GameConfig.COLYSEUS_URL; // doit déjà être wss://...
+        return window.GameConfig.COLYSEUS_URL; // tu peux mettre wss://chimarena.cloud/ws dans GameConfig
     }
 
     const host = window.location.hostname || 'chimarena.cloud';
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${host}:2567`;
+    return `${protocol}://${host}/ws`;
 }
+
 
 
     
