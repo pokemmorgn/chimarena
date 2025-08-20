@@ -50,8 +50,8 @@
 
   "auth": {
   "enabled": true,
-  "accessTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
-  "refreshTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
+  "accessTokenSecret": "xxx",
+  "refreshTokenSecret": "xxx",
   "accessTokenExpiry": "15m",
   "refreshTokenExpiry": "7d",
   "maxFailedAttempts": 5,
