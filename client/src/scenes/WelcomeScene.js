@@ -1,9 +1,9 @@
-// client/src/scenes/WelcomeScene.js - AVEC INTÉGRATION COLYSEUS
+// client/src/scenes/WelcomeScene.js - VERSION CORRIGÉE ET SIMPLIFIÉE
 
 import Phaser from 'phaser';
 import { auth, user, crypto, config } from '../api';
 import metaMaskHelper from '../utils/metamask';
-import colyseusManager from '../managers/ColyseusManager'; // ✅ IMPORT COLYSEUS
+import colyseusManager from '../managers/ColyseusManager';
 
 export default class WelcomeScene extends Phaser.Scene {
     constructor() {
@@ -19,7 +19,7 @@ export default class WelcomeScene extends Phaser.Scene {
         this.isConnectingWallet = false;
         this.metaMaskHelper = null;
         
-        // 🌐 ÉTAT COLYSEUS (NOUVEAU)
+        // 🌐 ÉTAT COLYSEUS
         this.colyseusConnected = false;
         this.worldPlayers = [];
         this.globalStats = { totalPlayers: 0, playersOnline: 0, playersSearching: 0 };
@@ -29,12 +29,20 @@ export default class WelcomeScene extends Phaser.Scene {
         this.connectWalletButton = null;
         this.walletInfoPanel = null;
         this.securityIndicators = {};
-        this.colyseusIndicator = null; // ✅ NOUVEAU
-        this.playersOnlineText = null; // ✅ NOUVEAU
+        this.colyseusIndicator = null;
+        this.playersOnlineText = null;
 
         // 📱 VARIABLES PORTRAIT
         this.isPortrait = true;
         this.isMobile = window.GameConfig?.MOBILE_OPTIMIZED || false;
+        
+        // Binding pour éviter les erreurs de contexte
+        this.onColyseusConnected = this.onColyseusConnected.bind(this);
+        this.onColyseusDisconnected = this.onColyseusDisconnected.bind(this);
+        this.onColyseusProfileUpdated = this.onColyseusProfileUpdated.bind(this);
+        this.onColyseusGlobalStatsUpdated = this.onColyseusGlobalStatsUpdated.bind(this);
+        this.onColyseusPlayersUpdated = this.onColyseusPlayersUpdated.bind(this);
+        this.onColyseusError = this.onColyseusError.bind(this);
     }
 
     create() {
@@ -54,7 +62,7 @@ export default class WelcomeScene extends Phaser.Scene {
         // Initialiser MetaMask Helper
         this.metaMaskHelper = metaMaskHelper;
         
-        // 🌐 CONFIGURER COLYSEUS (NOUVEAU)
+        // 🌐 CONFIGURER COLYSEUS
         this.setupColyseus();
         
         // 📱 CRÉATION UI PORTRAIT
@@ -62,7 +70,7 @@ export default class WelcomeScene extends Phaser.Scene {
         this.createPortraitHeader();
         this.createPortraitWelcomePanel();
         this.createPortraitSecurityIndicators();
-        this.createPortraitColyseusSection(); // ✅ NOUVEAU
+        this.createPortraitColyseusSection();
         this.createPortraitWalletSection();
         this.createPortraitNavigationButtons();
         this.createPortraitFooter();
@@ -81,61 +89,90 @@ export default class WelcomeScene extends Phaser.Scene {
         // Vérifier l'état du wallet
         this.checkWalletStatus();
         
-        // 🌐 CONNECTER À COLYSEUS (NOUVEAU)
+        // 🌐 CONNECTER À COLYSEUS
         this.connectToColyseus();
     }
 
-    // 🌐 CONFIGURATION COLYSEUS (NOUVEAU)
+    // 🌐 CONFIGURATION COLYSEUS - VERSION SIMPLIFIÉE
     setupColyseus() {
         console.log('🌐 Configuration des callbacks Colyseus...');
         
-        // Connexion réussie
-        colyseusManager.on('connected', () => {
+        // Nettoyer les anciens callbacks d'abord
+        this.cleanupColyseusCallbacks();
+        
+        // Configurer les nouveaux callbacks
+        colyseusManager.on('connected', this.onColyseusConnected);
+        colyseusManager.on('disconnected', this.onColyseusDisconnected);
+        colyseusManager.on('profileUpdated', this.onColyseusProfileUpdated);
+        colyseusManager.on('globalStatsUpdated', this.onColyseusGlobalStatsUpdated);
+        colyseusManager.on('playersUpdated', this.onColyseusPlayersUpdated);
+        colyseusManager.on('error', this.onColyseusError);
+    }
+    
+    // Callbacks Colyseus avec gestion d'erreurs
+    onColyseusConnected() {
+        try {
             console.log('✅ Connecté à Colyseus depuis WelcomeScene');
             this.colyseusConnected = true;
             this.updateColyseusIndicator();
             window.NotificationManager?.success('Connexion temps réel établie !');
-        });
-        
-        // Déconnexion
-        colyseusManager.on('disconnected', (code) => {
+        } catch (error) {
+            console.error('❌ Erreur onColyseusConnected:', error);
+        }
+    }
+    
+    onColyseusDisconnected(code) {
+        try {
             console.log('❌ Déconnecté de Colyseus:', code);
             this.colyseusConnected = false;
             this.updateColyseusIndicator();
             
-            if (code !== 1000) { // Pas une déconnexion volontaire
+            if (code !== 1000) {
                 window.NotificationManager?.error('Connexion temps réel perdue');
             }
-        });
-        
-        // Profil mis à jour
-        colyseusManager.on('profileUpdated', (profile) => {
+        } catch (error) {
+            console.error('❌ Erreur onColyseusDisconnected:', error);
+        }
+    }
+    
+    onColyseusProfileUpdated(profile) {
+        try {
             console.log('📊 Profil Colyseus mis à jour:', profile.username);
-            // Mettre à jour l'affichage si nécessaire
             this.updateUserDisplay(profile);
-        });
-        
-        // Stats globales mises à jour
-        colyseusManager.on('globalStatsUpdated', (stats) => {
+        } catch (error) {
+            console.error('❌ Erreur onColyseusProfileUpdated:', error);
+        }
+    }
+    
+    onColyseusGlobalStatsUpdated(stats) {
+        try {
             console.log('📊 Stats globales:', stats);
             this.globalStats = stats;
             this.updateGlobalStatsDisplay();
-        });
-        
-        // Joueurs mis à jour
-        colyseusManager.on('playersUpdated', (players) => {
+        } catch (error) {
+            console.error('❌ Erreur onColyseusGlobalStatsUpdated:', error);
+        }
+    }
+    
+    onColyseusPlayersUpdated(players) {
+        try {
             console.log('👥 Joueurs mis à jour:', players.size, 'connectés');
             this.worldPlayers = Array.from(players.values());
-        });
-        
-        // Erreurs
-        colyseusManager.on('error', (error) => {
+        } catch (error) {
+            console.error('❌ Erreur onColyseusPlayersUpdated:', error);
+        }
+    }
+    
+    onColyseusError(error) {
+        try {
             console.error('❌ Erreur Colyseus:', error);
             window.NotificationManager?.error(`Erreur temps réel: ${error}`);
-        });
+        } catch (e) {
+            console.error('❌ Erreur onColyseusError:', e);
+        }
     }
 
-    // 🌐 CONNEXION À COLYSEUS (NOUVEAU)
+    // 🌐 CONNEXION À COLYSEUS
     async connectToColyseus() {
         console.log('🌐 Tentative de connexion à Colyseus...');
         
@@ -149,12 +186,9 @@ export default class WelcomeScene extends Phaser.Scene {
             
             if (success) {
                 console.log('✅ Connexion Colyseus réussie');
-                // Le callback 'connected' gérera l'UI
-                
-                // Démarrer le heartbeat
                 colyseusManager.startHeartbeat();
                 
-                // Demander les infos d'arène
+                // Demander les infos d'arène après connexion
                 setTimeout(() => {
                     colyseusManager.requestArenaInfo();
                 }, 1000);
@@ -175,7 +209,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    // 🌐 SECTION COLYSEUS (NOUVEAU)
+    // 🌐 SECTION COLYSEUS
     createPortraitColyseusSection() {
         const { width } = this.scale;
         const sectionY = this.isMobile ? 250 : 270;
@@ -228,7 +262,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    // 🌐 MISE À JOUR INDICATEUR COLYSEUS (NOUVEAU)
+    // 🌐 MISE À JOUR INDICATEUR COLYSEUS
     updateColyseusIndicator() {
         if (!this.colyseusIndicator) return;
         
@@ -241,7 +275,7 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    // 🌐 MISE À JOUR STATS GLOBALES (NOUVEAU)
+    // 🌐 MISE À JOUR STATS GLOBALES
     updateGlobalStatsDisplay() {
         if (!this.playersOnlineText) return;
         
@@ -258,15 +292,12 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    // 🌐 MISE À JOUR AFFICHAGE UTILISATEUR (NOUVEAU)
+    // 🌐 MISE À JOUR AFFICHAGE UTILISATEUR
     updateUserDisplay(profile) {
-        // Mettre à jour les stats affichées si elles ont changé
         if (this.currentUser && profile) {
-            // Mettre à jour les trophées si ils ont changé
             if (profile.trophies !== this.currentUser.playerStats?.trophies) {
                 console.log(`🏆 Trophées mis à jour: ${this.currentUser.playerStats?.trophies} → ${profile.trophies}`);
                 
-                // Animation de changement de trophées
                 window.NotificationManager?.show(
                     `🏆 ${profile.trophies} trophées`, 
                     'success', 
@@ -276,179 +307,18 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    // 📱 INDICATEURS DE SÉCURITÉ PORTRAIT (MODIFIÉ)
-    createPortraitSecurityIndicators() {
-        const { width } = this.scale;
-        const indicatorY = this.isMobile ? 200 : 220;
-        
-        // Panel indicateurs de sécurité plus compact
-        const securityPanel = this.add.graphics();
-        securityPanel.fillStyle(0x34495e, 0.8);
-        securityPanel.fillRoundedRect(20, indicatorY, width - 40, 40, 8); // Plus petit
-        
-        this.add.text(30, indicatorY + 8, '🔐 Sécurité', {
-            fontSize: this.isMobile ? '12px' : '14px',
-            fill: '#ffffff',
-            fontFamily: 'Roboto, sans-serif',
-            fontWeight: 'bold'
-        });
-        
-        // Indicateurs en ligne pour économiser l'espace
-        const indicatorSpacing = (width - 60) / 3;
-        
-        this.securityIndicators.session = this.add.text(30, indicatorY + 25, '✅ Session', {
-            fontSize: this.isMobile ? '9px' : '10px',
-            fill: '#2ecc71',
-            fontFamily: 'Roboto, sans-serif'
-        });
-        
-        this.securityIndicators.token = this.add.text(30 + indicatorSpacing, indicatorY + 25, '🔄 Token', {
-            fontSize: this.isMobile ? '9px' : '10px',
-            fill: '#2ecc71',
-            fontFamily: 'Roboto, sans-serif'
-        });
-        
-        this.securityIndicators.wallet = this.add.text(30 + indicatorSpacing * 2, indicatorY + 25, '💰 Wallet: Non', {
-            fontSize: this.isMobile ? '9px' : '10px',
-            fill: '#95a5a6',
-            fontFamily: 'Roboto, sans-serif'
-        });
-    }
-
-    // 📱 SECTION WALLET PORTRAIT (POSITION AJUSTÉE)
-    createPortraitWalletSection() {
-        const { width } = this.scale;
-        const walletY = this.isMobile ? 330 : 350; // Décalé à cause de la section Colyseus
-        
-        // Section MetaMask plus compacte
-        this.walletSection = this.add.container(width / 2, walletY + 60);
-        
-        // Background wallet section
-        const walletBg = this.add.graphics();
-        walletBg.fillStyle(0x2c3e50, 0.9);
-        walletBg.fillRoundedRect(-(width/2 - 20), -50, width - 40, 100, 10);
-        walletBg.lineStyle(2, 0xf39c12);
-        walletBg.strokeRoundedRect(-(width/2 - 20), -50, width - 40, 100, 10);
-        
-        // Titre section
-        const walletTitle = this.add.text(0, -30, '💰 Portefeuille Crypto', {
-            fontSize: this.isMobile ? '14px' : '16px',
-            fill: '#f39c12',
-            fontFamily: 'Roboto, sans-serif',
-            fontWeight: 'bold'
-        }).setOrigin(0.5);
-        
-        this.walletSection.add([walletBg, walletTitle]);
-        
-        // Vérifier la disponibilité de MetaMask
-        if (window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
-            this.createPortraitMetaMaskInterface();
-        } else {
-            this.createPortraitNoMetaMaskMessage();
-        }
-    }
-
-    // 📱 BOUTONS DE NAVIGATION PORTRAIT (POSITION AJUSTÉE)
-    createPortraitNavigationButtons() {
-        const { width, height } = this.scale;
-        
-        // Boutons en bas de l'écran
-        const navY = height - (this.isMobile ? 100 : 120);
-        
-        this.createPortraitNavButton(width / 2, navY, '⚔️ JOUER', '#e74c3c', () => {
-            // 🌐 DÉCONNECTER COLYSEUS AVANT DE CHANGER DE SCÈNE
-            console.log('🚪 Changement vers ClashMenuScene...');
-            // On garde la connexion Colyseus pour l'instant
-            this.scene.start('ClashMenuScene');
-        }, true);
-        
-        // Bouton paramètres plus petit à côté
-        this.createPortraitNavButton(width / 2, navY + (this.isMobile ? 35 : 40), '⚙️ Paramètres', '#7f8c8d', () => {
-            window.NotificationManager.show('Paramètres - Bientôt disponible !', 'info');
-        }, false);
-    }
-
-    // 🚪 DÉCONNEXION SÉCURISÉE (MODIFIÉE POUR UTILISER handleFullDisconnect)
-    async handleSecureLogout() {
-        const confirmLogout = confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
-        if (!confirmLogout) return;
-
-        try {
-            console.log('🚪 Déconnexion sécurisée...');
-            
-            // Utiliser la méthode complète
-            await this.handleFullDisconnect();
-            
-            window.NotificationManager?.success('Déconnexion réussie');
-            this.scene.start('AuthScene');
-            
-        } catch (error) {
-            console.error('❌ Erreur lors de la déconnexion:', error);
-            
-            // Forcer la déconnexion locale
-            await this.handleFullDisconnect();
-            
-            window.NotificationManager?.show('Déconnexion locale effectuée', 'info');
-            this.scene.start('AuthScene');
-        }
-    }
-
-    // 🧹 NETTOYAGE (MODIFIÉ)
-    cleanup() {
-        console.log('🧹 Nettoyage WelcomeScene...');
-        
-        // Arrêter les timers
-        if (this.refreshTimer) {
-            this.refreshTimer.destroy();
-            this.refreshTimer = null;
-        }
-        
-        if (this.securityTimer) {
-            this.securityTimer.destroy();
-            this.securityTimer = null;
-        }
-        
-        // 🌐 NETTOYER LES CALLBACKS COLYSEUS
-        colyseusManager.off('connected');
-        colyseusManager.off('disconnected');
-        colyseusManager.off('profileUpdated');
-        colyseusManager.off('globalStatsUpdated');
-        colyseusManager.off('playersUpdated');
-        colyseusManager.off('error');
-        
-        // Nettoyer les hooks auth
-        if (auth?.config) {
-            auth.config.onAuthenticationLost?.(null);
-            auth.config.onTokenRefreshed?.(null);
-        }
-        
-        console.log('✅ Nettoyage WelcomeScene terminé');
-    }
-
-    destroy() {
-        this.cleanup();
-        super.destroy();
-    }
-
-    // === MÉTHODES EXISTANTES INCHANGÉES ===
-    // (Toutes les autres méthodes restent identiques...)
+    // === MÉTHODES UI EXISTANTES (simplifiées) ===
     
     createPortraitBackground() {
         const { width, height } = this.scale;
-        
-        // Dégradé vertical pour portrait
         const background = this.add.graphics();
         background.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
         background.fillRect(0, 0, width, height);
-        
-        // Particules adaptées au format portrait
         this.createPortraitParticles();
     }
 
     createPortraitParticles() {
         const { width, height } = this.scale;
-        
-        // Moins de particules sur mobile pour la performance
         const particleCount = this.isMobile ? 10 : 15;
         
         for (let i = 0; i < particleCount; i++) {
@@ -477,7 +347,6 @@ export default class WelcomeScene extends Phaser.Scene {
     createPortraitHeader() {
         const { width } = this.scale;
         
-        // Logo plus petit en haut
         this.add.text(width / 2, 40, 'ChimArena', {
             fontSize: this.isMobile ? '24px' : '28px',
             fontFamily: 'Orbitron, sans-serif',
@@ -487,7 +356,6 @@ export default class WelcomeScene extends Phaser.Scene {
             strokeThickness: 1
         }).setOrigin(0.5);
 
-        // Bouton de déconnexion en haut à droite
         this.createPortraitLogoutButton();
     }
 
@@ -518,14 +386,12 @@ export default class WelcomeScene extends Phaser.Scene {
         const panelY = 80;
         const panelHeight = this.isMobile ? 100 : 120;
         
-        // Panel principal d'accueil
         const welcomePanel = this.add.graphics();
         welcomePanel.fillStyle(0x2c3e50, 0.9);
         welcomePanel.fillRoundedRect(20, panelY, width - 40, panelHeight, 10);
         welcomePanel.lineStyle(2, 0x3498db);
         welcomePanel.strokeRoundedRect(20, panelY, width - 40, panelHeight, 10);
         
-        // Message de bienvenue personnalisé
         const timeOfDay = this.getTimeOfDay();
         const fontSize = this.isMobile ? '18px' : '20px';
         
@@ -536,7 +402,6 @@ export default class WelcomeScene extends Phaser.Scene {
             fontWeight: 'bold'
         }).setOrigin(0.5);
         
-        // Sous-titre avec niveau de sécurité
         const securityLevel = user.accountInfo?.securityLevel || 'BASIC';
         const securityIcon = securityLevel === 'CRYPTO_GRADE' ? '💎' : securityLevel === 'ENHANCED' ? '🛡️' : '🔰';
         
@@ -546,7 +411,6 @@ export default class WelcomeScene extends Phaser.Scene {
             fontFamily: 'Roboto, sans-serif'
         }).setOrigin(0.5);
         
-        // Stats rapides en ligne pour portrait
         const level = user.playerStats?.level || 1;
         const trophies = user.playerStats?.trophies || 0;
         const winRate = user.gameStats ? Math.round((user.gameStats.wins / Math.max(1, user.gameStats.totalGames)) * 100) : 0;
@@ -560,7 +424,7 @@ export default class WelcomeScene extends Phaser.Scene {
             fontFamily: 'Roboto, sans-serif'
         }).setOrigin(0.5);
         
-        this.add.text(statsSpacing * 2, statsY, `🏆 ${window.GameUtils.formatNumber(trophies)}`, {
+        this.add.text(statsSpacing * 2, statsY, `🏆 ${window.GameUtils?.formatNumber ? window.GameUtils.formatNumber(trophies) : trophies}`, {
             fontSize: this.isMobile ? '12px' : '14px',
             fill: '#f1c40f',
             fontFamily: 'Roboto, sans-serif'
@@ -573,205 +437,82 @@ export default class WelcomeScene extends Phaser.Scene {
         }).setOrigin(0.5);
     }
 
-    // Toutes les autres méthodes restent identiques...
-    // (je ne les répète pas pour éviter un artifact trop long)
-    
-    getTimeOfDay() {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Bonjour';
-        if (hour < 18) return 'Bon après-midi';
-        return 'Bonsoir';
-    }
-
-    setupKeyboardControls() {
-        if (!this.isMobile) {
-            this.input.keyboard.on('keydown-ENTER', () => {
-                this.scene.start('ClashMenuScene');
-            });
-            
-            this.input.keyboard.on('keydown-ESC', () => {
-                this.handleSecureLogout();
-            });
-        }
-    }
-
-    setupSecurityHooks() {
-        config.onAuthenticationLost((reason) => {
-            console.warn('🚨 Authentification perdue:', reason);
-            this.cleanup();
-            window.NotificationManager?.error(`Session expirée: ${reason}`);
-            this.scene.start('AuthScene');
-        });
+    createPortraitSecurityIndicators() {
+        const { width } = this.scale;
+        const indicatorY = this.isMobile ? 200 : 220;
         
-        config.onTokenRefreshed(() => {
-            console.log('🔄 Token rafraîchi automatiquement');
-            this.updateSecurityIndicators();
-        });
-    }
-
-    playEntranceAnimation() {
-        const elements = [this.walletSection];
-        elements.forEach((el, i) => {
-            if (!el) return;
-            el.setAlpha(0);
-            el.setY(el.y + 30);
-            this.tweens.add({ 
-                targets: el, 
-                alpha: 1, 
-                y: el.y - 30, 
-                duration: 600, 
-                delay: i * 200, 
-                ease: 'Back.easeOut' 
-            });
-        });
-    }
-
-    async refreshUserData() {
-        try {
-            console.log('🔄 Refresh des données utilisateur...');
-            
-            const response = await user.getProfile();
-            if (response.success && response.user) {
-                this.currentUser = response.user;
-                this.gameInstance?.setCurrentUser(response.user);
-                this.registry.set('currentUser', response.user);
-                
-                console.log('✅ Données utilisateur mises à jour');
-                this.updateSecurityIndicators();
-            }
-        } catch (error) {
-            console.error('❌ Erreur refresh utilisateur:', error);
-            
-            if (error.message?.toLowerCase().includes('session') || error.message?.toLowerCase().includes('token')) {
-                this.scene.start('AuthScene');
-            }
-        }
-    }
-
-    startAutoRefresh() {
-        this.refreshTimer = this.time.addEvent({
-            delay: 2 * 60 * 1000,
-            callback: () => {
-                if (auth.isAuthenticated()) {
-                    this.refreshUserData();
-                }
-            },
-            loop: true
-        });
-    }
-
-    updateSecurityIndicators() {
-        const tokenInfo = auth.getTokenInfo();
+        const securityPanel = this.add.graphics();
+        securityPanel.fillStyle(0x34495e, 0.8);
+        securityPanel.fillRoundedRect(20, indicatorY, width - 40, 40, 8);
         
-        if (tokenInfo) {
-            const timeLeft = Math.max(0, Math.floor((tokenInfo.exp * 1000 - Date.now()) / 1000 / 60));
-            
-            if (timeLeft <= 2) {
-                this.securityIndicators.token.setFill('#e74c3c');
-                this.securityIndicators.token.setText('⚠️ Token');
-            } else if (timeLeft <= 5) {
-                this.securityIndicators.token.setFill('#f39c12');
-                this.securityIndicators.token.setText('🔄 Token');
-            } else {
-                this.securityIndicators.token.setFill('#2ecc71');
-                this.securityIndicators.token.setText('✅ Token');
-            }
-        }
-    }
-
-    // === MÉTHODES WALLET EXISTANTES ===
-    
-    createPortraitMetaMaskInterface() {
-        if (this.currentUser?.cryptoWallet?.address) {
-            this.createPortraitConnectedWalletInterface();
-        } else {
-            this.createPortraitConnectWalletInterface();
-        }
-    }
-
-    createPortraitConnectWalletInterface() {
-        this.connectWalletButton = this.add.text(0, 0, '🦊 Connecter MetaMask', {
-            fontSize: this.isMobile ? '13px' : '15px',
+        this.add.text(30, indicatorY + 8, '🔐 Sécurité', {
+            fontSize: this.isMobile ? '12px' : '14px',
             fill: '#ffffff',
             fontFamily: 'Roboto, sans-serif',
-            fontWeight: 'bold',
-            backgroundColor: '#f6851b',
-            padding: { x: 15, y: 8 },
-            borderRadius: 6
-        })
-        .setOrigin(0.5)
-        .setInteractive()
-        .on('pointerover', () => this.connectWalletButton.setTint(0xffa726))
-        .on('pointerout', () => this.connectWalletButton.clearTint())
-        .on('pointerdown', () => this.connectWallet());
+            fontWeight: 'bold'
+        });
         
-        const infoText = this.add.text(0, 25, 'Accédez aux fonctionnalités crypto', {
-            fontSize: this.isMobile ? '10px' : '11px',
-            fill: '#bdc3c7',
-            fontFamily: 'Roboto, sans-serif'
-        }).setOrigin(0.5);
+        const indicatorSpacing = (width - 60) / 3;
         
-        this.walletSection.add([this.connectWalletButton, infoText]);
-    }
-
-    createPortraitConnectedWalletInterface() {
-        const walletData = this.currentUser.cryptoWallet;
-        
-        const addressText = this.add.text(0, -10, `📍 ${window.GameUtils.formatEthereumAddress(walletData.address)}`, {
-            fontSize: this.isMobile ? '11px' : '12px',
+        this.securityIndicators.session = this.add.text(30, indicatorY + 25, '✅ Session', {
+            fontSize: this.isMobile ? '9px' : '10px',
             fill: '#2ecc71',
             fontFamily: 'Roboto, sans-serif'
-        }).setOrigin(0.5);
+        });
         
-        const statusText = this.add.text(0, 5, `✅ Connecté`, {
-            fontSize: this.isMobile ? '10px' : '11px',
+        this.securityIndicators.token = this.add.text(30 + indicatorSpacing, indicatorY + 25, '🔄 Token', {
+            fontSize: this.isMobile ? '9px' : '10px',
+            fill: '#2ecc71',
+            fontFamily: 'Roboto, sans-serif'
+        });
+        
+        this.securityIndicators.wallet = this.add.text(30 + indicatorSpacing * 2, indicatorY + 25, '💰 Wallet: Non', {
+            fontSize: this.isMobile ? '9px' : '10px',
             fill: '#95a5a6',
             fontFamily: 'Roboto, sans-serif'
-        }).setOrigin(0.5);
-        
-        const disconnectBtn = this.add.text(0, 25, '🔌 Déconnecter', {
-            fontSize: this.isMobile ? '11px' : '12px',
-            fill: '#e74c3c',
-            fontFamily: 'Roboto, sans-serif',
-            backgroundColor: '#34495e',
-            padding: { x: 8, y: 4 },
-            borderRadius: 4
-        })
-        .setOrigin(0.5)
-        .setInteractive()
-        .on('pointerover', () => disconnectBtn.setTint(0xff6b6b))
-        .on('pointerout', () => disconnectBtn.clearTint())
-        .on('pointerdown', () => this.disconnectWallet());
-        
-        this.walletSection.add([addressText, statusText, disconnectBtn]);
-        
-        this.securityIndicators.wallet.setText('💰 Wallet: ✅');
-        this.securityIndicators.wallet.setFill('#2ecc71');
+        });
     }
 
-    createPortraitNoMetaMaskMessage() {
-        const noMetaMaskText = this.add.text(0, -5, '⚠️ MetaMask requis', {
-            fontSize: this.isMobile ? '13px' : '15px',
-            fill: '#e74c3c',
+    createPortraitWalletSection() {
+        const { width } = this.scale;
+        const walletY = this.isMobile ? 330 : 350;
+        
+        this.walletSection = this.add.container(width / 2, walletY + 60);
+        
+        const walletBg = this.add.graphics();
+        walletBg.fillStyle(0x2c3e50, 0.9);
+        walletBg.fillRoundedRect(-(width/2 - 20), -50, width - 40, 100, 10);
+        walletBg.lineStyle(2, 0xf39c12);
+        walletBg.strokeRoundedRect(-(width/2 - 20), -50, width - 40, 100, 10);
+        
+        const walletTitle = this.add.text(0, -30, '💰 Portefeuille Crypto', {
+            fontSize: this.isMobile ? '14px' : '16px',
+            fill: '#f39c12',
             fontFamily: 'Roboto, sans-serif',
             fontWeight: 'bold'
         }).setOrigin(0.5);
         
-        const installBtn = this.add.text(0, 20, '📥 Installer', {
-            fontSize: this.isMobile ? '12px' : '13px',
-            fill: '#ffffff',
-            fontFamily: 'Roboto, sans-serif',
-            backgroundColor: '#3498db',
-            padding: { x: 12, y: 6 },
-            borderRadius: 5
-        })
-        .setOrigin(0.5)
-        .setInteractive()
-        .on('pointerdown', () => {
-            window.open('https://metamask.io/', '_blank');
-        });
+        this.walletSection.add([walletBg, walletTitle]);
         
-        this.walletSection.add([noMetaMaskText, installBtn]);
+        if (window.GameConstants?.CRYPTO?.METAMASK_AVAILABLE) {
+            this.createPortraitMetaMaskInterface();
+        } else {
+            this.createPortraitNoMetaMaskMessage();
+        }
+    }
+
+    createPortraitNavigationButtons() {
+        const { width, height } = this.scale;
+        const navY = height - (this.isMobile ? 100 : 120);
+        
+        this.createPortraitNavButton(width / 2, navY, '⚔️ JOUER', '#e74c3c', () => {
+            console.log('🚪 Changement vers ClashMenuScene...');
+            this.scene.start('ClashMenuScene');
+        }, true);
+        
+        this.createPortraitNavButton(width / 2, navY + (this.isMobile ? 35 : 40), '⚙️ Paramètres', '#7f8c8d', () => {
+            window.NotificationManager?.show('Paramètres - Bientôt disponible !', 'info');
+        }, false);
     }
 
     createPortraitNavButton(x, y, text, color, action, isPrimary = false) {
@@ -832,6 +573,208 @@ export default class WelcomeScene extends Phaser.Scene {
 
     // === MÉTHODES WALLET ===
     
+    createPortraitMetaMaskInterface() {
+        if (this.currentUser?.cryptoWallet?.address) {
+            this.createPortraitConnectedWalletInterface();
+        } else {
+            this.createPortraitConnectWalletInterface();
+        }
+    }
+
+    createPortraitConnectWalletInterface() {
+        this.connectWalletButton = this.add.text(0, 0, '🦊 Connecter MetaMask', {
+            fontSize: this.isMobile ? '13px' : '15px',
+            fill: '#ffffff',
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 'bold',
+            backgroundColor: '#f6851b',
+            padding: { x: 15, y: 8 },
+            borderRadius: 6
+        })
+        .setOrigin(0.5)
+        .setInteractive()
+        .on('pointerover', () => this.connectWalletButton.setTint(0xffa726))
+        .on('pointerout', () => this.connectWalletButton.clearTint())
+        .on('pointerdown', () => this.connectWallet());
+        
+        const infoText = this.add.text(0, 25, 'Accédez aux fonctionnalités crypto', {
+            fontSize: this.isMobile ? '10px' : '11px',
+            fill: '#bdc3c7',
+            fontFamily: 'Roboto, sans-serif'
+        }).setOrigin(0.5);
+        
+        this.walletSection.add([this.connectWalletButton, infoText]);
+    }
+
+    createPortraitConnectedWalletInterface() {
+        const walletData = this.currentUser.cryptoWallet;
+        
+        const addressText = this.add.text(0, -10, `📍 ${window.GameUtils?.formatEthereumAddress ? window.GameUtils.formatEthereumAddress(walletData.address) : walletData.address}`, {
+            fontSize: this.isMobile ? '11px' : '12px',
+            fill: '#2ecc71',
+            fontFamily: 'Roboto, sans-serif'
+        }).setOrigin(0.5);
+        
+        const statusText = this.add.text(0, 5, `✅ Connecté`, {
+            fontSize: this.isMobile ? '10px' : '11px',
+            fill: '#95a5a6',
+            fontFamily: 'Roboto, sans-serif'
+        }).setOrigin(0.5);
+        
+        const disconnectBtn = this.add.text(0, 25, '🔌 Déconnecter', {
+            fontSize: this.isMobile ? '11px' : '12px',
+            fill: '#e74c3c',
+            fontFamily: 'Roboto, sans-serif',
+            backgroundColor: '#34495e',
+            padding: { x: 8, y: 4 },
+            borderRadius: 4
+        })
+        .setOrigin(0.5)
+        .setInteractive()
+        .on('pointerover', () => disconnectBtn.setTint(0xff6b6b))
+        .on('pointerout', () => disconnectBtn.clearTint())
+        .on('pointerdown', () => this.disconnectWallet());
+        
+        this.walletSection.add([addressText, statusText, disconnectBtn]);
+        
+        this.securityIndicators.wallet.setText('💰 Wallet: ✅');
+        this.securityIndicators.wallet.setFill('#2ecc71');
+    }
+
+    createPortraitNoMetaMaskMessage() {
+        const noMetaMaskText = this.add.text(0, -5, '⚠️ MetaMask requis', {
+            fontSize: this.isMobile ? '13px' : '15px',
+            fill: '#e74c3c',
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 'bold'
+        }).setOrigin(0.5);
+        
+        const installBtn = this.add.text(0, 20, '📥 Installer', {
+            fontSize: this.isMobile ? '12px' : '13px',
+            fill: '#ffffff',
+            fontFamily: 'Roboto, sans-serif',
+            backgroundColor: '#3498db',
+            padding: { x: 12, y: 6 },
+            borderRadius: 5
+        })
+        .setOrigin(0.5)
+        .setInteractive()
+        .on('pointerdown', () => {
+            window.open('https://metamask.io/', '_blank');
+        });
+        
+        this.walletSection.add([noMetaMaskText, installBtn]);
+    }
+
+    // === MÉTHODES LOGIQUE ===
+    
+    getTimeOfDay() {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Bonjour';
+        if (hour < 18) return 'Bon après-midi';
+        return 'Bonsoir';
+    }
+
+    setupKeyboardControls() {
+        if (!this.isMobile) {
+            this.input.keyboard.on('keydown-ENTER', () => {
+                this.scene.start('ClashMenuScene');
+            });
+            
+            this.input.keyboard.on('keydown-ESC', () => {
+                this.handleSecureLogout();
+            });
+        }
+    }
+
+    setupSecurityHooks() {
+        if (config && config.onAuthenticationLost) {
+            config.onAuthenticationLost((reason) => {
+                console.warn('🚨 Authentification perdue:', reason);
+                this.cleanup();
+                window.NotificationManager?.error(`Session expirée: ${reason}`);
+                this.scene.start('AuthScene');
+            });
+        }
+        
+        if (config && config.onTokenRefreshed) {
+            config.onTokenRefreshed(() => {
+                console.log('🔄 Token rafraîchi automatiquement');
+                this.updateSecurityIndicators();
+            });
+        }
+    }
+
+    playEntranceAnimation() {
+        const elements = [this.walletSection];
+        elements.forEach((el, i) => {
+            if (!el) return;
+            el.setAlpha(0);
+            el.setY(el.y + 30);
+            this.tweens.add({ 
+                targets: el, 
+                alpha: 1, 
+                y: el.y - 30, 
+                duration: 600, 
+                delay: i * 200, 
+                ease: 'Back.easeOut' 
+            });
+        });
+    }
+
+    async refreshUserData() {
+        try {
+            console.log('🔄 Refresh des données utilisateur...');
+            
+            const response = await user.getProfile();
+            if (response.success && response.user) {
+                this.currentUser = response.user;
+                this.gameInstance?.setCurrentUser(response.user);
+                this.registry.set('currentUser', response.user);
+                
+                console.log('✅ Données utilisateur mises à jour');
+                this.updateSecurityIndicators();
+            }
+        } catch (error) {
+            console.error('❌ Erreur refresh utilisateur:', error);
+            
+            if (error.message?.toLowerCase().includes('session') || error.message?.toLowerCase().includes('token')) {
+                this.scene.start('AuthScene');
+            }
+        }
+    }
+
+    startAutoRefresh() {
+        this.refreshTimer = this.time.addEvent({
+            delay: 2 * 60 * 1000,
+            callback: () => {
+                if (auth.isAuthenticated()) {
+                    this.refreshUserData();
+                }
+            },
+            loop: true
+        });
+    }
+
+    updateSecurityIndicators() {
+        const tokenInfo = auth.getTokenInfo();
+        
+        if (tokenInfo) {
+            const timeLeft = Math.max(0, Math.floor((tokenInfo.exp * 1000 - Date.now()) / 1000 / 60));
+            
+            if (timeLeft <= 2) {
+                this.securityIndicators.token?.setFill('#e74c3c');
+                this.securityIndicators.token?.setText('⚠️ Token');
+            } else if (timeLeft <= 5) {
+                this.securityIndicators.token?.setFill('#f39c12');
+                this.securityIndicators.token?.setText('🔄 Token');
+            } else {
+                this.securityIndicators.token?.setFill('#2ecc71');
+                this.securityIndicators.token?.setText('✅ Token');
+            }
+        }
+    }
+
     async connectWallet() {
         if (this.isConnectingWallet) return;
         this.isConnectingWallet = true;
@@ -898,7 +841,7 @@ export default class WelcomeScene extends Phaser.Scene {
             
             if (response.success) {
                 this.updateWalletUI(null);
-                window.NotificationManager.success('Wallet déconnecté');
+                window.NotificationManager?.success('Wallet déconnecté');
                 console.log('✅ Wallet déconnecté');
             } else {
                 throw new Error(response.message || 'Erreur déconnexion');
@@ -906,22 +849,22 @@ export default class WelcomeScene extends Phaser.Scene {
             
         } catch (error) {
             console.error('❌ Erreur déconnexion wallet:', error);
-            window.NotificationManager.error(error.message || 'Erreur déconnexion wallet');
+            window.NotificationManager?.error(error.message || 'Erreur déconnexion wallet');
         }
     }
 
     updateWalletUI(walletInfo) {
         if (walletInfo) {
             this.currentUser.cryptoWallet = walletInfo;
-            this.securityIndicators.wallet.setText('💰 Wallet: ✅');
-            this.securityIndicators.wallet.setFill('#2ecc71');
+            this.securityIndicators.wallet?.setText('💰 Wallet: ✅');
+            this.securityIndicators.wallet?.setFill('#2ecc71');
         } else {
             this.currentUser.cryptoWallet = null;
-            this.securityIndicators.wallet.setText('💰 Wallet: Non');
-            this.securityIndicators.wallet.setFill('#95a5a6');
+            this.securityIndicators.wallet?.setText('💰 Wallet: Non');
+            this.securityIndicators.wallet?.setFill('#95a5a6');
         }
 
-        this.walletSection.removeAll(true);
+        this.walletSection?.removeAll(true);
         this.createPortraitMetaMaskInterface();
     }
 
@@ -942,28 +885,71 @@ export default class WelcomeScene extends Phaser.Scene {
         }
     }
 
-    update() {
-        if (this.scene.isActive() && !auth.isAuthenticated()) {
-            console.warn('⚠️ Perte d\'authentification détectée dans WelcomeScene');
-            this.cleanup();
-            this.scene.start('AuthScene');
-            return;
-        }
+    async handleSecureLogout() {
+        const confirmLogout = confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+        if (!confirmLogout) return;
 
-        this.updateSecurityIndicators();
-        
-        // 🌐 MISE À JOUR PÉRIODIQUE COLYSEUS
-        if (this.colyseusConnected !== colyseusManager.isColyseusConnected()) {
-            this.colyseusConnected = colyseusManager.isColyseusConnected();
-            this.updateColyseusIndicator();
+        try {
+            console.log('🚪 Déconnexion sécurisée...');
+            
+            await this.handleFullDisconnect();
+            
+            window.NotificationManager?.success('Déconnexion réussie');
+            this.scene.start('AuthScene');
+            
+        } catch (error) {
+            console.error('❌ Erreur lors de la déconnexion:', error);
+            
+            await this.handleFullDisconnect();
+            
+            window.NotificationManager?.show('Déconnexion locale effectuée', 'info');
+            this.scene.start('AuthScene');
         }
     }
 
-    // 🧹 NETTOYAGE COMPLET (MODIFIÉ POUR COLYSEUS)
+    async handleFullDisconnect() {
+        console.log('🚪 Déconnexion complète avec nettoyage Colyseus...');
+        
+        try {
+            if (colyseusManager.isColyseusConnected()) {
+                console.log('🌐 Déconnexion complète de Colyseus...');
+                await colyseusManager.disconnect();
+            }
+            
+            this.cleanup();
+            await auth.logout();
+            this.gameInstance?.clearAuthData();
+            
+            console.log('✅ Déconnexion complète terminée');
+            
+        } catch (error) {
+            console.error('❌ Erreur déconnexion complète:', error);
+            
+            try {
+                await colyseusManager.disconnect();
+            } catch (e) {
+                console.warn('⚠️ Erreur forcée déconnexion Colyseus:', e);
+            }
+            
+            this.cleanup();
+            this.gameInstance?.clearAuthData();
+        }
+    }
+
+    // 🧹 NETTOYAGE CALLBACKS COLYSEUS
+    cleanupColyseusCallbacks() {
+        console.log('🧹 Nettoyage callbacks Colyseus...');
+        colyseusManager.off('connected');
+        colyseusManager.off('disconnected');
+        colyseusManager.off('profileUpdated');
+        colyseusManager.off('globalStatsUpdated');
+        colyseusManager.off('playersUpdated');
+        colyseusManager.off('error');
+    }
+
     cleanup() {
         console.log('🧹 Nettoyage WelcomeScene avec Colyseus...');
         
-        // Arrêter les timers
         if (this.refreshTimer) {
             this.refreshTimer.destroy();
             this.refreshTimer = null;
@@ -974,22 +960,9 @@ export default class WelcomeScene extends Phaser.Scene {
             this.securityTimer = null;
         }
         
-        // 🌐 NETTOYER LES CALLBACKS COLYSEUS (CRITIQUE !)
-        console.log('🧹 Nettoyage callbacks Colyseus...');
-        colyseusManager.off('connected');
-        colyseusManager.off('disconnected');
-        colyseusManager.off('profileUpdated');
-        colyseusManager.off('globalStatsUpdated');
-        colyseusManager.off('playersUpdated');
-        colyseusManager.off('error');
-        
-        // Arrêter le heartbeat
+        this.cleanupColyseusCallbacks();
         colyseusManager.stopHeartbeat();
         
-        // Note : On ne déconnecte PAS Colyseus ici car d'autres scènes peuvent l'utiliser
-        // La déconnexion se fait seulement au logout ou à la fermeture de l'app
-        
-        // Nettoyer les hooks auth
         if (auth?.config) {
             auth.config.onAuthenticationLost?.(null);
             auth.config.onTokenRefreshed?.(null);
@@ -998,56 +971,29 @@ export default class WelcomeScene extends Phaser.Scene {
         console.log('✅ Nettoyage WelcomeScene terminé');
     }
 
-    // 🔥 DESTRUCTION FINALE
+    update() {
+        if (this.scene.isActive() && !auth.isAuthenticated()) {
+            console.warn('⚠️ Perte d\'authentification détectée dans WelcomeScene');
+            this.cleanup();
+            this.scene.start('AuthScene');
+            return;
+        }
+
+        this.updateSecurityIndicators();
+        
+        if (this.colyseusConnected !== colyseusManager.isColyseusConnected()) {
+            this.colyseusConnected = colyseusManager.isColyseusConnected();
+            this.updateColyseusIndicator();
+        }
+    }
+
     destroy() {
         console.log('🔥 Destruction WelcomeScene...');
-        
-        // Cleanup d'abord
         this.cleanup();
-        
-        // Reset des propriétés spécifiques à cette scène
         this.colyseusConnected = false;
         this.worldPlayers = [];
         this.globalStats = { totalPlayers: 0, playersOnline: 0, playersSearching: 0 };
-        
-        // Destruction Phaser standard
         super.destroy();
-        
         console.log('✅ WelcomeScene détruite');
-    }
-
-    // 🚪 DÉCONNEXION COMPLÈTE AU LOGOUT (pour cleanup global)
-    async handleFullDisconnect() {
-        console.log('🚪 Déconnexion complète avec nettoyage Colyseus...');
-        
-        try {
-            // 🌐 DÉCONNEXION COLYSEUS COMPLÈTE
-            if (colyseusManager.isColyseusConnected()) {
-                console.log('🌐 Déconnexion complète de Colyseus...');
-                await colyseusManager.disconnect();
-            }
-            
-            // Nettoyage local
-            this.cleanup();
-            
-            // Déconnexion auth
-            await auth.logout();
-            this.gameInstance?.clearAuthData();
-            
-            console.log('✅ Déconnexion complète terminée');
-            
-        } catch (error) {
-            console.error('❌ Erreur déconnexion complète:', error);
-            
-            // Forcer le nettoyage même en cas d'erreur
-            try {
-                await colyseusManager.disconnect();
-            } catch (e) {
-                console.warn('⚠️ Erreur forcée déconnexion Colyseus:', e);
-            }
-            
-            this.cleanup();
-            this.gameInstance?.clearAuthData();
-        }
     }
 }
