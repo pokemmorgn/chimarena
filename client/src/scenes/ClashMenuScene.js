@@ -221,6 +221,20 @@ export default class ClashMenuScene extends Phaser.Scene {
                 this.handleSpectate(data);
                 break;
                 
+            // === ACTIONS DECK ===
+            case 'save_deck':
+                this.handleSaveDeck(data);
+                break;
+            case 'deck_updated':
+                this.handleDeckUpdated(data);
+                break;
+            case 'deck_cost_changed':
+                this.handleDeckCostChanged(data);
+                break;
+            case 'user_data_updated':
+                this.handleUserDataUpdated(data);
+                break;
+                
             // === ACTIONS COLLECTION ===
             case 'upgrade_cards':
                 this.handleUpgradeCards(data);
@@ -230,17 +244,6 @@ export default class ClashMenuScene extends Phaser.Scene {
                 break;
             case 'view_card':
                 this.handleViewCard(data);
-                break;
-                
-            // === ACTIONS DECK ===
-            case 'edit_deck':
-                this.handleEditDeck(data);
-                break;
-            case 'copy_deck':
-                this.handleCopyDeck(data);
-                break;
-            case 'save_deck':
-                this.handleSaveDeck(data);
                 break;
                 
             // === ACTIONS CLAN ===
@@ -397,6 +400,95 @@ export default class ClashMenuScene extends Phaser.Scene {
         // TODO: Implémenter mode spectateur
     }
 
+    // === HANDLERS D'ACTIONS DECK ===
+    
+    /**
+     * Gérer la sauvegarde d'un deck
+     */
+    handleSaveDeck(data) {
+        console.log('💾 Sauvegarde deck', data);
+        
+        if (data?.deck) {
+            // Mettre à jour les données utilisateur
+            const updatedUserData = {
+                ...this.currentUser,
+                currentDeck: data.deck,
+                lastDeckUpdate: Date.now()
+            };
+            
+            this.updateUserData(updatedUserData);
+            this.showMessage('Deck sauvegardé avec succès !', 'success');
+        } else {
+            this.showMessage('Erreur lors de la sauvegarde du deck', 'error');
+        }
+    }
+    
+    /**
+     * Gérer les mises à jour de deck
+     */
+    handleDeckUpdated(data) {
+        console.log('🔄 Deck mis à jour', data);
+        
+        // Mettre à jour le header si nécessaire
+        if (this.clashHeader && data?.elixirCost !== undefined) {
+            // Le header pourrait afficher le coût élixir
+            this.clashHeader.updateElixirCost?.(data.elixirCost);
+        }
+    }
+    
+    /**
+     * Gérer le changement de coût élixir
+     */
+    handleDeckCostChanged(data) {
+        console.log(`⚡ Coût élixir changé: ${data.newCost}`);
+        
+        // Pouvoir être utilisé pour des achievements ou statistiques
+        if (data.newCost > 5.0) {
+            // Deck très cher, peut-être montrer une alerte
+            this.showMessage('⚠️ Deck coûteux - Coût élixir élevé', 'warning');
+        }
+    }
+    
+    /**
+     * Gérer les mises à jour de données utilisateur
+     */
+    handleUserDataUpdated(data) {
+        console.log('📊 Données utilisateur mises à jour', data);
+        
+        if (data?.userData) {
+            this.updateUserData(data.userData);
+            
+            // Actions spécifiques selon la source
+            switch (data.source) {
+                case 'deck_save':
+                    // Peut déclencher des achievements liés aux decks
+                    this.checkDeckAchievements(data.userData.decks?.current);
+                    break;
+                // Autres sources...
+            }
+        }
+    }
+    
+    /**
+     * Vérifier les achievements liés aux decks
+     */
+    checkDeckAchievements(deck) {
+        if (!deck) return;
+        
+        const validCards = deck.filter(card => card !== null);
+        
+        // Achievement: Premier deck complet
+        if (validCards.length === 8 && !this.currentUser?.achievements?.firstCompleteDeck) {
+            this.showMessage('🏆 Achievement débloqué: Premier deck complet !', 'success');
+            // TODO: Sauvegarder l'achievement
+        }
+        
+        // Achievement: Deck légendaire (toutes cartes légendaires)
+        if (validCards.length === 8 && validCards.every(card => card.rarity === 'legendary')) {
+            this.showMessage('👑 Achievement débloqué: Deck légendaire !', 'success');
+        }
+    }
+    
     // === HANDLERS D'ACTIONS AUTRES PANELS ===
     
     /**
@@ -424,11 +516,12 @@ export default class ClashMenuScene extends Phaser.Scene {
     }
     
     /**
-     * Gérer l'édition de deck
+     * Gérer l'édition de deck (ancien)
      */
     handleEditDeck(data) {
-        console.log('✏️ Édition deck', data);
-        this.showMessage('Éditeur de deck - En développement', 'info');
+        console.log('✏️ Édition deck (redirected to deck panel)', data);
+        // Rediriger vers le panel deck
+        this.switchToPanel('deck');
     }
     
     /**
@@ -437,14 +530,6 @@ export default class ClashMenuScene extends Phaser.Scene {
     handleCopyDeck(data) {
         console.log('📋 Copie deck', data);
         this.showMessage('Copie de deck - En développement', 'info');
-    }
-    
-    /**
-     * Gérer la sauvegarde de deck
-     */
-    handleSaveDeck(data) {
-        console.log('💾 Sauvegarde deck', data);
-        this.showMessage('Sauvegarde deck - En développement', 'info');
     }
     
     /**
@@ -1250,15 +1335,93 @@ if (typeof window !== 'undefined') {
         }
     };
     
-    // Afficher les commandes de test
+    // Test du panel deck
+    window.testDeckPanel = () => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.switchToPanel('deck');
+            console.log('🛡️ Test: Basculement vers panel deck');
+            
+            // Tester les sous-onglets après un délai
+            setTimeout(() => {
+                const deckPanel = clashScene.panelManager?.panels?.get('deck');
+                if (deckPanel) {
+                    console.log('🃏 Test: Basculement vers collection');
+                    deckPanel.switchToSubTab('collection');
+                    
+                    setTimeout(() => {
+                        console.log('⚡ Test: Basculement vers défis');
+                        deckPanel.switchToSubTab('defis');
+                        
+                        setTimeout(() => {
+                            console.log('🛡️ Test: Retour vers deck');
+                            deckPanel.switchToSubTab('deck');
+                        }, 2000);
+                    }, 2000);
+                }
+            }, 1000);
+        } else {
+            console.error('❌ ClashMenuScene non trouvée');
+        }
+    };
+    
+    // Test du système de cartes
+    window.testDeckCards = () => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.switchToPanel('deck');
+            
+            setTimeout(() => {
+                const deckPanel = clashScene.panelManager?.panels?.get('deck');
+                if (deckPanel) {
+                    // Tester l'ajout d'une carte
+                    const testCard = {
+                        id: 'knight',
+                        name: 'Chevalier',
+                        icon: '🗡️',
+                        cost: 3,
+                        rarity: 'common',
+                        type: 'troupe'
+                    };
+                    
+                    console.log('🗡️ Test: Ajout carte Chevalier au slot 0');
+                    deckPanel.addCardToDeck(testCard, 0);
+                    
+                    setTimeout(() => {
+                        console.log('🔥 Test: Ajout Boule de feu au slot 1');
+                        const fireballCard = {
+                            id: 'fireball',
+                            name: 'Boule de feu',
+                            icon: '🔥',
+                            cost: 4,
+                            rarity: 'rare',
+                            type: 'sort'
+                        };
+                        deckPanel.addCardToDeck(fireballCard, 1);
+                    }, 1000);
+                }
+            }, 500);
+        }
+    };
+    
+    // Afficher les nouvelles commandes
     console.log(`
-🎯 === COMMANDES DE TEST DISPONIBLES ===
+🎯 === COMMANDES DE TEST MISES À JOUR ===
 
-▶️ testSwitchPanel('battle') - Basculer vers un panel
+▶️ testSwitchPanel('deck') - Basculer vers panel deck
+▶️ testDeckPanel() - Test complet du panel deck + sous-onglets
+▶️ testDeckCards() - Test du système de cartes
 ▶️ testColyseus() - Tester connexion Colyseus
 ▶️ testBattleSearch() - Tester recherche bataille
 ▶️ testMatchFound() - Tester match trouvé
 
-PANELS DISPONIBLES: battle, collection, deck, clan, profile
+PANELS DISPONIBLES: battle, deck, collection, clan, profile
+SOUS-ONGLETS DECK: deck, collection, defis
     `);
 }
