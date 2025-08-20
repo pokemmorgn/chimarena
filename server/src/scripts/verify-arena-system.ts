@@ -126,16 +126,16 @@ async function testArenaMethods(): Promise<void> {
   try {
     const currentArena = testUser.getCurrentArena();
     console.log(`   ✅ getCurrentArena(): Arène ${currentArena.id} (${currentArena.nameId})`);
-  } catch (error) {
-    console.log(`   ❌ getCurrentArena() échouée: ${error.message}`);
+  } catch (error: any) {
+    console.log(`   ❌ getCurrentArena() échouée: ${error?.message || 'Erreur inconnue'}`);
   }
   
   // Tester getCurrentSeasonStats()
   try {
     const seasonStats = testUser.getCurrentSeasonStats();
     console.log(`   ✅ getCurrentSeasonStats(): Saison ${seasonStats.seasonId}, ${seasonStats.wins} victoires`);
-  } catch (error) {
-    console.log(`   ❌ getCurrentSeasonStats() échouée: ${error.message}`);
+  } catch (error: any) {
+    console.log(`   ❌ getCurrentSeasonStats() échouée: ${error?.message || 'Erreur inconnue'}`);
   }
   
   // Tester le calcul de progression
@@ -143,16 +143,16 @@ async function testArenaMethods(): Promise<void> {
     const progress = ArenaManager.getArenaProgress(testUser.playerStats.trophies);
     const rank = ArenaManager.getArenaRank(testUser.playerStats.trophies);
     console.log(`   ✅ Progression: ${progress.toFixed(1)}%, Rang: ${rank}`);
-  } catch (error) {
-    console.log(`   ❌ Calcul progression échoué: ${error.message}`);
+  } catch (error: any) {
+    console.log(`   ❌ Calcul progression échoué: ${error?.message || 'Erreur inconnue'}`);
   }
   
   // Tester le calcul de trophées pour prochaine arène
   try {
     const trophiesToNext = ArenaManager.getTrophiesToNextArena(testUser.playerStats.trophies);
     console.log(`   ✅ Trophées pour prochaine arène: ${trophiesToNext}`);
-  } catch (error) {
-    console.log(`   ❌ Calcul trophées prochaine arène échoué: ${error.message}`);
+  } catch (error: any) {
+    console.log(`   ❌ Calcul trophées prochaine arène échoué: ${error?.message || 'Erreur inconnue'}`);
   }
 }
 
@@ -234,7 +234,7 @@ async function verifyArenaHistory(): Promise<void> {
   // Échantillon d'historique
   const sampleUser = await User.findOne({ 'arenaHistory.0': { $exists: true } })
     .select('username arenaHistory')
-    .lean();
+    .lean() as any;
   
   if (sampleUser) {
     console.log(`\n   📋 Échantillon d'historique (${sampleUser.username}):`);
@@ -288,8 +288,8 @@ async function detectAndRepairIssues(): Promise<void> {
     try {
       const result = await User.bulkWrite(bulkOps);
       console.log(`   ✅ ${result.modifiedCount} utilisateurs réparés`);
-    } catch (error) {
-      console.log(`   ❌ Erreur lors de la réparation: ${error.message}`);
+    } catch (error: any) {
+      console.log(`   ❌ Erreur lors de la réparation: ${error?.message || 'Erreur inconnue'}`);
     }
   }
 }
