@@ -1,0 +1,24 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../build/scripts",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "../src/*": ["../src/*"]
+    },
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "./**/*",
+    "../src/config/arenas.ts",
+    "../src/models/User.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../build"
+  ]
+}
