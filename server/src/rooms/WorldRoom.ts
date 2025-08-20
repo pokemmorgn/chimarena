@@ -41,7 +41,7 @@ export class WorldPlayer extends Schema {
   trophies: number = 0;
   currentArenaId: number = 0;
   status: string = "idle"; // idle, searching, in_battle
-  lastSeen: number = Date.now();
+lastSeen: number = 0;
   
   // Stats rapides pour l'affichage
   wins: number = 0;
