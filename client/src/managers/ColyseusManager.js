@@ -62,19 +62,16 @@ class ColyseusManager {
      * Obtenir l'URL du serveur Colyseus
      */
     getServerUrl() {
-        // Utiliser la config du jeu ou fallback
-        if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-            return window.GameConfig.COLYSEUS_URL;
-        }
-        
-        // Dériver de l'API URL
-        const apiUrl = (typeof window !== 'undefined' && window.GameConfig?.API_URL) 
-            ? window.GameConfig.API_URL 
-            : 'https://chimarena.cloud/api';
-            
-        // Remplacer /api par :2567 pour Colyseus
-        return apiUrl.replace('/api', ':2567').replace('https://', 'wss://').replace('http://', 'ws://');
+    // 1) Priorité à une config explicite
+    if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
+        return window.GameConfig.COLYSEUS_URL;
     }
+
+    // 2) Sinon, dériver automatiquement de l'host actuel
+    const host = window.location.hostname || 'chimarena.cloud';
+    return `wss://${host}:2567`;
+}
+
     
     /**
      * 🔌 CONNEXION À LA WORLDROOM
