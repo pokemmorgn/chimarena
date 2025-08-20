@@ -292,15 +292,15 @@
 
     <script>
         // Configuration globale du jeu PORTRAIT
-        window.GameConfig = {
-            SERVER_URL: 'https://chimarena.cloud',
-            API_URL: 'https://chimarena.cloud/api',
-            WS_URL: 'wss://chimarena.cloud/ws',
-            VERSION: '0.1.0',
-DEBUG: false, // Sera défini par le script module main.js
-            PORTRAIT_MODE: true,
-            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-        };
+      window.GameConfig = {
+    SERVER_URL: 'https://chimarena.cloud',
+    API_URL: 'https://chimarena.cloud/api',
+    COLYSEUS_URL: 'wss://chimarena.cloud/ws',  // ← Changé en COLYSEUS_URL
+    VERSION: '0.1.0',
+    DEBUG: false,
+    PORTRAIT_MODE: true,
+    MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+};
 
         // Gestionnaire de chargement
         window.LoadingManager = {
