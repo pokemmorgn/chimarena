@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.GameConfig = {
     // URLs selon l'environnement
     API_URL: import.meta.env.VITE_API_URL || 'https://chimarena.cloud/api',
-    COLYSEUS_URL: import.meta.env.VITE_COLYSEUS_URL || 'wss://chimarena.cloud:2567',
+  COLYSEUS_URL: import.meta.env.VITE_COLYSEUS_URL || 'wss://chimarena.cloud/ws',
     
     // Pour développement local, décommenter :
     // API_URL: 'http://localhost:3000/api',
