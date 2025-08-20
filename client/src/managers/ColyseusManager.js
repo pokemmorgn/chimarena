@@ -61,15 +61,17 @@ class ColyseusManager {
     /**
      * Obtenir l'URL du serveur Colyseus
      */
-    getServerUrl() {
-        if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-            return window.GameConfig.COLYSEUS_URL;
-        }
-
-        const host = window.location.hostname || 'chimarena.cloud';
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        return `${protocol}://${host}/ws`;
+getServerUrl() {
+    if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
+        return window.GameConfig.COLYSEUS_URL;
     }
+
+    const host = window.location.hostname || 'chimarena.cloud';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    
+    // ✅ CORRECTION : Port 3000 au lieu de 2567
+    return `${protocol}://${host}/ws`;  // Pas de port car c'est routé par nginx
+}
     
     /**
      * 🔌 CONNEXION À LA WORLDROOM
