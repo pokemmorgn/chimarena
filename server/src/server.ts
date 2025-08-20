@@ -272,19 +272,22 @@ app.use(
               'ws:',
               'https:', 
               'http:',
-              // Production - avec et sans port explicite
+              // ✅ AJOUTER EXPLICITEMENT LE PORT 2567
+              'https://chimarena.cloud:2567',      // ✅ HTTPS sur port 2567
+              'wss://chimarena.cloud:2567',        // ✅ WSS sur port 2567  
+              'ws://chimarena.cloud:2567',         // ✅ WS sur port 2567
+              // Garder les existants
               'wss://chimarena.cloud',           
-              'wss://chimarena.cloud:2567',      // ✅ Port WebSocket Colyseus
-              'wss://chimarena.cloud:443',       // ✅ Port HTTPS standard
+              'wss://chimarena.cloud:443',      
               'https://chimarena.cloud',         
               'https://chimarena.cloud:443',     
-              'ws://chimarena.cloud:2567',       // ✅ Fallback HTTP
+              'ws://chimarena.cloud:2567',       
               // Développement local
               'ws://localhost:2567',             
               'wss://localhost:2567',            
               'ws://127.0.0.1:2567',
               'wss://127.0.0.1:2567',
-              'http://localhost:3000',           // ✅ API locale
+              'http://localhost:3000',           
               'ws://localhost:3000',
               // Wildcard pour les ports dynamiques en dev
               ...(config.debug ? ['ws://*:*', 'wss://*:*'] : [])
