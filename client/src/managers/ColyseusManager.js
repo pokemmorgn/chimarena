@@ -1,10 +1,10 @@
-// client/src/managers/ColyseusManager.js - VERSION COMPLÈTE CORRIGÉE
+// client/src/managers/ColyseusManager.js - VERSION AVEC LOGS DÉTAILLÉS
 import { Client } from 'colyseus.js';
 import { auth, tokenManager } from '../api';
 
 /**
  * 🌐 GESTIONNAIRE COLYSEUS - Connexion WebSocket temps réel
- * Gère la connexion à la WorldRoom et la synchronisation des données
+ * Version avec logs détaillés pour debug
  */
 class ColyseusManager {
     constructor() {
@@ -43,15 +43,24 @@ class ColyseusManager {
         // Configuration
         this.serverUrl = this.getServerUrl();
         console.log('🌐 ColyseusManager initialisé - URL:', this.serverUrl);
+        
+        // Debug: exposer globalement en dev
+        if (window.GameConfig?.DEBUG) {
+            window.debugColyseusManager = this;
+            console.log('🔧 ColyseusManager exposé pour debug');
+        }
     }
     
     /**
      * 🔐 OBTENIR LE TOKEN JWT
      */
     getAuthToken() {
+        console.log('🔑 Récupération token...');
         const token = tokenManager.getToken();
         if (token) {
-            console.log("🔑 Token récupéré depuis tokenManager");
+            console.log("🔑 Token récupéré depuis tokenManager (longueur:", token.length, ")");
+            // Log des premiers/derniers caractères pour debug (sans exposer le token)
+            console.log("🔑 Token preview:", token.substring(0, 20) + "..." + token.substring(token.length - 20));
             return token;
         }
         console.error("❌ Aucun token disponible !");
@@ -61,30 +70,53 @@ class ColyseusManager {
     /**
      * Obtenir l'URL du serveur Colyseus
      */
-getServerUrl() {
-    if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-        return window.GameConfig.COLYSEUS_URL;
-    }
+    getServerUrl() {
+        console.log('🔧 Calcul URL serveur...');
+        
+        if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
+            console.log('🔧 URL depuis GameConfig:', window.GameConfig.COLYSEUS_URL);
+            return window.GameConfig.COLYSEUS_URL;
+        }
 
-    const host = window.location.hostname || 'chimarena.cloud';
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    
-    // ✅ CORRECTION : Port 3000 au lieu de 2567
-    return `${protocol}://${host}/ws`;  // Pas de port car c'est routé par nginx
-}
+        const host = window.location.hostname || 'chimarena.cloud';
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const calculatedUrl = `${protocol}://${host}/ws`;
+        
+        console.log('🔧 URL calculée:', calculatedUrl);
+        return calculatedUrl;
+    }
     
     /**
-     * 🔌 CONNEXION À LA WORLDROOM
+     * 🔌 CONNEXION À LA WORLDROOM AVEC LOGS DÉTAILLÉS
      */
     async connect() {
+        console.log('🔌 === DÉBUT CONNEXION COLYSEUS ===');
+        
         if (this.isConnecting || this.isConnected) {
             console.warn('⚠️ Connexion Colyseus déjà en cours ou établie');
+            console.log('📊 État actuel:', {
+                isConnecting: this.isConnecting,
+                isConnected: this.isConnected,
+                hasClient: !!this.client,
+                hasRoom: !!this.worldRoom
+            });
             return false;
+        }
+        
+        // ✅ NOUVEAU : Nettoyer toute connexion existante d'abord
+        if (this.client || this.worldRoom) {
+            console.log('🧹 Nettoyage connexion existante...');
+            await this.disconnect();
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Attendre 1s
         }
         
         // Vérifier l'authentification
         if (!auth.isAuthenticated()) {
             console.error('❌ Pas d\'authentification pour Colyseus');
+            console.log('🔍 État auth:', {
+                isAuthenticated: auth.isAuthenticated(),
+                tokenInfo: auth.getTokenInfo()
+            });
             this.triggerCallback('onError', 'Authentification requise');
             return false;
         }
@@ -92,9 +124,16 @@ getServerUrl() {
         try {
             this.isConnecting = true;
             console.log('🔌 Connexion à Colyseus...');
+            console.log('📊 Paramètres connexion:', {
+                serverUrl: this.serverUrl,
+                isAuthenticated: auth.isAuthenticated(),
+                hasToken: !!this.getAuthToken()
+            });
             
             // Créer le client Colyseus
+            console.log('🔧 Création client Colyseus...');
             this.client = new Client(this.serverUrl);
+            console.log('✅ Client Colyseus créé');
             
             // Obtenir le token JWT depuis l'auth
             const token = this.getAuthToken();
@@ -103,13 +142,20 @@ getServerUrl() {
             }
             
             // Se connecter à la WorldRoom avec seulement le token
-            this.worldRoom = await this.client.joinOrCreate('world', {
-                token: token
+            console.log('🔌 Connexion à la WorldRoom...');
+            const roomOptions = { token: token };
+            console.log('📦 Options room:', { token: token.substring(0, 20) + "..." });
+            
+            this.worldRoom = await this.client.joinOrCreate('world', roomOptions);
+            
+            console.log('✅ Connecté à la WorldRoom:', {
+                sessionId: this.worldRoom.sessionId,
+                roomId: this.worldRoom.id,
+                hasState: !!this.worldRoom.state
             });
             
-            console.log('✅ Connecté à la WorldRoom:', this.worldRoom.sessionId);
-            
             // Configurer les handlers - MÉTHODE CORRIGÉE
+            console.log('🔧 Configuration des handlers...');
             this.setupRoomHandlers();
             
             // Marquer comme connecté
@@ -117,11 +163,22 @@ getServerUrl() {
             this.isConnecting = false;
             this.reconnectAttempts = 0;
             
+            console.log('✅ === CONNEXION COLYSEUS RÉUSSIE ===');
             this.triggerCallback('onConnected');
             return true;
             
         } catch (error) {
-            console.error('❌ Erreur connexion Colyseus:', error);
+            console.error('❌ === ERREUR CONNEXION COLYSEUS ===');
+            console.error('❌ Message:', error.message);
+            console.error('❌ Stack:', error.stack);
+            console.error('❌ Détails:', {
+                serverUrl: this.serverUrl,
+                hasClient: !!this.client,
+                hasRoom: !!this.worldRoom,
+                isConnecting: this.isConnecting,
+                reconnectAttempts: this.reconnectAttempts
+            });
+            
             this.isConnecting = false;
             this.isConnected = false;
             
@@ -134,57 +191,100 @@ getServerUrl() {
     }
     
     /**
-     * 🔧 CONFIGURATION DES HANDLERS DE LA ROOM - VERSION CORRIGÉE
+     * 🔧 CONFIGURATION DES HANDLERS DE LA ROOM - VERSION AVEC LOGS DÉTAILLÉS
      */
     setupRoomHandlers() {
-        if (!this.worldRoom) return;
+        if (!this.worldRoom) {
+            console.error('❌ worldRoom non disponible pour setup handlers');
+            return;
+        }
         
         console.log('🔧 Configuration des handlers WorldRoom...');
+        console.log('🔧 État room initial:', {
+            sessionId: this.worldRoom.sessionId,
+            hasState: !!this.worldRoom.state,
+            stateType: typeof this.worldRoom.state
+        });
         
         // ✅ CORRECTION CRITIQUE : Attendre l'état initial
         this.worldRoom.onStateChange.once((state) => {
-            console.log('📊 État initial WorldRoom reçu');
+            console.log('📊 PREMIER ÉTAT REÇU:', {
+                totalPlayers: state.totalPlayers,
+                playersOnline: state.playersOnline,
+                playersSearching: state.playersSearching,
+                playersSize: state.players.size,
+                playersKeys: Array.from(state.players.keys()),
+                stateType: typeof state,
+                playersType: typeof state.players
+            });
+            
             this.updateGlobalStats(state);
             
             // ✅ Setup des handlers players SEULEMENT après réception de l'état
             if (state.players) {
+                console.log('🔧 Configuration handlers players...');
+                
                 state.players.onAdd((player, sessionId) => {
-                    console.log(`👤 Joueur ajouté: ${player.username} (${sessionId})`);
+                    console.log(`👤 PLAYER AJOUTÉ:`, {
+                        sessionId: sessionId,
+                        username: player.username,
+                        level: player.level,
+                        trophies: player.trophies,
+                        status: player.status
+                    });
                     this.worldPlayers.set(sessionId, player);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
                 
                 state.players.onRemove((player, sessionId) => {
-                    console.log(`👤 Joueur supprimé: ${player.username} (${sessionId})`);
+                    console.log(`👤 PLAYER SUPPRIMÉ:`, {
+                        sessionId: sessionId,
+                        username: player.username
+                    });
                     this.worldPlayers.delete(sessionId);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
                 
                 state.players.onChange((player, sessionId) => {
-                    console.log(`👤 Joueur modifié: ${player.username}`);
+                    console.log(`👤 PLAYER MODIFIÉ:`, {
+                        sessionId: sessionId,
+                        username: player.username,
+                        changes: 'Voir état complet dans player object'
+                    });
                     this.worldPlayers.set(sessionId, player);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
+                
+                console.log('✅ Handlers players configurés');
+            } else {
+                console.error('❌ state.players non disponible !');
             }
         });
         
         // ✅ Changements d'état suivants
         this.worldRoom.onStateChange((state) => {
-            console.log('📊 État WorldRoom mis à jour');
+            console.log('📊 État WorldRoom mis à jour:', {
+                totalPlayers: state.totalPlayers,
+                playersOnline: state.playersOnline,
+                playersSearching: state.playersSearching
+            });
             this.updateGlobalStats(state);
             this.updatePlayersMap(state.players);
         });
         
-        // 📨 Messages du serveur
+        // 📨 Messages du serveur avec logs
         this.worldRoom.onMessage("player_profile", (data) => {
-            console.log('📨 Profil reçu:', data.profile.username);
+            console.log('📨 PROFIL REÇU:', {
+                username: data.profile.username,
+                level: data.profile.level,
+                trophies: data.profile.trophies
+            });
             this.playerProfile = data.profile;
             this.triggerCallback('onProfileUpdated', this.playerProfile);
         });
         
         this.worldRoom.onMessage("arena_info", (data) => {
-            console.log('📨 Info arène reçue:', data);
-            // Mettre à jour le profil local avec les infos d'arène
+            console.log('📨 INFO ARÈNE REÇUE:', data);
             if (this.playerProfile) {
                 this.playerProfile.arenaInfo = data;
                 this.triggerCallback('onProfileUpdated', this.playerProfile);
@@ -192,23 +292,22 @@ getServerUrl() {
         });
         
         this.worldRoom.onMessage("search_started", (data) => {
-            console.log('📨 Recherche commencée:', data.message);
+            console.log('📨 RECHERCHE COMMENCÉE:', data);
             this.triggerCallback('onSearchStarted', data);
         });
         
         this.worldRoom.onMessage("search_cancelled", (data) => {
-            console.log('📨 Recherche annulée:', data.message);
+            console.log('📨 RECHERCHE ANNULÉE:', data);
             this.triggerCallback('onSearchCancelled', data);
         });
         
         this.worldRoom.onMessage("match_found", (data) => {
-            console.log('📨 Match trouvé:', data);
+            console.log('📨 MATCH TROUVÉ:', data);
             this.triggerCallback('onMatchFound', data);
         });
         
         this.worldRoom.onMessage("battle_result", (data) => {
-            console.log('📨 Résultat bataille:', data);
-            // Mettre à jour le profil local
+            console.log('📨 RÉSULTAT BATAILLE:', data);
             if (this.playerProfile) {
                 this.playerProfile.trophies = data.newTrophies;
                 if (data.newArena) {
@@ -219,27 +318,35 @@ getServerUrl() {
         });
         
         this.worldRoom.onMessage("leaderboard", (data) => {
-            console.log('📨 Leaderboard reçu:', data.players.length, 'joueurs');
+            console.log('📨 LEADERBOARD REÇU:', {
+                playersCount: data.players.length,
+                total: data.total
+            });
             this.triggerCallback('onLeaderboard', data);
         });
         
         this.worldRoom.onMessage("error", (data) => {
-            console.error('📨 Erreur serveur:', data.message);
+            console.error('📨 ERREUR SERVEUR:', data);
             this.triggerCallback('onError', data.message);
         });
         
         this.worldRoom.onMessage("search_error", (data) => {
-            console.error('📨 Erreur recherche:', data.message);
+            console.error('📨 ERREUR RECHERCHE:', data);
             this.triggerCallback('onError', data.message);
         });
         
         this.worldRoom.onMessage("heartbeat_ack", (data) => {
-            // Heartbeat silencieux
+            // Heartbeat silencieux (pas de log)
         });
         
-        // 🔌 Déconnexion
+        // 🔌 Déconnexion avec logs
         this.worldRoom.onLeave((code) => {
-            console.log(`🔌 Déconnecté de la WorldRoom (code: ${code})`);
+            console.log(`🔌 DÉCONNECTÉ DE LA WORLDROOM:`, {
+                code: code,
+                codeDescription: this.getLeaveCodeDescription(code),
+                sessionId: this.worldRoom?.sessionId
+            });
+            
             this.isConnected = false;
             this.worldRoom = null;
             
@@ -247,48 +354,106 @@ getServerUrl() {
             
             // Tentative de reconnexion si ce n'est pas volontaire
             if (code !== 1000) {
+                console.log('🔄 Programmation reconnexion automatique...');
                 this.scheduleReconnect();
             }
         });
         
-        // 🔧 Erreur de room
+        // 🔧 Erreur de room avec logs détaillés
         this.worldRoom.onError((code, message) => {
-            console.error(`🔧 Erreur WorldRoom (${code}):`, message);
+            console.error(`🔧 ERREUR WORLDROOM:`, {
+                code: code,
+                message: message,
+                sessionId: this.worldRoom?.sessionId,
+                roomState: !!this.worldRoom?.state
+            });
             this.triggerCallback('onError', `Erreur room: ${message}`);
         });
+        
+        console.log('✅ Tous les handlers configurés');
     }
     
     /**
-     * 📊 METTRE À JOUR LES STATS GLOBALES
+     * 🔍 Description des codes de déconnexion
+     */
+    getLeaveCodeDescription(code) {
+        const codes = {
+            1000: 'Fermeture normale',
+            1001: 'Endpoint parti',
+            1002: 'Erreur de protocole',
+            1003: 'Type de données non supporté',
+            1005: 'Aucun code de statut reçu',
+            1006: 'Connexion fermée anormalement',
+            1007: 'Données invalides',
+            1008: 'Violation de politique',
+            1009: 'Message trop grand',
+            1010: 'Extension manquante',
+            1011: 'Erreur interne du serveur',
+            4000: 'Erreur personnalisée serveur'
+        };
+        return codes[code] || `Code inconnu: ${code}`;
+    }
+    
+    /**
+     * 📊 METTRE À JOUR LES STATS GLOBALES AVEC LOGS
      */
     updateGlobalStats(state) {
+        const oldStats = { ...this.globalStats };
+        
         this.globalStats = {
             totalPlayers: state.totalPlayers || 0,
             playersOnline: state.playersOnline || 0,
             playersSearching: state.playersSearching || 0
         };
+        
+        // Log seulement si les stats changent
+        if (JSON.stringify(oldStats) !== JSON.stringify(this.globalStats)) {
+            console.log('📊 STATS GLOBALES MISES À JOUR:', {
+                old: oldStats,
+                new: this.globalStats
+            });
+        }
+        
         this.triggerCallback('onGlobalStatsUpdated', this.globalStats);
     }
     
     /**
-     * 👥 METTRE À JOUR LA MAP DES JOUEURS
+     * 👥 METTRE À JOUR LA MAP DES JOUEURS AVEC LOGS
      */
     updatePlayersMap(playersMap) {
+        const oldSize = this.worldPlayers.size;
         this.worldPlayers.clear();
+        
         if (playersMap) {
             playersMap.forEach((player, sessionId) => {
                 this.worldPlayers.set(sessionId, player);
             });
         }
+        
+        if (oldSize !== this.worldPlayers.size) {
+            console.log('👥 MAP JOUEURS MISE À JOUR:', {
+                oldSize: oldSize,
+                newSize: this.worldPlayers.size,
+                players: Array.from(this.worldPlayers.values()).map(p => ({
+                    username: p.username,
+                    trophies: p.trophies,
+                    status: p.status
+                }))
+            });
+        }
+        
         this.triggerCallback('onPlayersUpdated', this.worldPlayers);
     }
     
     /**
-     * 🔄 RECONNEXION AUTOMATIQUE
+     * 🔄 RECONNEXION AUTOMATIQUE AVEC LOGS
      */
     scheduleReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('❌ Trop de tentatives de reconnexion, abandon');
+            console.error('❌ TROP DE TENTATIVES DE RECONNEXION:', {
+                attempts: this.reconnectAttempts,
+                max: this.maxReconnectAttempts
+            });
             this.triggerCallback('onError', 'Connexion impossible après plusieurs tentatives');
             return;
         }
@@ -296,34 +461,54 @@ getServerUrl() {
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Backoff exponentiel
         
-        console.log(`🔄 Reconnexion dans ${delay}ms (tentative ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        console.log(`🔄 PROGRAMMATION RECONNEXION:`, {
+            attempt: this.reconnectAttempts,
+            maxAttempts: this.maxReconnectAttempts,
+            delay: delay,
+            delaySeconds: Math.round(delay / 1000)
+        });
         
         setTimeout(() => {
             if (!this.isConnected && auth.isAuthenticated()) {
+                console.log('🔄 TENTATIVE DE RECONNEXION...');
                 this.connect();
+            } else {
+                console.log('🔄 RECONNEXION ANNULÉE:', {
+                    isConnected: this.isConnected,
+                    isAuthenticated: auth.isAuthenticated()
+                });
             }
         }, delay);
     }
     
     /**
-     * 🔌 DÉCONNEXION VOLONTAIRE
+     * 🔌 DÉCONNEXION VOLONTAIRE AVEC LOGS
      */
     async disconnect() {
-        console.log('🔌 Déconnexion volontaire de Colyseus');
+        console.log('🔌 DÉCONNEXION VOLONTAIRE DE COLYSEUS');
+        console.log('📊 État avant déconnexion:', {
+            isConnected: this.isConnected,
+            hasRoom: !!this.worldRoom,
+            hasClient: !!this.client,
+            reconnectAttempts: this.reconnectAttempts
+        });
         
         this.isConnected = false;
         this.reconnectAttempts = this.maxReconnectAttempts; // Empêcher la reconnexion auto
         
         if (this.worldRoom) {
             try {
+                console.log('🔌 Fermeture room...');
                 await this.worldRoom.leave();
+                console.log('✅ Room fermée');
             } catch (error) {
-                console.warn('⚠️ Erreur lors de la déconnexion:', error);
+                console.warn('⚠️ Erreur lors de la fermeture room:', error);
             }
             this.worldRoom = null;
         }
         
         if (this.client) {
+            console.log('🔌 Fermeture client...');
             this.client = null;
         }
         
@@ -331,13 +516,21 @@ getServerUrl() {
         this.playerProfile = null;
         this.worldPlayers.clear();
         
+        console.log('✅ Déconnexion terminée');
         this.triggerCallback('onDisconnected', 1000);
     }
     
     /**
-     * 📨 ENVOYER UN MESSAGE À LA WORLDROOM
+     * 📨 ENVOYER UN MESSAGE À LA WORLDROOM AVEC LOGS
      */
     sendMessage(type, data = {}) {
+        console.log(`📨 ENVOI MESSAGE:`, {
+            type: type,
+            data: data,
+            isConnected: this.isConnected,
+            hasRoom: !!this.worldRoom
+        });
+        
         if (!this.isConnected || !this.worldRoom) {
             console.warn(`⚠️ Impossible d'envoyer ${type}, pas connecté`);
             return false;
@@ -345,7 +538,7 @@ getServerUrl() {
         
         try {
             this.worldRoom.send(type, data);
-            console.log(`📨 Message envoyé: ${type}`, data);
+            console.log(`✅ Message envoyé: ${type}`);
             return true;
         } catch (error) {
             console.error(`❌ Erreur envoi message ${type}:`, error);
@@ -354,25 +547,30 @@ getServerUrl() {
     }
     
     /**
-     * ⚔️ ACTIONS DE MATCHMAKING
+     * ⚔️ ACTIONS DE MATCHMAKING AVEC LOGS
      */
     searchBattle() {
+        console.log('⚔️ DEMANDE RECHERCHE BATAILLE');
         return this.sendMessage("search_battle");
     }
     
     cancelSearch() {
+        console.log('❌ DEMANDE ANNULATION RECHERCHE');
         return this.sendMessage("cancel_search");
     }
     
     requestArenaInfo() {
+        console.log('🏟️ DEMANDE INFO ARÈNE');
         return this.sendMessage("get_arena_info");
     }
     
     requestLeaderboard(limit = 50) {
+        console.log('🏆 DEMANDE LEADERBOARD (limit:', limit, ')');
         return this.sendMessage("get_leaderboard", { limit });
     }
     
     updateStatus(status) {
+        console.log('📊 MISE À JOUR STATUT:', status);
         return this.sendMessage("update_status", { status });
     }
     
@@ -384,6 +582,7 @@ getServerUrl() {
             clearInterval(this.heartbeatInterval);
         }
         
+        console.log('💓 DÉMARRAGE HEARTBEAT (30s)');
         this.heartbeatInterval = setInterval(() => {
             if (this.isConnected) {
                 this.sendMessage("heartbeat", { timestamp: Date.now() });
@@ -393,18 +592,20 @@ getServerUrl() {
     
     stopHeartbeat() {
         if (this.heartbeatInterval) {
+            console.log('💓 ARRÊT HEARTBEAT');
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
     }
     
     /**
-     * 🔧 GESTION DES CALLBACKS
+     * 🔧 GESTION DES CALLBACKS AVEC LOGS
      */
     on(event, callback) {
         const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
         if (this.callbacks.hasOwnProperty(callbackName)) {
             this.callbacks[callbackName] = callback;
+            console.log(`🔧 Callback configuré: ${callbackName}`);
         } else {
             console.warn(`⚠️ Événement non reconnu: ${event}`);
         }
@@ -414,6 +615,7 @@ getServerUrl() {
         const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
         if (this.callbacks.hasOwnProperty(callbackName)) {
             this.callbacks[callbackName] = null;
+            console.log(`🔧 Callback supprimé: ${callbackName}`);
         }
     }
     
@@ -421,10 +623,13 @@ getServerUrl() {
         const callback = this.callbacks[callbackName];
         if (callback && typeof callback === 'function') {
             try {
+                console.log(`🔔 DÉCLENCHEMENT CALLBACK: ${callbackName}`, data ? 'avec données' : 'sans données');
                 callback(data);
             } catch (error) {
                 console.error(`❌ Erreur callback ${callbackName}:`, error);
             }
+        } else {
+            console.log(`🔔 Pas de callback pour: ${callbackName}`);
         }
     }
     
@@ -448,10 +653,29 @@ getServerUrl() {
     }
     
     /**
-     * 🧹 NETTOYAGE
+     * 🔍 DEBUG INFO
+     */
+    getDebugInfo() {
+        return {
+            isConnected: this.isConnected,
+            isConnecting: this.isConnecting,
+            hasClient: !!this.client,
+            hasRoom: !!this.worldRoom,
+            sessionId: this.worldRoom?.sessionId,
+            reconnectAttempts: this.reconnectAttempts,
+            serverUrl: this.serverUrl,
+            playersCount: this.worldPlayers.size,
+            globalStats: this.globalStats,
+            playerProfile: !!this.playerProfile,
+            callbacksConfigured: Object.keys(this.callbacks).filter(k => this.callbacks[k] !== null)
+        };
+    }
+    
+    /**
+     * 🧹 NETTOYAGE AVEC LOGS
      */
     destroy() {
-        console.log('🧹 Destruction ColyseusManager');
+        console.log('🧹 DESTRUCTION COLYSEUSMANAGER');
         this.stopHeartbeat();
         this.disconnect();
         
@@ -459,6 +683,8 @@ getServerUrl() {
         Object.keys(this.callbacks).forEach(key => {
             this.callbacks[key] = null;
         });
+        
+        console.log('✅ ColyseusManager détruit');
     }
 }
 
