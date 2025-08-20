@@ -49,19 +49,20 @@
   },
 
   "auth": {
-    "accessTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
-    "refreshTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
-    "accessTokenExpiry": "15m",
-    "refreshTokenExpiry": "7d",
-    "maxFailedAttempts": 5,
-    "lockDurationMinutes": 30,
-    "cookieOptions": {
-      "httpOnly": true,
-      "secure": "auto",
-      "sameSite": "strict",
-      "maxAge": 604800000
-    }
-  },
+  "enabled": true,
+  "accessTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
+  "refreshTokenSecret": "placeholder-will-be-overridden-by-env-variables-min32chars",
+  "accessTokenExpiry": "15m",
+  "refreshTokenExpiry": "7d",
+  "maxFailedAttempts": 5,
+  "lockDurationMinutes": 30,
+  "cookieOptions": {
+    "httpOnly": true,
+    "secure": "auto",
+    "sameSite": "strict",
+    "maxAge": 604800000
+  }
+},
 
   "crypto": {
     "enabled": true,
