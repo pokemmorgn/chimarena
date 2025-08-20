@@ -1,30 +1,4 @@
-// 📨 GESTION DES MESSAGES DU CLIENT
-  onMessage(client: Client, type: any, message?: any) {
-    console.log(`📨 Message reçu de ${client.sessionId}: ${type}`, message);
-    
-    const player = this.state.players.get(client.sessionId);
-    if (!player) {
-      console.warn(`❌ Joueur ${client.sessionId} non trouvé pour le message ${type}`);
-      return;
-    }
-    
-    switch (type) {
-      case "get_arena_info":
-        this.handleGetArenaInfo(client, player);
-        break;
-        
-      case "search_battle":
-        this.handleSearchBattle(client, player);
-        break;
-        
-      case "cancel_search":
-        this.handleCancelSearch(client, player);
-        break;
-        
-      case "get_leaderboard":
-        this.handleGetLeaderboard(client, message);
-        break;
-        // server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
+// server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 import User, { type IUser } from "../models/User";
@@ -175,7 +149,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 📨 GESTION DES MESSAGES DU CLIENT
-  onMessage(client: Client, type: string | number, message?: any) {
+  onMessage(client: Client, type: any, message?: any) {
     console.log(`📨 Message reçu de ${client.sessionId}: ${type}`, message);
     
     const player = this.state.players.get(client.sessionId);
