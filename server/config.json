@@ -48,10 +48,10 @@
     "autoReconnect": true
   },
 
-  "auth": {
+ "auth": {
   "enabled": true,
-  "accessTokenSecret": "xxx",
-  "refreshTokenSecret": "xxx",
+  "accessTokenSecret": "ENV_OVERRIDE",
+  "refreshTokenSecret": "ENV_OVERRIDE",
   "accessTokenExpiry": "15m",
   "refreshTokenExpiry": "7d",
   "maxFailedAttempts": 5,
