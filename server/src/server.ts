@@ -265,7 +265,15 @@ async function setupSecureMiddlewares(app: express.Application, config: any): Pr
               fontSrc: ["'self'", 'https://fonts.gstatic.com'],
               imgSrc: ["'self'", 'data:', 'https:'],
               scriptSrc: ["'self'"],
-              connectSrc: ["'self'", 'wss:', 'https:'], // ✅ WSS pour Colyseus
+              connectSrc: [
+                "'self'", 
+                'wss:', 
+                'https:', 
+                'ws://chimarena.cloud:2567',      // ✅ Ajouter port 2567
+                'wss://chimarena.cloud:2567',     // ✅ Ajouter port 2567 SSL
+                'ws://localhost:2567',            // ✅ Pour dev local
+                'wss://localhost:2567'            // ✅ Pour dev local SSL
+              ],
             },
           },
       crossOriginEmbedderPolicy: false,
