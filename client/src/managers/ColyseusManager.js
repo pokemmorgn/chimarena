@@ -1,4 +1,4 @@
-// client/src/managers/ColyseusManager.js - VERSION CORRIGÉE
+// client/src/managers/ColyseusManager.js - VERSION COMPLÈTE CORRIGÉE
 import { Client } from 'colyseus.js';
 import { auth, tokenManager } from '../api';
 
@@ -48,12 +48,15 @@ class ColyseusManager {
     /**
      * 🔐 OBTENIR LE TOKEN JWT
      */
-getAuthToken() {
-    if (auth.isAuthenticated()) {
-        return tokenManager.getToken();
+    getAuthToken() {
+        const token = tokenManager.getToken();
+        if (token) {
+            console.log("🔑 Token récupéré depuis tokenManager");
+            return token;
+        }
+        console.error("❌ Aucun token disponible !");
+        return null;
     }
-    return null;
-}
     
     /**
      * Obtenir l'URL du serveur Colyseus
@@ -104,7 +107,7 @@ getAuthToken() {
             
             console.log('✅ Connecté à la WorldRoom:', this.worldRoom.sessionId);
             
-            // Configurer les handlers
+            // Configurer les handlers - MÉTHODE CORRIGÉE
             this.setupRoomHandlers();
             
             // Marquer comme connecté
@@ -136,30 +139,38 @@ getAuthToken() {
         
         console.log('🔧 Configuration des handlers WorldRoom...');
         
-        // 📊 Changements d'état général
+        // ✅ CORRECTION CRITIQUE : Attendre l'état initial
+        this.worldRoom.onStateChange.once((state) => {
+            console.log('📊 État initial WorldRoom reçu');
+            this.updateGlobalStats(state);
+            
+            // ✅ Setup des handlers players SEULEMENT après réception de l'état
+            if (state.players) {
+                state.players.onAdd((player, sessionId) => {
+                    console.log(`👤 Joueur ajouté: ${player.username} (${sessionId})`);
+                    this.worldPlayers.set(sessionId, player);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                });
+                
+                state.players.onRemove((player, sessionId) => {
+                    console.log(`👤 Joueur supprimé: ${player.username} (${sessionId})`);
+                    this.worldPlayers.delete(sessionId);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                });
+                
+                state.players.onChange((player, sessionId) => {
+                    console.log(`👤 Joueur modifié: ${player.username}`);
+                    this.worldPlayers.set(sessionId, player);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                });
+            }
+        });
+        
+        // ✅ Changements d'état suivants
         this.worldRoom.onStateChange((state) => {
             console.log('📊 État WorldRoom mis à jour');
             this.updateGlobalStats(state);
             this.updatePlayersMap(state.players);
-        });
-        
-        // ✅ CORRECTION : Handlers de joueurs avec vérification
-        this.worldRoom.state.players.onAdd((player, sessionId) => {
-            console.log(`👤 Joueur ajouté: ${player.username} (${sessionId})`);
-            this.worldPlayers.set(sessionId, player);
-            this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-        });
-        
-        this.worldRoom.state.players.onRemove((player, sessionId) => {
-            console.log(`👤 Joueur supprimé: ${player.username} (${sessionId})`);
-            this.worldPlayers.delete(sessionId);
-            this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-        });
-        
-        this.worldRoom.state.players.onChange((player, sessionId) => {
-            console.log(`👤 Joueur modifié: ${player.username}`);
-            this.worldPlayers.set(sessionId, player);
-            this.triggerCallback('onPlayersUpdated', this.worldPlayers);
         });
         
         // 📨 Messages du serveur
