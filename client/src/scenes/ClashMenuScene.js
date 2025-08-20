@@ -1,210 +1,108 @@
-// client/src/scenes/ClashMenuScene.js - ARCHITECTURE AVEC COLYSEUS INTÉGRÉ
+// client/src/scenes/ClashMenuScene.js - REFACTORISÉ AVEC PANEL MANAGER
 import Phaser from 'phaser';
 import { auth } from '../api';
 import { ClashHeader } from '../clashmenu';
+import PanelManager from '../clashmenu/utils/PanelManager.js';
 import colyseusManager from '../managers/ColyseusManager';
 
 export default class ClashMenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'ClashMenuScene' });
         
+        // Données utilisateur
         this.currentUser = null;
         this.gameInstance = null;
         
-        // Navigation
-        this.currentTab = 0;
-        this.tabs = ['Bataille', 'Collection', 'Deck', 'Clan', 'Profil'];
-        
-        // Composants Clash Royale
+        // Composants principaux
         this.clashHeader = null;
+        this.panelManager = null;
         
-        // 🆕 NOUVEAUX PANELS COMPLETS
-        this.fullPanels = [];
-        this.currentPanelContainer = null;
+        // 🌐 COLYSEUS - État temps réel
+        this.colyseusState = {
+            connected: false,
+            realtimeProfile: null,
+            globalStats: { totalPlayers: 0, playersOnline: 0, playersSearching: 0 },
+            isSearchingBattle: false,
+            currentMatch: null
+        };
         
-        // 🌐 COLYSEUS - Données temps réel
-        this.colyseusConnected = false;
-        this.realtimeProfile = null;
-        this.worldPlayers = [];
-        this.globalStats = { totalPlayers: 0, playersOnline: 0, playersSearching: 0 };
-        this.isSearchingBattle = false;
-        
-        // UI Elements qui peuvent être mis à jour en temps réel
-        this.trophyText = null;
-        this.arenaName = null;
-        this.progressFill = null;
-        this.onlinePlayersText = null;
-        
-        // Dimensions
+        // Configuration
         this.isMobile = window.GameConfig?.MOBILE_OPTIMIZED || false;
-        this.contentStartY = 100; // Après le header
+        
+        console.log('🏆 ClashMenuScene initialisé (version modulaire)');
     }
 
+    // === CYCLE DE VIE PHASER ===
+    
     create() {
-        console.log('🏆 ClashMenuScene - Architecture Header + Panels + Colyseus');
+        console.log('🏗️ ClashMenuScene.create() - Architecture modulaire');
         
-        // Récupérer données
+        // Récupérer les données
         this.gameInstance = this.registry.get('gameInstance');
         this.currentUser = this.registry.get('currentUser');
         
-        // Vérifier auth
-        if (!auth.isAuthenticated()) {
-            console.warn('❌ Non authentifié, retour AuthScene');
-            this.scene.start('AuthScene');
+        // Vérifier authentification
+        if (!this.validateAuthentication()) {
             return;
         }
         
         // Créer l'interface
         this.createBackground();
-        this.createFixedHeader();
-        this.createAllPanels();
+        this.createHeader();
+        this.createPanelSystem();
         
-        // Afficher le premier panel
-        this.showPanel(0);
-        
-        // 🌐 CONNECTER À COLYSEUS
+        // Configurer Colyseus
         this.setupColyseus();
         
-        // Animations et événements
+        // Finaliser
+        this.setupInputHandlers();
         this.playEntranceAnimation();
-        this.setupInputEvents();
         
-        console.log('✅ ClashMenuScene avec Colyseus initialisé');
+        console.log('✅ ClashMenuScene créé avec succès');
     }
-
-    // === 🌐 CONFIGURATION COLYSEUS ===
-    setupColyseus() {
-        console.log('🌐 Configuration des handlers Colyseus...');
-        
-        // Configurer les callbacks
-        colyseusManager.on('connected', () => {
-            console.log('✅ Colyseus connecté !');
-            this.colyseusConnected = true;
-            this.showMessage('Connecté au serveur temps réel', 'success');
-            
-            // Demander les infos d'arène
-            colyseusManager.requestArenaInfo();
-        });
-        
-        colyseusManager.on('disconnected', (code) => {
-            console.log('🔌 Colyseus déconnecté, code:', code);
-            this.colyseusConnected = false;
-            
-            if (code !== 1000) { // Pas une déconnexion volontaire
-                this.showMessage('Connexion temps réel perdue', 'warning');
-            }
-        });
-        
-        colyseusManager.on('profileUpdated', (profile) => {
-            console.log('📊 Profil mis à jour via Colyseus:', profile.username);
-            this.realtimeProfile = profile;
-            this.updateUIFromRealtimeData();
-        });
-        
-        colyseusManager.on('globalStatsUpdated', (stats) => {
-            console.log('📊 Stats globales mises à jour:', stats);
-            this.globalStats = stats;
-            this.updateGlobalStatsUI();
-        });
-        
-        colyseusManager.on('playersUpdated', (players) => {
-            console.log('👥 Joueurs mis à jour:', players.size, 'connectés');
-            this.worldPlayers = Array.from(players.values());
-        });
-        
-        colyseusManager.on('searchStarted', (data) => {
-            console.log('⚔️ Recherche bataille commencée:', data.message);
-            this.isSearchingBattle = true;
-            this.updateBattleButtonState();
-            this.showMessage(data.message, 'info');
-        });
-        
-        colyseusManager.on('searchCancelled', (data) => {
-            console.log('❌ Recherche bataille annulée:', data.message);
-            this.isSearchingBattle = false;
-            this.updateBattleButtonState();
-            this.showMessage(data.message, 'info');
-        });
-        
-        colyseusManager.on('matchFound', (data) => {
-            console.log('🎯 Match trouvé !', data);
-            this.handleMatchFound(data);
-        });
-        
-        colyseusManager.on('battleResult', (data) => {
-            console.log('🏆 Résultat bataille:', data);
-            this.handleBattleResult(data);
-        });
-        
-        colyseusManager.on('error', (error) => {
-            console.error('❌ Erreur Colyseus:', error);
-            this.showMessage(`Erreur: ${error}`, 'error');
-        });
-        
-        // Tenter la connexion
-        colyseusManager.connect().then(success => {
-            if (success) {
-                console.log('✅ Connexion Colyseus réussie');
-            } else {
-                console.warn('⚠️ Connexion Colyseus échouée, mode hors ligne');
-            }
-        });
-    }
-
-    // === 📊 MISE À JOUR UI TEMPS RÉEL ===
-    updateUIFromRealtimeData() {
-        if (!this.realtimeProfile) return;
-        
-        console.log('🔄 Mise à jour UI depuis données temps réel');
-        
-        // Mettre à jour les trophées
-        if (this.trophyText) {
-            const trophies = this.realtimeProfile.trophies || 0;
-            this.trophyText.setText(`🏆 ${trophies}/400`);
-        }
-        
-        // Mettre à jour l'arène
-        if (this.arenaName && this.realtimeProfile.currentArena) {
-            this.arenaName.setText(this.getArenaDisplayName(this.realtimeProfile.currentArena));
-        }
-        
-        // Mettre à jour la barre de progression
-        if (this.progressFill && this.realtimeProfile.arenaInfo) {
-            const progress = this.realtimeProfile.arenaInfo.progress || 0;
-            const maxWidth = 196;
-            this.progressFill.clear();
-            this.progressFill.fillStyle(0xFFD700, 1);
-            this.progressFill.fillRoundedRect(
-                this.scale.width/2 - 98, 
-                this.contentStartY + 82, 
-                (maxWidth * progress / 100), 
-                8, 
-                4
-            );
-        }
-        
-        // Mettre à jour le header si nécessaire
-        if (this.clashHeader && this.clashHeader.updateFromProfile) {
-            this.clashHeader.updateFromProfile(this.realtimeProfile);
+    
+    update() {
+        // Vérifier l'authentification en continu
+        if (!auth.isAuthenticated()) {
+            console.warn('⚠️ Perte d\'authentification détectée');
+            this.cleanup();
+            this.scene.start('AuthScene');
         }
     }
     
-    updateGlobalStatsUI() {
-        if (this.onlinePlayersText) {
-            this.onlinePlayersText.setText(`👥 ${this.globalStats.playersOnline} en ligne`);
-        }
-    }
-    
-    updateBattleButtonState() {
-        // Trouver le bouton bataille dans le panel bataille
-        if (this.fullPanels[0] && this.isSearchingBattle !== undefined) {
-            // Cette logique sera implémentée quand on crée les boutons
-            // Pour l'instant on log juste
-            console.log(`🔄 État bouton bataille: ${this.isSearchingBattle ? 'Recherche...' : 'BATAILLE'}`);
-        }
+    destroy() {
+        console.log('🧹 ClashMenuScene.destroy()');
+        this.cleanup();
+        super.destroy();
     }
 
-    // === CRÉATION DU FOND (inchangé) ===
+    // === VALIDATION ===
+    
+    /**
+     * Valider l'authentification et les données
+     */
+    validateAuthentication() {
+        if (!auth.isAuthenticated()) {
+            console.warn('❌ Non authentifié, retour AuthScene');
+            this.scene.start('AuthScene');
+            return false;
+        }
+        
+        if (!this.currentUser) {
+            console.error('❌ Données utilisateur manquantes');
+            this.showMessage('Erreur de données utilisateur', 'error');
+            this.scene.start('AuthScene');
+            return false;
+        }
+        
+        return true;
+    }
+
+    // === CRÉATION DE L'INTERFACE ===
+    
+    /**
+     * Créer le fond d'écran
+     */
     createBackground() {
         const { width, height } = this.scale;
         
@@ -215,8 +113,13 @@ export default class ClashMenuScene extends Phaser.Scene {
         
         // Nuages décoratifs
         this.createClouds();
+        
+        console.log('🎨 Fond d\'écran créé');
     }
-
+    
+    /**
+     * Créer les nuages décoratifs
+     */
     createClouds() {
         const { width } = this.scale;
         const cloudCount = this.isMobile ? 3 : 5;
@@ -247,180 +150,517 @@ export default class ClashMenuScene extends Phaser.Scene {
             });
         }
     }
-
-    // === HEADER FIXE (inchangé) ===
-    createFixedHeader() {
-        console.log('🏗️ Création Header fixe...');
-        this.clashHeader = new ClashHeader(this, this.currentUser);
-    }
-
-    // === CRÉATION DE TOUS LES PANELS COMPLETS ===
-    createAllPanels() {
-        console.log('🏗️ Création de tous les panels complets...');
-        
-        // Créer les 5 panels complets
-        this.fullPanels = [
-            this.createBattlePanel(),      // 0 - Bataille avec ArenaDisplay + Navigation
-            this.createCollectionPanel(),  // 1 - Collection complète
-            this.createDeckPanel(),        // 2 - Deck complet
-            this.createClanPanel(),        // 3 - Clan complet
-            this.createProfilePanel()      // 4 - Profil complet
-        ];
-        
-        // Tous invisibles au départ
-        this.fullPanels.forEach(panel => panel.setVisible(false));
-    }
-
-    // === PANEL BATAILLE COMPLET (avec Colyseus intégré) ===
-    createBattlePanel() {
-        const { width, height } = this.scale;
-        const panel = this.add.container(0, 0);
-        
-        // 1. ArenaDisplay (avec références pour mise à jour temps réel)
-        const arenaContainer = this.add.container(0, this.contentStartY);
-        
-        // Fond arène
-        const arenaBg = this.add.graphics();
-        arenaBg.fillStyle(0x2F4F4F, 0.9);
-        arenaBg.fillRoundedRect(20, 0, width - 40, 140, 15);
-        arenaBg.lineStyle(4, 0xFFD700, 1);
-        arenaBg.strokeRoundedRect(20, 0, width - 40, 140, 15);
-        
-        // Info arène (référence gardée pour mise à jour)
-        this.arenaName = this.add.text(width/2, 30, 'Arène des Gobelins', {
-            fontSize: this.isMobile ? '18px' : '22px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        }).setOrigin(0.5);
-        
-        const trophies = this.currentUser?.playerStats?.trophies || 0;
-        this.trophyText = this.add.text(width/2, 60, `🏆 ${trophies}/400`, {
-            fontSize: this.isMobile ? '14px' : '16px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#B0C4DE'
-        }).setOrigin(0.5);
-        
-        // Barre progression (référence gardée)
-        const progressBg = this.add.graphics();
-        progressBg.fillStyle(0x2F2F2F, 0.8);
-        progressBg.fillRoundedRect(width/2 - 100, 80, 200, 12, 6);
-        
-        this.progressFill = this.add.graphics();
-        this.progressFill.fillStyle(0xFFD700, 1);
-        const progressPercent = Math.min((trophies / 400) * 100, 100);
-        this.progressFill.fillRoundedRect(width/2 - 98, 82, (196 * progressPercent / 100), 8, 4);
-        
-        // Statut connexion Colyseus
-        const connectionStatus = this.add.text(width - 30, 20, '🔴', {
-            fontSize: '16px'
-        }).setOrigin(1, 0);
-        
-        // Stats en ligne
-        this.onlinePlayersText = this.add.text(width - 30, 45, '👥 ? en ligne', {
-            fontSize: this.isMobile ? '10px' : '12px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#B0C4DE'
-        }).setOrigin(1, 0);
-        
-        arenaContainer.add([arenaBg, this.arenaName, this.trophyText, progressBg, this.progressFill, connectionStatus, this.onlinePlayersText]);
-        
-        // 2. Contenu bataille avec gestion Colyseus
-        const battleContent = this.add.container(0, this.contentStartY + 160);
-        
-        // Bouton principal BATAILLE (référence gardée pour mise à jour)
-        this.battleButton = this.createPanelButton(width/2, 40, 220, 70, '⚔️ BATAILLE', '#FFD700', () => {
-            this.handleBattleClick();
-        });
-        
-        // Boutons secondaires
-        const trainingBtn = this.createPanelButton(width/2 - 80, 130, 140, 50, '🎯 Entraînement', '#32CD32', () => {
-            this.handlePanelAction('training');
-        });
-        
-        const tournamentBtn = this.createPanelButton(width/2 + 80, 130, 140, 50, '🏆 Tournoi', '#9370DB', () => {
-            this.handlePanelAction('tournament');
-        });
-        
-        // Bouton Leaderboard
-        const leaderboardBtn = this.createPanelButton(width/2, 220, 160, 40, '🏆 Classement', '#4682B4', () => {
-            this.handleLeaderboardClick();
-        });
-        
-        battleContent.add([this.battleButton, trainingBtn, tournamentBtn, leaderboardBtn]);
-        
-        // 3. Navigation en bas
-        const navigation = this.createPanelNavigation(0);
-        
-        panel.add([arenaContainer, battleContent, navigation]);
-        panel.name = 'BattlePanel';
-        
-        return panel;
-    }
-
-    // === 🎮 HANDLERS COLYSEUS SPÉCIFIQUES ===
     
     /**
-     * ⚔️ Gestion du clic bataille
+     * Créer le header fixe
      */
-    handleBattleClick() {
-        if (!this.colyseusConnected) {
+    createHeader() {
+        console.log('🏗️ Création Header...');
+        
+        try {
+            this.clashHeader = new ClashHeader(this, this.currentUser);
+            console.log('✅ ClashHeader créé');
+        } catch (error) {
+            console.error('❌ Erreur création ClashHeader:', error);
+            this.showMessage('Erreur lors de la création du header', 'error');
+        }
+    }
+    
+    /**
+     * Créer le système de panels
+     */
+    async createPanelSystem() {
+        console.log('🏗️ Création système de panels...');
+        
+        try {
+            // Créer le gestionnaire de panels
+            this.panelManager = new PanelManager(this, {
+                userData: this.currentUser,
+                onAction: this.handlePanelAction.bind(this),
+                onTabChange: this.handleTabChange.bind(this),
+                enableTransitions: true,
+                defaultPanel: 'battle'
+            });
+            
+            // Initialiser le système
+            await this.panelManager.init();
+            
+            console.log('✅ Système de panels créé');
+        } catch (error) {
+            console.error('❌ Erreur création système panels:', error);
+            this.showMessage('Erreur lors de la création des panels', 'error');
+        }
+    }
+
+    // === GESTION DES ACTIONS PANELS ===
+    
+    /**
+     * Gérer les actions venant des panels
+     */
+    handlePanelAction(action, data = null) {
+        console.log(`🎮 Action panel reçue: ${action}`, data);
+        
+        switch (action) {
+            // === ACTIONS BATAILLE ===
+            case 'battle':
+                this.handleBattleRequest(data);
+                break;
+            case 'cancel_search':
+                this.handleCancelSearch();
+                break;
+            case 'training':
+                this.handleTraining(data);
+                break;
+            case 'tournament':
+                this.handleTournament(data);
+                break;
+            case 'leaderboard':
+                this.handleLeaderboard(data);
+                break;
+            case 'spectate':
+                this.handleSpectate(data);
+                break;
+                
+            // === ACTIONS COLLECTION ===
+            case 'upgrade_cards':
+                this.handleUpgradeCards(data);
+                break;
+            case 'filter_cards':
+                this.handleFilterCards(data);
+                break;
+            case 'view_card':
+                this.handleViewCard(data);
+                break;
+                
+            // === ACTIONS DECK ===
+            case 'edit_deck':
+                this.handleEditDeck(data);
+                break;
+            case 'copy_deck':
+                this.handleCopyDeck(data);
+                break;
+            case 'save_deck':
+                this.handleSaveDeck(data);
+                break;
+                
+            // === ACTIONS CLAN ===
+            case 'join_clan':
+                this.handleJoinClan(data);
+                break;
+            case 'create_clan':
+                this.handleCreateClan(data);
+                break;
+            case 'clan_chat':
+                this.handleClanChat(data);
+                break;
+            case 'clan_war':
+                this.handleClanWar(data);
+                break;
+                
+            // === ACTIONS PROFIL ===
+            case 'settings':
+                this.handleSettings(data);
+                break;
+            case 'logout':
+                this.handleLogout();
+                break;
+                
+            // === ACTIONS GÉNÉRIQUES ===
+            default:
+                console.warn(`⚠️ Action non gérée: ${action}`);
+                this.showMessage(`Action "${action}" en développement`, 'info');
+        }
+    }
+    
+    /**
+     * Gérer les changements d'onglets
+     */
+    handleTabChange(panelId, index) {
+        console.log(`📱 Changement onglet: ${panelId} (${index})`);
+        
+        // Notifier le header si nécessaire
+        if (this.clashHeader && this.clashHeader.onTabChanged) {
+            this.clashHeader.onTabChanged(panelId);
+        }
+        
+        // Actions spécifiques selon le panel
+        switch (panelId) {
+            case 'battle':
+                // Rafraîchir les données de bataille
+                this.refreshBattlePanelData();
+                break;
+            case 'collection':
+                // Charger les cartes si nécessaire
+                this.refreshCollectionData();
+                break;
+            // Autres panels...
+        }
+    }
+
+    // === HANDLERS D'ACTIONS BATAILLE ===
+    
+    /**
+     * Gérer une demande de bataille
+     */
+    handleBattleRequest(data) {
+        console.log('⚔️ Demande de bataille', data);
+        
+        if (!this.colyseusState.connected) {
             this.showMessage('Connexion au serveur requise pour jouer', 'warning');
             return;
         }
         
-        if (this.isSearchingBattle) {
-            // Annuler la recherche
-            console.log('❌ Annulation recherche bataille');
-            colyseusManager.cancelSearch();
-        } else {
-            // Lancer la recherche
-            console.log('⚔️ Lancement recherche bataille');
-            colyseusManager.searchBattle();
+        if (this.colyseusState.isSearchingBattle) {
+            console.warn('⚠️ Recherche déjà en cours');
+            return;
         }
+        
+        // Lancer la recherche via Colyseus
+        colyseusManager.searchBattle()
+            .then(() => {
+                console.log('✅ Recherche de bataille lancée');
+            })
+            .catch(error => {
+                console.error('❌ Erreur lancement bataille:', error);
+                this.showMessage('Erreur lors du lancement de la bataille', 'error');
+            });
     }
     
     /**
-     * 🏆 Gestion du leaderboard
+     * Gérer l'annulation de recherche
      */
-    handleLeaderboardClick() {
-        if (!this.colyseusConnected) {
+    handleCancelSearch() {
+        console.log('❌ Annulation recherche bataille');
+        
+        if (!this.colyseusState.isSearchingBattle) {
+            console.warn('⚠️ Aucune recherche en cours');
+            return;
+        }
+        
+        // Annuler via Colyseus
+        colyseusManager.cancelSearch()
+            .then(() => {
+                console.log('✅ Recherche annulée');
+            })
+            .catch(error => {
+                console.error('❌ Erreur annulation:', error);
+                this.showMessage('Erreur lors de l\'annulation', 'error');
+            });
+    }
+    
+    /**
+     * Gérer l'entraînement
+     */
+    handleTraining(data) {
+        console.log('🎯 Mode entraînement demandé');
+        this.showMessage('Mode entraînement - Bientôt disponible !', 'info');
+        // TODO: Implémenter mode entraînement
+    }
+    
+    /**
+     * Gérer les tournois
+     */
+    handleTournament(data) {
+        console.log('🏆 Tournois demandés');
+        this.showMessage('Tournois - Bientôt disponibles !', 'info');
+        // TODO: Implémenter système de tournois
+    }
+    
+    /**
+     * Gérer le classement
+     */
+    handleLeaderboard(data) {
+        console.log('📊 Classement demandé');
+        
+        if (!this.colyseusState.connected) {
             this.showMessage('Connexion au serveur requise', 'warning');
             return;
         }
         
-        console.log('🏆 Demande du leaderboard');
-        colyseusManager.requestLeaderboard(20);
+        // Demander le leaderboard via Colyseus
+        colyseusManager.requestLeaderboard(20)
+            .then(leaderboardData => {
+                this.showLeaderboardModal(leaderboardData);
+            })
+            .catch(error => {
+                console.error('❌ Erreur leaderboard:', error);
+                this.showMessage('Erreur lors du chargement du classement', 'error');
+            });
+    }
+    
+    /**
+     * Gérer le mode spectateur
+     */
+    handleSpectate(data) {
+        console.log('👁️ Mode spectateur demandé');
+        this.showMessage('Mode spectateur - En développement', 'info');
+        // TODO: Implémenter mode spectateur
+    }
+
+    // === HANDLERS D'ACTIONS AUTRES PANELS ===
+    
+    /**
+     * Gérer l'amélioration de cartes
+     */
+    handleUpgradeCards(data) {
+        console.log('⬆️ Amélioration cartes', data);
+        this.showMessage('Amélioration de cartes - En développement', 'info');
+    }
+    
+    /**
+     * Gérer les filtres de cartes
+     */
+    handleFilterCards(data) {
+        console.log('🔍 Filtres cartes', data);
+        this.showMessage('Filtres de cartes - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la visualisation d'une carte
+     */
+    handleViewCard(data) {
+        console.log('👁️ Voir carte', data);
+        this.showMessage('Visualisation carte - En développement', 'info');
+    }
+    
+    /**
+     * Gérer l'édition de deck
+     */
+    handleEditDeck(data) {
+        console.log('✏️ Édition deck', data);
+        this.showMessage('Éditeur de deck - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la copie de deck
+     */
+    handleCopyDeck(data) {
+        console.log('📋 Copie deck', data);
+        this.showMessage('Copie de deck - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la sauvegarde de deck
+     */
+    handleSaveDeck(data) {
+        console.log('💾 Sauvegarde deck', data);
+        this.showMessage('Sauvegarde deck - En développement', 'info');
+    }
+    
+    /**
+     * Gérer rejoindre un clan
+     */
+    handleJoinClan(data) {
+        console.log('🔍 Rejoindre clan', data);
+        this.showMessage('Rejoindre un clan - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la création de clan
+     */
+    handleCreateClan(data) {
+        console.log('🏗️ Créer clan', data);
+        this.showMessage('Créer un clan - En développement', 'info');
+    }
+    
+    /**
+     * Gérer le chat clan
+     */
+    handleClanChat(data) {
+        console.log('💬 Chat clan', data);
+        this.showMessage('Chat clan - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la guerre de clan
+     */
+    handleClanWar(data) {
+        console.log('⚔️ Guerre clan', data);
+        this.showMessage('Guerre de clan - En développement', 'info');
+    }
+    
+    /**
+     * Gérer les paramètres
+     */
+    handleSettings(data) {
+        console.log('⚙️ Paramètres', data);
+        this.showMessage('Paramètres - En développement', 'info');
+    }
+    
+    /**
+     * Gérer la déconnexion
+     */
+    async handleLogout() {
+        const confirm = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+        if (!confirm) return;
+
+        try {
+            console.log('🚪 Déconnexion...');
+            
+            // Déconnecter Colyseus d'abord
+            if (this.colyseusState.connected) {
+                await colyseusManager.disconnect();
+            }
+            
+            // Nettoyer et déconnecter
+            this.cleanup();
+            await auth.logout();
+            this.gameInstance?.clearAuthData();
+            
+            this.showMessage('Déconnexion réussie', 'success');
+            this.scene.start('AuthScene');
+        } catch (error) {
+            console.error('❌ Erreur déconnexion:', error);
+            
+            // Déconnexion forcée en cas d'erreur
+            this.cleanup();
+            this.gameInstance?.clearAuthData();
+            this.showMessage('Déconnexion locale effectuée', 'info');
+            this.scene.start('AuthScene');
+        }
+    }
+
+    // === CONFIGURATION COLYSEUS ===
+    
+    /**
+     * Configurer les handlers Colyseus
+     */
+    setupColyseus() {
+        console.log('🌐 Configuration Colyseus...');
         
-        // Handler pour la réponse
+        // === ÉVÉNEMENTS DE CONNEXION ===
+        colyseusManager.on('connected', () => {
+            console.log('✅ Colyseus connecté !');
+            this.colyseusState.connected = true;
+            this.showMessage('Connecté au serveur temps réel', 'success');
+            
+            // Notifier le panel bataille
+            this.notifyBattlePanel('setColyseusConnected', true);
+            
+            // Demander les infos d'arène
+            colyseusManager.requestArenaInfo();
+        });
+        
+        colyseusManager.on('disconnected', (code) => {
+            console.log('🔌 Colyseus déconnecté, code:', code);
+            this.colyseusState.connected = false;
+            
+            // Notifier le panel bataille
+            this.notifyBattlePanel('setColyseusConnected', false);
+            
+            if (code !== 1000) { // Pas une déconnexion volontaire
+                this.showMessage('Connexion temps réel perdue', 'warning');
+            }
+        });
+        
+        // === ÉVÉNEMENTS PROFIL ===
+        colyseusManager.on('profileUpdated', (profile) => {
+            console.log('📊 Profil mis à jour via Colyseus:', profile.username);
+            this.colyseusState.realtimeProfile = profile;
+            this.updateUIFromRealtimeData();
+        });
+        
+        colyseusManager.on('globalStatsUpdated', (stats) => {
+            console.log('📊 Stats globales mises à jour:', stats);
+            this.colyseusState.globalStats = stats;
+            
+            // Notifier le panel bataille
+            this.notifyBattlePanel('updateGlobalStats', stats);
+        });
+        
+        // === ÉVÉNEMENTS MATCHMAKING ===
+        colyseusManager.on('searchStarted', (data) => {
+            console.log('⚔️ Recherche bataille commencée:', data.message);
+            this.colyseusState.isSearchingBattle = true;
+            
+            // Notifier le panel bataille
+            this.notifyBattlePanel('setSearchState', true, data);
+            
+            this.showMessage(data.message, 'info');
+        });
+        
+        colyseusManager.on('searchCancelled', (data) => {
+            console.log('❌ Recherche bataille annulée:', data.message);
+            this.colyseusState.isSearchingBattle = false;
+            
+            // Notifier le panel bataille
+            this.notifyBattlePanel('setSearchState', false, data);
+            
+            this.showMessage(data.message, 'info');
+        });
+        
+        colyseusManager.on('matchFound', (data) => {
+            console.log('🎯 Match trouvé !', data);
+            this.handleMatchFound(data);
+        });
+        
+        colyseusManager.on('battleResult', (data) => {
+            console.log('🏆 Résultat bataille:', data);
+            this.handleBattleResult(data);
+        });
+        
+        // === ÉVÉNEMENTS LEADERBOARD ===
         colyseusManager.on('leaderboard', (data) => {
-            this.showLeaderboard(data);
+            console.log('📊 Leaderboard reçu:', data);
+            this.showLeaderboardModal(data);
+        });
+        
+        // === GESTION D'ERREURS ===
+        colyseusManager.on('error', (error) => {
+            console.error('❌ Erreur Colyseus:', error);
+            this.showMessage(`Erreur: ${error}`, 'error');
+        });
+        
+        // Tenter la connexion
+        colyseusManager.connect().then(success => {
+            if (success) {
+                console.log('✅ Connexion Colyseus réussie');
+            } else {
+                console.warn('⚠️ Connexion Colyseus échouée, mode hors ligne');
+                this.showMessage('Mode hors ligne - Fonctionnalités limitées', 'warning');
+            }
         });
     }
+
+    // === HANDLERS ÉVÉNEMENTS COLYSEUS ===
     
     /**
-     * 🎯 Match trouvé
+     * Gérer un match trouvé
      */
     handleMatchFound(data) {
-        this.isSearchingBattle = false;
-        this.updateBattleButtonState();
+        this.colyseusState.isSearchingBattle = false;
+        this.colyseusState.currentMatch = data;
         
-        console.log('🎯 Match trouvé, transition vers BattleRoom');
-        this.showMessage(`Adversaire trouvé: ${data.opponent.username}`, 'success');
+        console.log('🎯 Match trouvé, préparation bataille...');
         
-        // TODO: Transition vers la BattleRoom
+        // Notifier le panel bataille
+        this.notifyBattlePanel('notifyMatchFound', data);
+        
+        this.showMessage(`Adversaire trouvé: ${data.opponent?.username}`, 'success');
+        
+        // TODO: Transition vers BattleScene
         // this.scene.start('BattleScene', { matchData: data });
         
-        // Pour l'instant, on simule juste
-        this.showMessage('Bataille en cours...', 'info');
+        // Pour l'instant, simuler une bataille
+        this.simulateBattle(data);
     }
     
     /**
-     * 🏆 Résultat de bataille
+     * Gérer le résultat d'une bataille
      */
     handleBattleResult(data) {
-        this.isSearchingBattle = false;
-        this.updateBattleButtonState();
+        this.colyseusState.isSearchingBattle = false;
+        this.colyseusState.currentMatch = null;
+        
+        console.log('🏆 Résultat bataille reçu:', data);
+        
+        // Notifier le panel bataille
+        this.notifyBattlePanel('notifyBattleResult', data);
+        
+        // Mettre à jour les données utilisateur si nécessaire
+        if (data.updatedProfile) {
+            this.updateUserData(data.updatedProfile);
+        }
         
         const message = data.victory ? 
             `🎉 Victoire ! +${data.trophyChange} trophées` : 
@@ -428,27 +668,139 @@ export default class ClashMenuScene extends Phaser.Scene {
             
         this.showMessage(message, data.victory ? 'success' : 'error');
         
-        // L'UI sera automatiquement mise à jour via profileUpdated
-        
         if (data.arenaChanged) {
-            this.showMessage(`🏟️ Nouvelle arène débloquée !`, 'success');
+            setTimeout(() => {
+                this.showMessage('🏟️ Nouvelle arène débloquée !', 'success');
+            }, 2000);
         }
     }
     
     /**
-     * 🏆 Afficher le leaderboard
+     * Simuler une bataille (temporaire)
      */
-    showLeaderboard(data) {
-        // Créer une popup simple pour le leaderboard
+    simulateBattle(matchData) {
+        console.log('🎮 Simulation bataille...');
+        
+        this.showMessage('Bataille en cours...', 'info');
+        
+        // Simuler bataille après 3 secondes
+        setTimeout(() => {
+            const victory = Math.random() > 0.5;
+            const trophyChange = victory ? 
+                Math.floor(Math.random() * 30) + 20 : 
+                -(Math.floor(Math.random() * 20) + 10);
+            
+            const result = {
+                victory: victory,
+                trophyChange: trophyChange,
+                opponent: matchData.opponent,
+                duration: 123, // secondes
+                arenaChanged: false
+            };
+            
+            this.handleBattleResult(result);
+        }, 3000);
+    }
+
+    // === MISE À JOUR DONNÉES ===
+    
+    /**
+     * Mettre à jour l'interface depuis les données temps réel
+     */
+    updateUIFromRealtimeData() {
+        if (!this.colyseusState.realtimeProfile) return;
+        
+        console.log('🔄 Mise à jour UI depuis données temps réel');
+        
+        // Mettre à jour le header
+        if (this.clashHeader && this.clashHeader.updateFromProfile) {
+            this.clashHeader.updateFromProfile(this.colyseusState.realtimeProfile);
+        }
+        
+        // Mettre à jour le panel bataille
+        this.notifyBattlePanel('updateRealtimeProfile', this.colyseusState.realtimeProfile);
+        
+        // Mettre à jour les données utilisateur locales
+        this.updateUserData({
+            ...this.currentUser,
+            playerStats: {
+                ...this.currentUser.playerStats,
+                ...this.colyseusState.realtimeProfile
+            }
+        });
+    }
+    
+    /**
+     * Mettre à jour les données utilisateur
+     */
+    updateUserData(newUserData) {
+        this.currentUser = newUserData;
+        this.registry.set('currentUser', newUserData);
+        
+        // Mettre à jour le header
+        if (this.clashHeader) {
+            this.clashHeader.updateUserData(newUserData);
+        }
+        
+        // Mettre à jour le panel manager
+        if (this.panelManager) {
+            this.panelManager.updateUserData(newUserData);
+        }
+        
+        console.log('📊 Données utilisateur mises à jour');
+    }
+    
+    /**
+     * Rafraîchir les données du panel bataille
+     */
+    refreshBattlePanelData() {
+        if (this.colyseusState.connected) {
+            // Demander les dernières stats
+            colyseusManager.requestArenaInfo();
+            colyseusManager.requestGlobalStats();
+        }
+    }
+    
+    /**
+     * Rafraîchir les données de collection
+     */
+    refreshCollectionData() {
+        // TODO: Charger les cartes depuis l'API
+        console.log('🔄 Rafraîchissement données collection');
+    }
+
+    // === COMMUNICATION AVEC PANELS ===
+    
+    /**
+     * Notifier le panel bataille
+     */
+    notifyBattlePanel(method, data = null) {
+        if (!this.panelManager) return;
+        
+        const battlePanel = this.panelManager.panels.get('battle');
+        if (battlePanel && typeof battlePanel[method] === 'function') {
+            battlePanel[method](data);
+        }
+    }
+
+    // === MODALES ET NOTIFICATIONS ===
+    
+    /**
+     * Afficher le modal de classement
+     */
+    showLeaderboardModal(data) {
+        console.log('📊 Affichage leaderboard modal', data);
+        
         const { width, height } = this.scale;
         
-        // Fond semi-transparent
+        // Overlay semi-transparent
         const overlay = this.add.graphics();
         overlay.fillStyle(0x000000, 0.7);
         overlay.fillRect(0, 0, width, height);
         overlay.setDepth(1000);
+        overlay.setInteractive();
         
-        // Panneau leaderboard
+        // Panel leaderboard
         const panelWidth = Math.min(width - 40, 400);
         const panelHeight = Math.min(height - 100, 500);
         const panelX = width / 2;
@@ -456,9 +808,15 @@ export default class ClashMenuScene extends Phaser.Scene {
         
         const leaderboardPanel = this.add.graphics();
         leaderboardPanel.fillStyle(0x2F4F4F, 1);
-        leaderboardPanel.fillRoundedRect(panelX - panelWidth/2, panelY - panelHeight/2, panelWidth, panelHeight, 15);
+        leaderboardPanel.fillRoundedRect(
+            panelX - panelWidth/2, panelY - panelHeight/2, 
+            panelWidth, panelHeight, 15
+        );
         leaderboardPanel.lineStyle(3, 0xFFD700, 1);
-        leaderboardPanel.strokeRoundedRect(panelX - panelWidth/2, panelY - panelHeight/2, panelWidth, panelHeight, 15);
+        leaderboardPanel.strokeRoundedRect(
+            panelX - panelWidth/2, panelY - panelHeight/2, 
+            panelWidth, panelHeight, 15
+        );
         leaderboardPanel.setDepth(1001);
         
         // Titre
@@ -472,8 +830,9 @@ export default class ClashMenuScene extends Phaser.Scene {
         // Liste des joueurs
         const startY = panelY - panelHeight/2 + 70;
         const lineHeight = 25;
+        const elementsToDestroy = [overlay, leaderboardPanel, title];
         
-        data.players.slice(0, 15).forEach((player, index) => {
+        data.players?.slice(0, 15).forEach((player, index) => {
             const y = startY + index * lineHeight;
             
             const rankText = this.add.text(panelX - panelWidth/2 + 20, y, `#${player.rank}`, {
@@ -494,6 +853,8 @@ export default class ClashMenuScene extends Phaser.Scene {
                 fontFamily: 'Arial, sans-serif',
                 fill: '#FFD700'
             }).setOrigin(1, 0).setDepth(1002);
+            
+            elementsToDestroy.push(rankText, nameText, trophyText);
         });
         
         // Bouton fermer
@@ -504,517 +865,151 @@ export default class ClashMenuScene extends Phaser.Scene {
             fill: '#FFD700'
         }).setOrigin(0.5).setDepth(1002).setInteractive();
         
-        closeBtn.on('pointerdown', () => {
-            overlay.destroy();
-            leaderboardPanel.destroy();
-            title.destroy();
-            closeBtn.destroy();
-            // Détruire tous les textes de joueurs...
-        });
-    }
-
-    // === UTILITAIRES ===
-    getArenaDisplayName(arena) {
-        // Conversion simple des nameId en noms affichables
-        const arenaNames = {
-            'arena.training_center.name': 'Centre d\'entraînement',
-            'arena.goblin_stadium.name': 'Stade des Gobelins',
-            'arena.bone_pit.name': 'Fosse aux Os',
-            'arena.royal_arena.name': 'Arène Royale',
-            'arena.spell_valley.name': 'Vallée des Sorts',
-            'arena.builders_workshop.name': 'Atelier des Bâtisseurs',
-            'arena.royal_arena_high.name': 'Arène Royale Suprême',
-            'arena.legendary_arena.name': 'Arène Légendaire',
-            'arena.champions_arena.name': 'Arène des Champions',
-            'arena.ultimate_arena.name': 'Arène Ultime'
-        };
+        elementsToDestroy.push(closeBtn);
         
-        return arenaNames[arena.nameId] || arena.nameId || 'Arène Inconnue';
-    }
-
-    // === RESTE DES MÉTHODES (création panels, navigation, etc.) ===
-    // [Le reste du code reste identique aux panels Collection, Deck, Clan, Profile]
-    
-    createCollectionPanel() {
-        const { width, height } = this.scale;
-        const panel = this.add.container(0, 0);
-        
-        // Titre
-        const title = this.add.text(width/2, this.contentStartY + 30, '🃏 MA COLLECTION', {
-            fontSize: this.isMobile ? '18px' : '22px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        }).setOrigin(0.5);
-        
-        // Grille de cartes simulée
-        const cardGrid = this.add.container(0, this.contentStartY + 80);
-        this.createSimpleCardGrid(cardGrid);
-        
-        // Boutons d'action
-        const upgradeBtn = this.createPanelButton(width/2 - 70, height - 150, 120, 40, '⬆️ Améliorer', '#32CD32', () => {
-            this.handlePanelAction('upgrade_cards');
-        });
-        
-        const filterBtn = this.createPanelButton(width/2 + 70, height - 150, 120, 40, '🔍 Filtrer', '#4682B4', () => {
-            this.handlePanelAction('filter_cards');
-        });
-        
-        // Navigation
-        const navigation = this.createPanelNavigation(1);
-        
-        panel.add([title, cardGrid, upgradeBtn, filterBtn, navigation]);
-        panel.name = 'CollectionPanel';
-        
-        return panel;
-    }
-
-    createDeckPanel() {
-        const { width, height } = this.scale;
-        const panel = this.add.container(0, 0);
-        
-        // Titre
-        const title = this.add.text(width/2, this.contentStartY + 30, '🛡️ MON DECK', {
-            fontSize: this.isMobile ? '18px' : '22px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        }).setOrigin(0.5);
-        
-        // Slots de deck (8 cartes)
-        const deckSlots = this.add.container(0, this.contentStartY + 80);
-        this.createDeckSlots(deckSlots);
-        
-        // Coût moyen
-        const costBg = this.add.graphics();
-        costBg.fillStyle(0x1C3A3A, 0.8);
-        costBg.fillRoundedRect(width/2 - 80, this.contentStartY + 200, 160, 40, 8);
-        
-        const costText = this.add.text(width/2, this.contentStartY + 220, '⚡ Coût moyen: 3.8', {
-            fontSize: this.isMobile ? '14px' : '16px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#9370DB'
-        }).setOrigin(0.5);
-        
-        // Boutons d'action
-        const editBtn = this.createPanelButton(width/2 - 70, height - 150, 120, 40, '✏️ Modifier', '#FFD700', () => {
-            this.handlePanelAction('edit_deck');
-        });
-        
-        const copyBtn = this.createPanelButton(width/2 + 70, height - 150, 120, 40, '📋 Copier', '#4682B4', () => {
-            this.handlePanelAction('copy_deck');
-        });
-        
-        // Navigation
-        const navigation = this.createPanelNavigation(2);
-        
-        panel.add([title, deckSlots, costBg, costText, editBtn, copyBtn, navigation]);
-        panel.name = 'DeckPanel';
-        
-        return panel;
-    }
-
-    createClanPanel() {
-        const { width, height } = this.scale;
-        const panel = this.add.container(0, 0);
-        
-        // Titre
-        const title = this.add.text(width/2, this.contentStartY + 30, '🏰 CLAN', {
-            fontSize: this.isMobile ? '18px' : '22px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        }).setOrigin(0.5);
-        
-        // Message pas de clan
-        const message = this.add.text(width/2, this.contentStartY + 120, 
-            'Vous n\'appartenez à aucun clan.\nRejoignez-en un pour accéder à de nouvelles fonctionnalités !', {
-            fontSize: this.isMobile ? '13px' : '15px',
-            fontFamily: 'Arial, sans-serif',
-            fill: '#B0C4DE',
-            align: 'center',
-            wordWrap: { width: width - 60 }
-        }).setOrigin(0.5);
-        
-        // Boutons
-        const joinBtn = this.createPanelButton(width/2, this.contentStartY + 200, 180, 50, '🔍 Rejoindre un clan', '#32CD32', () => {
-            this.handlePanelAction('join_clan');
-        });
-        
-        const createBtn = this.createPanelButton(width/2, this.contentStartY + 270, 180, 50, '🏗️ Créer un clan', '#FFD700', () => {
-            this.handlePanelAction('create_clan');
-        });
-        
-        // Navigation
-        const navigation = this.createPanelNavigation(3);
-        
-        panel.add([title, message, joinBtn, createBtn, navigation]);
-        panel.name = 'ClanPanel';
-        
-        return panel;
-    }
-
-    createProfilePanel() {
-        const { width, height } = this.scale;
-        const panel = this.add.container(0, 0);
-        
-        // Titre
-        const title = this.add.text(width/2, this.contentStartY + 30, '👤 MON PROFIL', {
-            fontSize: this.isMobile ? '18px' : '22px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFD700'
-        }).setOrigin(0.5);
-        
-        // Stats utilisateur
-        const statsContainer = this.add.container(0, this.contentStartY + 80);
-        this.createUserStats(statsContainer);
-        
-        // Boutons d'action
-        const settingsBtn = this.createPanelButton(width/2 - 70, height - 150, 120, 40, '⚙️ Paramètres', '#708090', () => {
-            this.handlePanelAction('settings');
-        });
-        
-        const logoutBtn = this.createPanelButton(width/2 + 70, height - 150, 120, 40, '🚪 Déconnexion', '#DC143C', () => {
-            this.handlePanelAction('logout');
-        });
-        
-        // Navigation
-        const navigation = this.createPanelNavigation(4);
-        
-        panel.add([title, statsContainer, settingsBtn, logoutBtn, navigation]);
-        panel.name = 'ProfilePanel';
-        
-        return panel;
-    }
-
-    // === NAVIGATION POUR CHAQUE PANEL ===
-    createPanelNavigation(activeIndex) {
-        const { width, height } = this.scale;
-        const navContainer = this.add.container(0, height - 70);
-        
-        // Fond navigation
-        const navBg = this.add.graphics();
-        navBg.fillStyle(0x2F4F4F, 1);
-        navBg.fillRect(0, 0, width, 70);
-        navBg.lineStyle(3, 0xFFD700);
-        navBg.lineBetween(0, 0, width, 0);
-        navContainer.add(navBg);
-        
-        // Boutons onglets
-        const tabWidth = width / this.tabs.length;
-        const tabIcons = ['⚔️', '🃏', '🛡️', '🏰', '👤'];
-        
-        this.tabs.forEach((tabName, index) => {
-            const x = tabWidth * index + tabWidth / 2;
-            const y = 35;
-            
-            // Background onglet
-            const tabBg = this.add.graphics();
-            const isActive = index === activeIndex;
-            
-            if (isActive) {
-                tabBg.fillStyle(0xFFD700, 1);
-                tabBg.fillRoundedRect(x - 30, y - 25, 60, 50, 12);
-            } else {
-                tabBg.fillStyle(0x4682B4, 0.7);
-                tabBg.fillRoundedRect(x - 25, y - 20, 50, 40, 10);
-            }
-            
-            // Icône
-            const icon = this.add.text(x, y - 5, tabIcons[index], {
-                fontSize: isActive ? '24px' : '20px',
-                fill: isActive ? '#2F4F4F' : '#FFFFFF'
-            }).setOrigin(0.5);
-            
-            // Texte
-            const text = this.add.text(x, y + 15, tabName, {
-                fontSize: isActive ? '10px' : '8px',
-                fontFamily: 'Arial, sans-serif',
-                fontWeight: 'bold',
-                fill: isActive ? '#2F4F4F' : '#FFFFFF'
-            }).setOrigin(0.5);
-            
-            navContainer.add([tabBg, icon, text]);
-            
-            // Interactivité
-            if (!isActive) {
-                const hitArea = this.add.zone(x, y, 60, 50).setInteractive();
-                hitArea.on('pointerdown', () => {
-                    this.switchToTab(index);
-                });
-                navContainer.add(hitArea);
-            }
-        });
-        
-        return navContainer;
-    }
-
-    // === UTILITAIRES ===
-    createPanelButton(x, y, width, height, text, color, callback) {
-        const container = this.add.container(x, y);
-        
-        const colorNum = typeof color === 'string' ? parseInt(color.replace('#', '0x')) : color;
-        
-        const bg = this.add.graphics();
-        bg.fillStyle(colorNum);
-        bg.fillRoundedRect(-width/2, -height/2, width, height, 8);
-        
-        const buttonText = this.add.text(0, 0, text, {
-            fontSize: this.isMobile ? '12px' : '14px',
-            fontFamily: 'Arial, sans-serif',
-            fontWeight: 'bold',
-            fill: '#FFFFFF'
-        }).setOrigin(0.5);
-        
-        container.add([bg, buttonText]);
-        
-        bg.setInteractive(new Phaser.Geom.Rectangle(-width/2, -height/2, width, height), 
-            Phaser.Geom.Rectangle.Contains);
-        
-        bg.on('pointerdown', () => {
-            container.setScale(0.95);
-            this.time.delayedCall(100, () => {
-                container.setScale(1);
-                if (callback) callback();
-            });
-        });
-        
-        return container;
-    }
-
-    createSimpleCardGrid(container) {
-        const { width } = this.scale;
-        const cardSize = this.isMobile ? 35 : 45;
-        const spacing = this.isMobile ? 40 : 50;
-        const cols = 4;
-        const rows = 3;
-        
-        const startX = width / 2 - (cols - 1) * spacing / 2;
-        
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const x = startX + col * spacing;
-                const y = row * (cardSize + 15);
-                
-                const card = this.add.graphics();
-                card.fillStyle(0x4169E1, 0.8);
-                card.fillRoundedRect(x - cardSize/2, y - cardSize/2, cardSize, cardSize, 6);
-                
-                const icon = this.add.text(x, y, ['🗡️', '🏹', '🔥', '⚡', '🐲', '🛡️'][row * cols + col] || '❓', {
-                    fontSize: this.isMobile ? '16px' : '20px'
-                }).setOrigin(0.5);
-                
-                container.add([card, icon]);
-            }
-        }
-    }
-
-    createDeckSlots(container) {
-        const { width } = this.scale;
-        const slotSize = this.isMobile ? 35 : 45;
-        const spacing = this.isMobile ? 40 : 50;
-        const cols = 4;
-        const rows = 2;
-        
-        const startX = width / 2 - (cols - 1) * spacing / 2;
-        
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const x = startX + col * spacing;
-                const y = row * (slotSize + 15);
-                
-                const slot = this.add.graphics();
-                slot.fillStyle(0x1C3A3A, 0.8);
-                slot.fillRoundedRect(x - slotSize/2, y - slotSize/2, slotSize, slotSize, 6);
-                slot.lineStyle(2, 0x4682B4, 0.5);
-                slot.strokeRoundedRect(x - slotSize/2, y - slotSize/2, slotSize, slotSize, 6);
-                
-                const placeholder = this.add.text(x, y, '+', {
-                    fontSize: this.isMobile ? '16px' : '20px',
-                    fontFamily: 'Arial, sans-serif',
-                    fill: '#708090'
-                }).setOrigin(0.5);
-                
-                container.add([slot, placeholder]);
-            }
-        }
-    }
-
-    createUserStats(container) {
-        const { width } = this.scale;
-        const user = this.currentUser;
-        
-        const stats = [
-            { label: '🏆 Trophées', value: user?.playerStats?.trophies || 0 },
-            { label: '⭐ Niveau', value: user?.playerStats?.level || 1 },
-            { label: '🎮 Parties', value: user?.gameStats?.totalGames || 0 },
-            { label: '✅ Victoires', value: user?.gameStats?.wins || 0 },
-        ];
-        
-        const rowHeight = 30;
-        const leftCol = width / 2 - 80;
-        const rightCol = width / 2 + 80;
-        
-        stats.forEach((stat, index) => {
-            const row = Math.floor(index / 2);
-            const col = index % 2;
-            const x = col === 0 ? leftCol : rightCol;
-            const y = row * rowHeight;
-            
-            const label = this.add.text(x - 60, y, stat.label, {
-                fontSize: this.isMobile ? '12px' : '14px',
-                fontFamily: 'Arial, sans-serif',
-                fill: '#B0C4DE'
-            });
-            
-            const value = this.add.text(x + 60, y, stat.value.toString(), {
-                fontSize: this.isMobile ? '12px' : '14px',
-                fontFamily: 'Arial, sans-serif',
-                fontWeight: 'bold',
-                fill: '#FFD700'
-            }).setOrigin(1, 0);
-            
-            container.add([label, value]);
-        });
-    }
-
-    // === GESTION DES ONGLETS ===
-    showPanel(index) {
-        // Masquer tous les panels
-        this.fullPanels.forEach(panel => panel.setVisible(false));
-        
-        // Afficher le panel demandé
-        if (this.fullPanels[index]) {
-            this.fullPanels[index].setVisible(true);
-            this.currentTab = index;
-            console.log(`✅ Panel affiché: ${this.tabs[index]} (${index})`);
-        }
-    }
-
-    switchToTab(index) {
-        if (index === this.currentTab) return;
-        
-        console.log(`📱 Changement onglet: ${this.tabs[this.currentTab]} -> ${this.tabs[index]}`);
-        
-        // Animation de transition
-        const currentPanel = this.fullPanels[this.currentTab];
-        const nextPanel = this.fullPanels[index];
-        
-        if (currentPanel) {
-            this.tweens.add({
-                targets: currentPanel,
-                alpha: 0,
-                duration: 200,
-                onComplete: () => {
-                    currentPanel.setVisible(false);
-                    nextPanel.setVisible(true);
-                    nextPanel.setAlpha(0);
-                    
-                    this.tweens.add({
-                        targets: nextPanel,
-                        alpha: 1,
-                        duration: 200
-                    });
+        // Fonction de fermeture
+        const closeModal = () => {
+            elementsToDestroy.forEach(element => {
+                if (element && element.destroy) {
+                    element.destroy();
                 }
             });
-        } else {
-            nextPanel.setVisible(true);
-        }
+        };
         
-        this.currentTab = index;
-    }
-
-    // === HANDLERS D'ACTIONS ===
-    handlePanelAction(action, data) {
-        console.log(`🎮 Action panel: ${action}`, data);
+        // Events de fermeture
+        closeBtn.on('pointerdown', closeModal);
+        overlay.on('pointerdown', closeModal);
         
-        switch (action) {
-            case 'training':
-                this.showMessage('Mode entraînement - Bientôt disponible !', 'info');
-                break;
-            case 'tournament':
-                this.showMessage('Tournois - Bientôt disponibles !', 'info');
-                break;
-            case 'upgrade_cards':
-                this.showMessage('Amélioration de cartes - En développement', 'info');
-                break;
-            case 'filter_cards':
-                this.showMessage('Filtres de cartes - En développement', 'info');
-                break;
-            case 'edit_deck':
-                this.showMessage('Éditeur de deck - En développement', 'info');
-                break;
-            case 'copy_deck':
-                this.showMessage('Copie de deck - En développement', 'info');
-                break;
-            case 'join_clan':
-                this.showMessage('Rejoindre un clan - En développement', 'info');
-                break;
-            case 'create_clan':
-                this.showMessage('Créer un clan - En développement', 'info');
-                break;
-            case 'settings':
-                this.showMessage('Paramètres - En développement', 'info');
-                break;
-            case 'logout':
-                this.handleLogout();
-                break;
-            default:
-                this.showMessage(`Action "${action}" non implémentée`, 'info');
-        }
-    }
-
-    async handleLogout() {
-        const confirm = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
-        if (!confirm) return;
-
-        try {
-            console.log('🚪 Déconnexion...');
-            
-            // Déconnecter Colyseus d'abord
-            if (this.colyseusConnected) {
-                await colyseusManager.disconnect();
+        // Animation d'entrée
+        elementsToDestroy.forEach((element, index) => {
+            if (element && element !== overlay) {
+                element.setAlpha(0);
+                element.setScale(0.9);
+                
+                this.tweens.add({
+                    targets: element,
+                    alpha: 1,
+                    scaleX: 1,
+                    scaleY: 1,
+                    duration: 300,
+                    delay: index * 20,
+                    ease: 'Back.easeOut'
+                });
             }
-            
-            this.cleanup();
-            await auth.logout();
-            this.gameInstance?.clearAuthData();
-            this.showMessage('Déconnexion réussie', 'success');
-            this.scene.start('AuthScene');
-        } catch (error) {
-            console.error('❌ Erreur déconnexion:', error);
-            this.cleanup();
-            this.gameInstance?.clearAuthData();
-            this.showMessage('Déconnexion locale effectuée', 'info');
-            this.scene.start('AuthScene');
-        }
+        });
     }
-
+    
+    /**
+     * Afficher un message/notification
+     */
     showMessage(message, type = 'info') {
+        // Utiliser le système de notification global s'il existe
         if (window.NotificationManager) {
             window.NotificationManager.show(message, type);
         } else {
-            console.log(`[${type.toUpperCase()}] ${message}`);
+            // Fallback console
+            const prefix = `[${type.toUpperCase()}]`;
+            console.log(`${prefix} ${message}`);
+            
+            // Créer une notification simple
+            this.createSimpleNotification(message, type);
         }
     }
+    
+    /**
+     * Créer une notification simple
+     */
+    createSimpleNotification(message, type) {
+        const { width } = this.scale;
+        
+        // Couleurs selon le type
+        const colors = {
+            info: 0x4682B4,
+            success: 0x32CD32,
+            warning: 0xFF8C00,
+            error: 0xDC143C
+        };
+        
+        const color = colors[type] || colors.info;
+        
+        // Créer la notification
+        const notificationBg = this.add.graphics();
+        notificationBg.fillStyle(color, 0.9);
+        notificationBg.fillRoundedRect(20, 20, width - 40, 60, 8);
+        notificationBg.setDepth(2000);
+        
+        const notificationText = this.add.text(width / 2, 50, message, {
+            fontSize: this.isMobile ? '12px' : '14px',
+            fontFamily: 'Arial, sans-serif',
+            fontWeight: 'bold',
+            fill: '#FFFFFF',
+            wordWrap: { width: width - 60 },
+            align: 'center'
+        }).setOrigin(0.5).setDepth(2001);
+        
+        // Animation d'entrée
+        notificationBg.setAlpha(0);
+        notificationText.setAlpha(0);
+        
+        this.tweens.add({
+            targets: [notificationBg, notificationText],
+            alpha: 1,
+            duration: 200,
+            ease: 'Power2'
+        });
+        
+        // Auto-suppression après 3 secondes
+        this.time.delayedCall(3000, () => {
+            this.tweens.add({
+                targets: [notificationBg, notificationText],
+                alpha: 0,
+                duration: 200,
+                onComplete: () => {
+                    notificationBg.destroy();
+                    notificationText.destroy();
+                }
+            });
+        });
+    }
 
-    setupInputEvents() {
-        if (!this.isMobile) {
+    // === GESTION DES ENTRÉES ===
+    
+    /**
+     * Configurer les handlers d'entrée
+     */
+    setupInputHandlers() {
+        // Navigation clavier si pas mobile
+        if (!this.isMobile && this.input.keyboard) {
             this.input.keyboard.on('keydown-LEFT', () => {
-                const newIndex = Math.max(0, this.currentTab - 1);
-                this.switchToTab(newIndex);
+                if (this.panelManager) {
+                    this.panelManager.previousTab();
+                }
             });
             
             this.input.keyboard.on('keydown-RIGHT', () => {
-                const newIndex = Math.min(this.tabs.length - 1, this.currentTab + 1);
-                this.switchToTab(newIndex);
+                if (this.panelManager) {
+                    this.panelManager.nextTab();
+                }
+            });
+            
+            // Échap pour annuler recherche
+            this.input.keyboard.on('keydown-ESC', () => {
+                if (this.colyseusState.isSearchingBattle) {
+                    this.handleCancelSearch();
+                }
             });
         }
+        
+        console.log('⌨️ Handlers d\'entrée configurés');
     }
 
+    // === ANIMATIONS ===
+    
+    /**
+     * Animation d'entrée de la scène
+     */
     playEntranceAnimation() {
+        // Fade in de la caméra
         this.cameras.main.setAlpha(0);
         this.tweens.add({
             targets: this.cameras.main,
@@ -1023,220 +1018,247 @@ export default class ClashMenuScene extends Phaser.Scene {
             ease: 'Power2'
         });
         
-        if (this.clashHeader) {
+        // Animation du header
+        if (this.clashHeader && this.clashHeader.show) {
             this.clashHeader.show();
         }
+        
+        // Animation du panel manager
+        if (this.panelManager && this.panelManager.playEntranceAnimation) {
+            this.time.delayedCall(200, () => {
+                this.panelManager.playEntranceAnimation();
+            });
+        }
+        
+        console.log('🎬 Animation d\'entrée jouée');
     }
 
+    // === MÉTHODES PUBLIQUES POUR INTÉGRATION ===
+    
+    /**
+     * API publique pour accès externe
+     */
+    
+    // Obtenir l'état Colyseus
+    getColyseusState() {
+        return { ...this.colyseusState };
+    }
+    
+    // Obtenir le panel manager
+    getPanelManager() {
+        return this.panelManager;
+    }
+    
+    // Obtenir l'utilisateur actuel
+    getCurrentUser() {
+        return this.currentUser;
+    }
+    
+    // Changer de panel programmatiquement
+    switchToPanel(panelId) {
+        if (this.panelManager) {
+            return this.panelManager.showPanel(panelId);
+        }
+        return false;
+    }
+    
+    // Recharger un panel
+    reloadPanel(panelId) {
+        if (this.panelManager) {
+            return this.panelManager.reloadPanel(panelId);
+        }
+        return false;
+    }
+
+    // === NETTOYAGE ===
+    
+    /**
+     * Nettoyer les ressources
+     */
     cleanup() {
         console.log('🧹 Nettoyage ClashMenuScene...');
         
-        // Nettoyer Colyseus
-        if (this.colyseusConnected) {
-            colyseusManager.disconnect();
+        // Déconnecter Colyseus
+        if (this.colyseusState.connected) {
+            colyseusManager.disconnect().catch(error => {
+                console.warn('⚠️ Erreur déconnexion Colyseus:', error);
+            });
         }
         
         // Nettoyer les callbacks Colyseus
-        Object.keys(colyseusManager.callbacks).forEach(key => {
-            colyseusManager.off(key.replace('on', '').toLowerCase());
-        });
+        this.cleanupColyseusCallbacks();
         
+        // Nettoyer les composants
         if (this.clashHeader) {
             this.clashHeader.destroy();
             this.clashHeader = null;
         }
         
-        // Nettoyer les références UI temps réel
-        this.trophyText = null;
-        this.arenaName = null;
-        this.progressFill = null;
-        this.onlinePlayersText = null;
-        this.battleButton = null;
-    }
-
-    update() {
-        if (!auth.isAuthenticated()) {
-            console.warn('⚠️ Perte d\'authentification détectée');
-            this.cleanup();
-            this.scene.start('AuthScene');
+        if (this.panelManager) {
+            this.panelManager.destroy();
+            this.panelManager = null;
         }
         
-        // Mettre à jour l'indicateur de connexion Colyseus
-        if (this.connectionStatus) {
-            this.connectionStatus.setText(this.colyseusConnected ? '🟢' : '🔴');
-        }
+        // Reset état
+        this.colyseusState = {
+            connected: false,
+            realtimeProfile: null,
+            globalStats: { totalPlayers: 0, playersOnline: 0, playersSearching: 0 },
+            isSearchingBattle: false,
+            currentMatch: null
+        };
+        
+        console.log('✅ Nettoyage terminé');
+    }
+    
+    /**
+     * Nettoyer les callbacks Colyseus
+     */
+    cleanupColyseusCallbacks() {
+        const eventsToClean = [
+            'connected', 'disconnected', 'profileUpdated', 'globalStatsUpdated',
+            'searchStarted', 'searchCancelled', 'matchFound', 'battleResult',
+            'leaderboard', 'error'
+        ];
+        
+        eventsToClean.forEach(event => {
+            colyseusManager.off(event);
+        });
+        
+        console.log('🧹 Callbacks Colyseus nettoyés');
     }
 
-    destroy() {
-        console.log('🧹 ClashMenuScene détruite');
-        this.cleanup();
-        super.destroy();
+    // === DEBUG ET DÉVELOPPEMENT ===
+    
+    /**
+     * Méthodes de debug pour développement
+     */
+    
+    // Simuler connexion Colyseus
+    debugSimulateColyseusConnection() {
+        if (this.colyseusState.connected) {
+            console.log('🔌 Simulation déconnexion Colyseus');
+            this.colyseusState.connected = false;
+            this.notifyBattlePanel('setColyseusConnected', false);
+        } else {
+            console.log('🔌 Simulation connexion Colyseus');
+            this.colyseusState.connected = true;
+            this.notifyBattlePanel('setColyseusConnected', true);
+        }
+    }
+    
+    // Simuler recherche de bataille
+    debugSimulateBattleSearch() {
+        if (this.colyseusState.isSearchingBattle) {
+            console.log('❌ Simulation annulation recherche');
+            this.colyseusState.isSearchingBattle = false;
+            this.notifyBattlePanel('setSearchState', false);
+        } else {
+            console.log('⚔️ Simulation début recherche');
+            this.colyseusState.isSearchingBattle = true;
+            this.notifyBattlePanel('setSearchState', true, { message: 'Recherche d\'adversaire...' });
+        }
+    }
+    
+    // Simuler match trouvé
+    debugSimulateMatchFound() {
+        const mockMatchData = {
+            opponent: {
+                username: 'TestOpponent',
+                trophies: 1200,
+                level: 8
+            },
+            battleType: 'ranked',
+            arena: 'arena_2'
+        };
+        
+        console.log('🎯 Simulation match trouvé');
+        this.handleMatchFound(mockMatchData);
+    }
+    
+    // Forcer mise à jour données
+    debugForceDataUpdate() {
+        const mockProfile = {
+            trophies: this.currentUser?.playerStats?.trophies + 25,
+            level: this.currentUser?.playerStats?.level,
+            experience: (this.currentUser?.playerStats?.experience || 0) + 100
+        };
+        
+        console.log('📊 Simulation mise à jour profil');
+        this.colyseusState.realtimeProfile = mockProfile;
+        this.updateUIFromRealtimeData();
     }
 }
-// === TEST DIRECT VIA LA SCÈNE ===
 
-// Fonction pour tester directement depuis ClashMenuScene
-window.testDirectColyseus = () => {
-  console.group('🎯 TEST DIRECT COLYSEUS VIA SCÈNE');
-  
-  // Récupérer la scène active
-  const gameInstance = window.ChimArenaInstance;
-  const scenes = gameInstance.game.scene.getScenes();
-  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
-  
-  if (!clashScene) {
-    console.error('❌ ClashMenuScene non trouvée');
-    return;
-  }
-  
-  console.log('🏆 ClashMenuScene trouvée');
-  
-  // 1. Essayer d'accéder au colyseusManager via l'import dans la scène
-  console.log('🔍 Recherche colyseusManager...');
-  
-  // Le colyseusManager est importé dans ClashMenuScene.js comme :
-  // import colyseusManager from '../managers/ColyseusManager';
-  
-  // On va essayer de déclencher la méthode setupColyseus() directement
-  if (typeof clashScene.setupColyseus === 'function') {
-    console.log('🎯 setupColyseus trouvée, tentative d\'exécution...');
-    try {
-      clashScene.setupColyseus();
-      console.log('✅ setupColyseus exécutée');
-    } catch (error) {
-      console.error('❌ Erreur setupColyseus:', error);
-    }
-  } else {
-    console.log('⚠️ setupColyseus non trouvée');
-  }
-  
-  // 2. Vérifier l'état de connexion
-  console.log('📊 État actuel scène:', {
-    colyseusConnected: clashScene.colyseusConnected,
-    realtimeProfile: clashScene.realtimeProfile,
-    globalStats: clashScene.globalStats
-  });
-  
-  // 3. Essayer de simuler la connexion manuellement
-  console.log('🔧 Tentative de connexion manuelle...');
-  
-  // Si on peut accéder à colyseusManager via une propriété de la scène
-  const possibleManagers = [
-    'colyseusManager',
-    'manager', 
-    'wsManager',
-    'connectionManager'
-  ];
-  
-  let foundManager = null;
-  for (const prop of possibleManagers) {
-    if (clashScene[prop]) {
-      console.log(`✅ Manager trouvé: ${prop}`);
-      foundManager = clashScene[prop];
-      break;
-    }
-  }
-  
-  if (!foundManager) {
-    console.log('⚠️ Aucun manager trouvé dans la scène');
-    console.log('🔍 Propriétés de la scène contenant "manager":', 
-      Object.keys(clashScene).filter(k => k.toLowerCase().includes('manager'))
-    );
-  } else {
-    console.log('🎯 Test connexion via manager trouvé...');
-    if (typeof foundManager.connect === 'function') {
-      foundManager.connect().then(result => {
-        console.log('📡 Résultat connexion:', result);
-      }).catch(error => {
-        console.error('❌ Erreur connexion:', error);
-      });
-    }
-  }
-  
-  console.groupEnd();
-};
+// === EXPORTS ET FONCTIONS GLOBALES DE DEBUG ===
 
-// Test du bouton bataille
-window.testBattleButton = () => {
-  console.group('⚔️ TEST BOUTON BATAILLE');
-  
-  const gameInstance = window.ChimArenaInstance;
-  const scenes = gameInstance.game.scene.getScenes();
-  const clashScene = scenes.find(s => s.scene.key === 'ClashMenuScene');
-  
-  if (!clashScene) {
-    console.error('❌ ClashMenuScene non trouvée');
-    return;
-  }
-  
-  // Simuler le clic sur le bouton bataille
-  if (typeof clashScene.handleBattleClick === 'function') {
-    console.log('🎯 Simulation clic bouton bataille...');
-    try {
-      clashScene.handleBattleClick();
-      console.log('✅ Clic simulé');
-    } catch (error) {
-      console.error('❌ Erreur simulation:', error);
-    }
-  } else {
-    console.log('❌ handleBattleClick non trouvée');
-  }
-  
-  console.groupEnd();
-};
-
-// Forcer la connexion Colyseus avec URL directe
-window.forceColyseusConnection = () => {
-  console.group('🚀 FORCE CONNEXION COLYSEUS');
-  
-  // Test avec l'URL correcte
-  const url = 'wss://chimarena.cloud:2567';
-  console.log(`🔗 Test connexion directe: ${url}`);
-  
-  try {
-    const ws = new WebSocket(url);
-    
-    ws.onopen = () => {
-      console.log('✅ WebSocket connecté !');
-      
-      // Envoyer un message de test (format Colyseus)
-      const joinMessage = {
-        method: 'joinOrCreate',
-        roomName: 'world',
-        options: {
-          token: 'test' // Tu devras mettre le vrai token ici
+// Fonctions de test globales pour développement
+if (typeof window !== 'undefined') {
+    // Test des panels
+    window.testSwitchPanel = (panelId) => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.switchToPanel(panelId);
+            console.log(`📱 Test: Basculement vers panel ${panelId}`);
+        } else {
+            console.error('❌ ClashMenuScene non trouvée');
         }
-      };
-      
-      ws.send(JSON.stringify(joinMessage));
-      console.log('📤 Message envoyé:', joinMessage);
     };
     
-    ws.onmessage = (event) => {
-      console.log('📨 Message reçu:', event.data);
+    // Test Colyseus
+    window.testColyseus = () => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.debugSimulateColyseusConnection();
+            console.log('🔌 Test: Simulation connexion Colyseus');
+        } else {
+            console.error('❌ ClashMenuScene non trouvée');
+        }
     };
     
-    ws.onerror = (error) => {
-      console.error('❌ Erreur WebSocket:', error);
+    // Test recherche bataille
+    window.testBattleSearch = () => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.debugSimulateBattleSearch();
+            console.log('⚔️ Test: Simulation recherche bataille');
+        } else {
+            console.error('❌ ClashMenuScene non trouvée');
+        }
     };
     
-    ws.onclose = (event) => {
-      console.log(`🔌 WebSocket fermé: ${event.code} - ${event.reason}`);
+    // Test match trouvé
+    window.testMatchFound = () => {
+        const gameInstance = window.ChimArenaInstance;
+        const scenes = gameInstance?.game?.scene?.getScenes();
+        const clashScene = scenes?.find(s => s.scene.key === 'ClashMenuScene');
+        
+        if (clashScene) {
+            clashScene.debugSimulateMatchFound();
+            console.log('🎯 Test: Simulation match trouvé');
+        } else {
+            console.error('❌ ClashMenuScene non trouvée');
+        }
     };
     
-  } catch (error) {
-    console.error('❌ Erreur création WebSocket:', error);
-  }
-  
-  console.groupEnd();
-};
+    // Afficher les commandes de test
+    console.log(`
+🎯 === COMMANDES DE TEST DISPONIBLES ===
 
-console.log(`
-🎯 === TESTS DIRECTS DISPONIBLES ===
+▶️ testSwitchPanel('battle') - Basculer vers un panel
+▶️ testColyseus() - Tester connexion Colyseus
+▶️ testBattleSearch() - Tester recherche bataille
+▶️ testMatchFound() - Tester match trouvé
 
-▶️ testDirectColyseus() - Test via scène ClashMenu
-▶️ testBattleButton() - Simuler clic bataille  
-▶️ forceColyseusConnection() - Force connexion directe
-
-COMMENCE PAR: testDirectColyseus()
-`);
+PANELS DISPONIBLES: battle, collection, deck, clan, profile
+    `);
+}
