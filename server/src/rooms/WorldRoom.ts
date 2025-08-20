@@ -1,4 +1,4 @@
-// server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena COMPLÈTE AVEC JWT
+// server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 import * as jwt from 'jsonwebtoken';
@@ -87,6 +87,11 @@ export class WorldRoom extends Room<WorldState> {
   // Configurations JWT
   private JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
   
+  // Utilitaire mathématique pour remplacer Phaser.Math
+  private randomBetween(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+  
   onCreate(options: any) {
     console.log('🌍 WorldRoom créée avec options:', options);
     this.setState(new WorldState());
@@ -99,15 +104,24 @@ export class WorldRoom extends Room<WorldState> {
     
     // 📨 HANDLERS DE MESSAGES
     this.onMessage("get_arena_info", (client, message) => {
-      this.handleGetArenaInfo(client, this.state.players.get(client.sessionId)!);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.handleGetArenaInfo(client, player);
+      }
     });
     
     this.onMessage("search_battle", (client, message) => {
-      this.handleSearchBattle(client, this.state.players.get(client.sessionId)!);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.handleSearchBattle(client, player);
+      }
     });
     
     this.onMessage("cancel_search", (client, message) => {
-      this.handleCancelSearch(client, this.state.players.get(client.sessionId)!);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.handleCancelSearch(client, player);
+      }
     });
     
     this.onMessage("get_leaderboard", (client, message) => {
@@ -115,11 +129,17 @@ export class WorldRoom extends Room<WorldState> {
     });
     
     this.onMessage("update_status", (client, message) => {
-      this.handleUpdateStatus(client, this.state.players.get(client.sessionId)!, message);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.handleUpdateStatus(client, player, message);
+      }
     });
     
     this.onMessage("heartbeat", (client, message) => {
-      this.handleHeartbeat(client, this.state.players.get(client.sessionId)!);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.handleHeartbeat(client, player);
+      }
     });
     
     // Mise à jour périodique des stats
@@ -159,7 +179,7 @@ export class WorldRoom extends Room<WorldState> {
         throw new Error('Utilisateur non trouvé');
       }
       
-      // Vérifier si l'utilisateur est banni (même logique qu'HTTP)
+      // Vérifier si l'utilisateur est banni
       if (user.accountInfo?.isBanned) {
         const banMessage = user.accountInfo.banReason || 'Compte banni';
         const banExpires = user.accountInfo.banExpires;
@@ -216,17 +236,15 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  // 🔐 VALIDATION DU JWT (EXACTEMENT comme authMiddleware.ts)
+  // 🔐 VALIDATION DU JWT
   private async validateJWT(token: string): Promise<any> {
     try {
       if (!this.JWT_ACCESS_SECRET) {
         throw new Error('JWT_ACCESS_SECRET non configuré');
       }
       
-      // Décoder et valider le JWT (même logique qu'authMiddleware)
+      // Décoder et valider le JWT
       const decoded = jwt.verify(token, this.JWT_ACCESS_SECRET);
-      
-      // Vérifier que le token n'est pas expiré (déjà géré par jwt.verify)
       return decoded;
     } catch (error) {
       console.error('❌ Erreur validation JWT:', error);
@@ -312,10 +330,10 @@ export class WorldRoom extends Room<WorldState> {
       if (player.status === "searching") {
         this.simulateMatchFound(client, player);
       }
-    }, Phaser.Math.Between(3000, 8000)); // 3-8 secondes aléatoires
+    }, this.randomBetween(3000, 8000)); // 3-8 secondes aléatoires
   }
 
-  // 🎯 SIMULATION MATCH TROUVÉ (temporaire)
+  // 🎯 SIMULATION MATCH TROUVÉ
   private simulateMatchFound(client: Client, player: WorldPlayer) {
     console.log(`🎯 Match simulé trouvé pour ${player.username}`);
     
@@ -337,13 +355,13 @@ export class WorldRoom extends Room<WorldState> {
     });
     
     // Simuler fin de combat après 20-40 secondes
-    const battleDuration = Phaser.Math.Between(20000, 40000);
+    const battleDuration = this.randomBetween(20000, 40000);
     this.clock.setTimeout(() => {
       this.simulateBattleEnd(client, player, Math.max(0, opponentTrophies));
     }, battleDuration);
   }
 
-  // 🏆 SIMULATION FIN DE COMBAT (temporaire)
+  // 🏆 SIMULATION FIN DE COMBAT
   private async simulateBattleEnd(client: Client, player: WorldPlayer, opponentTrophies: number) {
     // Calculer les chances de victoire selon la différence de trophées
     const trophyDifference = opponentTrophies - player.trophies;
@@ -389,7 +407,7 @@ export class WorldRoom extends Room<WorldState> {
     // Calculer les récompenses
     const baseGold = isWin ? 100 : 25;
     const baseExp = isWin ? 50 : 10;
-    const bonusGold = Math.abs(trophyChange) * 2; // Bonus selon les trophées gagnés/perdus
+    const bonusGold = Math.abs(trophyChange) * 2;
     
     // Envoyer le résultat
     client.send("battle_result", {
@@ -403,7 +421,7 @@ export class WorldRoom extends Room<WorldState> {
         experience: baseExp,
         cards: isWin ? 1 : 0
       },
-      battleDuration: "2:34", // Durée fictive
+      battleDuration: "2:34",
       opponentTrophies
     });
     
@@ -480,7 +498,7 @@ export class WorldRoom extends Room<WorldState> {
     const players = Array.from(this.state.players.values());
     
     this.state.totalPlayers = players.length;
-    this.state.playersOnline = players.filter(p => now - p.lastSeen < 120000).length; // 2 minutes
+    this.state.playersOnline = players.filter(p => now - p.lastSeen < 120000).length;
     this.state.playersSearching = players.filter(p => p.status === "searching").length;
   }
 
@@ -548,14 +566,13 @@ export class WorldRoom extends Room<WorldState> {
       if (updates.isWin !== undefined) {
         if (updates.isWin) {
           user.gameStats.wins++;
-          // Gérer les win streaks
           user.gameStats.winStreak++;
           if (user.gameStats.winStreak > user.gameStats.bestWinStreak) {
             user.gameStats.bestWinStreak = user.gameStats.winStreak;
           }
         } else {
           user.gameStats.losses++;
-          user.gameStats.winStreak = 0; // Reset win streak
+          user.gameStats.winStreak = 0;
         }
         user.gameStats.totalGames++;
         
@@ -590,32 +607,7 @@ export class WorldRoom extends Room<WorldState> {
   // 🗑️ NETTOYAGE À LA FERMETURE
   onDispose() {
     console.log('🗑️ WorldRoom fermée - Nettoyage en cours...');
-    
-    // Nettoyer le cache
     this.userCache.clear();
-    
-    // Arrêter tous les timers (géré automatiquement par Colyseus)
-    
     console.log('✅ WorldRoom nettoyée');
   }
-}
-
-// 🧮 AJOUT DE PHASER.MATH POUR LA COMPATIBILITÉ
-declare global {
-  namespace Phaser {
-    namespace Math {
-      function Between(min: number, max: number): number;
-    }
-  }
-}
-
-// Fallback si Phaser.Math n'est pas disponible côté serveur
-if (typeof Phaser === 'undefined') {
-  (global as any).Phaser = {
-    Math: {
-      Between: (min: number, max: number): number => {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-      }
-    }
-  };
 }
