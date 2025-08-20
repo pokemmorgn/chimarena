@@ -160,7 +160,7 @@ class SecureConfigManager extends EventEmitter {
         autoReconnect: true
       },
 auth: {
-  // ⬇️ on utilise les 2 secrets
+  enabled: true, // ⬅️ Manquant actuellement
   accessTokenSecret: "ENV_OVERRIDE",
   refreshTokenSecret: "ENV_OVERRIDE",
   accessTokenExpiry: "15m",
@@ -174,6 +174,7 @@ auth: {
     maxAge: 604800000
   }
 },
+
       crypto: {
         enabled: true,
         metamask: {
