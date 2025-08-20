@@ -1,96 +1,32 @@
-// server/src/routes/cryptoRoutes.ts - VERSION COMPLÈTE avec logger intégré
-import { Router, Request, Response, NextFunction } from 'express';
+// server/src/routes/cryptoRoutes.ts - VERSION SIMPLIFIÉE
+import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { ethersHelper } from '../utils/ethersHelper';
 import User from '../models/User';
 import rateLimit from 'express-rate-limit';
-import { logger } from '../utils/Logger';
-import { configManager } from '../config/ConfigManager';
 
 const router = Router();
 
-// Helpers
-const toPosInt = (v: any, def: number) => {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : def;
-};
+// Rate limiting simple
+const cryptoLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 20, // 20 requêtes par heure
+  message: { error: 'Trop de requêtes crypto, réessayez plus tard' },
+  handler: (req: Request, res: Response) => {
+    console.log(`[CRYPTO] Rate limit atteint - IP: ${req.ip}, Path: ${req.path}`);
+    res.status(429).json({ error: 'Trop de requêtes crypto, réessayez plus tard' });
+  }
+});
 
-const createCryptoLimiter = () => {
-  // Essaie la config, sinon ENV, sinon valeurs par défaut
-  const cfg = ((): any => {
-    try { return configManager?.get?.('security.rateLimits.crypto'); }
-    catch { return undefined; }
-  })() || {};
-
-  const windowMs = toPosInt(
-    cfg.windowMs ?? process.env.CRYPTO_RATE_WINDOW_MS, 
-    60_000 // 1 minute par défaut
-  );
-
-  const max = toPosInt(
-    cfg.max ?? process.env.CRYPTO_RATE_MAX, 
-    10 // 10 req/min par défaut
-  );
-
-  const message =
-    (cfg.message as string) ||
-    process.env.CRYPTO_RATE_MESSAGE ||
-    "Trop de requêtes sur l'API crypto. Réessaie plus tard.";
-
-  return rateLimit({
-    windowMs,
-    max,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: message, retryAfter: Math.ceil(windowMs / 1000) },
-    handler: (req: Request, res: Response) => {
-      const requestLogger = logger.crypto.withRequest(
-        (req as any).requestId,
-        req.ip,
-        req.get('User-Agent')
-      );
-      requestLogger.warn('Rate limit crypto atteint', {
-        userId: (req as any).user?.id,
-        path: req.path,
-        method: req.method
-      });
-      res.status(429).json({ error: message });
-    },
-    skip: (req) => req.path === "/health",
-  });
-};
-
-// POST /api/crypto/connect-wallet - Connexion MetaMask avec logs détaillés
+// POST /api/crypto/connect-wallet - Connexion MetaMask
 router.post('/connect-wallet', 
-  createCryptoLimiter(),
+  cryptoLimiter,
   authenticateToken, 
   async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('wallet_connect');
-
     try {
       if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
+        console.log(`[CRYPTO] Connect wallet - Authentification manquante`);
         return res.status(401).json({ success: false, message: 'Authentification requise' });
-      }
-
-      // Vérifier si les fonctionnalités crypto sont activées
-      if (!configManager.get('crypto.enabled', true)) {
-        requestLogger.warn('Crypto désactivé par configuration');
-        return res.status(503).json({ 
-          success: false, 
-          message: 'Fonctionnalités crypto temporairement désactivées' 
-        });
-      }
-
-      if (!configManager.get('crypto.metamask.enabled', true)) {
-        requestLogger.warn('MetaMask désactivé par configuration');
-        return res.status(503).json({ 
-          success: false, 
-          message: 'Connexion MetaMask temporairement désactivée' 
-        });
       }
 
       const { address, signature, message } = req.body as {
@@ -99,19 +35,11 @@ router.post('/connect-wallet',
         message?: string;
       };
 
-      requestLogger.info('Tentative connexion wallet', { 
-        address: address ? ethersHelper.formatAddress(address) : undefined,
-        hasSignature: !!signature,
-        hasMessage: !!message
-      });
+      console.log(`[CRYPTO] Tentative connexion wallet - User: ${req.user.id}, Address: ${address ? ethersHelper.formatAddress(address) : 'undefined'}`);
 
       // Validation basique
       if (!address || !signature || !message) {
-        requestLogger.warn('Paramètres manquants', { 
-          hasAddress: !!address,
-          hasSignature: !!signature,
-          hasMessage: !!message
-        });
+        console.log(`[CRYPTO] Connect wallet échoué - Paramètres manquants`);
         return res.status(400).json({ 
           success: false, 
           message: 'Adresse, signature et message requis' 
@@ -127,10 +55,7 @@ router.post('/connect-wallet',
       );
 
       if (!validation.isValid) {
-        requestLogger.warn('Validation wallet échouée', { 
-          address: ethersHelper.formatAddress(address),
-          error: validation.error
-        });
+        console.log(`[CRYPTO] Connect wallet échoué - Validation: ${validation.error}`);
         return res.status(400).json({ 
           success: false, 
           message: validation.error 
@@ -144,10 +69,7 @@ router.post('/connect-wallet',
       });
 
       if (existingUser) {
-        requestLogger.warn('Adresse déjà utilisée', { 
-          address: ethersHelper.formatAddress(address),
-          conflictUserId: existingUser._id?.toString()
-        });
+        console.log(`[CRYPTO] Connect wallet échoué - Adresse déjà utilisée: ${ethersHelper.formatAddress(address)}`);
         return res.status(409).json({ 
           success: false, 
           message: 'Cette adresse wallet est déjà connectée à un autre compte' 
@@ -157,85 +79,50 @@ router.post('/connect-wallet',
       // Mettre à jour l'utilisateur
       const user: any = await User.findById(req.user.id);
       if (!user) {
-        requestLogger.error('Utilisateur non trouvé');
+        console.log(`[CRYPTO] Connect wallet échoué - Utilisateur non trouvé: ${req.user.id}`);
         return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
-      }
-
-      // Vérifier les limites de connexions par heure
-      const maxConnections = configManager.get('crypto.metamask.maxConnectionsPerHour', 3);
-      const currentConnections = user.cryptoWallet?.connectionCount || 0;
-      const lastConnection = user.cryptoWallet?.connectedAt;
-      
-      if (lastConnection) {
-        const hoursSince = (Date.now() - new Date(lastConnection).getTime()) / (1000 * 60 * 60);
-        if (hoursSince < 1 && currentConnections >= maxConnections) {
-          requestLogger.warn('Limite connexions atteinte', { 
-            currentConnections,
-            maxConnections,
-            hoursSince: Math.round(hoursSince * 100) / 100
-          });
-          return res.status(429).json({ 
-            success: false, 
-            message: `Limite de ${maxConnections} connexions par heure atteinte` 
-          });
-        }
       }
 
       // Connecter le wallet
       await user.connectWallet(address, 1, req.ip); // Ethereum mainnet par défaut
 
-      requestLogger.info('Wallet connecté avec succès', { 
-        address: ethersHelper.formatAddress(address),
-        userId: user._id.toString(),
-        username: user.username,
-        connectionCount: user.cryptoWallet.connectionCount
-      });
+      console.log(`[CRYPTO] Wallet connecté avec succès - User: ${user.username}, Address: ${ethersHelper.formatAddress(address)}`);
 
       res.json({
         success: true,
         message: 'Wallet connecté avec succès',
         walletInfo: {
           address: ethersHelper.formatAddress(address),
-          fullAddress: address, // Pour le client
+          fullAddress: address,
           connectedAt: user.cryptoWallet.connectedAt,
           connectionCount: user.cryptoWallet.connectionCount,
         }
       });
 
     } catch (error) {
-      requestLogger.error('Erreur connexion wallet', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
+      console.error(`[CRYPTO] Erreur connexion wallet:`, (error as Error).message);
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
   }
 );
 
-// POST /api/crypto/disconnect-wallet - Déconnexion wallet avec logs
+// POST /api/crypto/disconnect-wallet - Déconnexion wallet
 router.post('/disconnect-wallet',
-  createCryptoLimiter(),
+  cryptoLimiter,
   authenticateToken,
   async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('wallet_disconnect');
-
     try {
       if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
         return res.status(401).json({ success: false, message: 'Authentification requise' });
       }
 
       const user: any = await User.findById(req.user.id);
       if (!user) {
-        requestLogger.error('Utilisateur non trouvé');
         return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
       }
 
       if (!user.cryptoWallet?.address) {
-        requestLogger.warn('Aucun wallet connecté');
+        console.log(`[CRYPTO] Disconnect wallet - Aucun wallet connecté: ${user.username}`);
         return res.status(400).json({ 
           success: false, 
           message: 'Aucun wallet connecté' 
@@ -247,11 +134,7 @@ router.post('/disconnect-wallet',
       // Déconnecter le wallet
       await user.disconnectWallet();
 
-      requestLogger.info('Wallet déconnecté avec succès', { 
-        address: ethersHelper.formatAddress(walletAddress),
-        userId: user._id.toString(),
-        username: user.username
-      });
+      console.log(`[CRYPTO] Wallet déconnecté - User: ${user.username}, Address: ${ethersHelper.formatAddress(walletAddress)}`);
 
       res.json({
         success: true,
@@ -259,38 +142,28 @@ router.post('/disconnect-wallet',
       });
 
     } catch (error) {
-      requestLogger.error('Erreur déconnexion wallet', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
+      console.error(`[CRYPTO] Erreur déconnexion wallet:`, (error as Error).message);
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
   }
 );
 
-// GET /api/crypto/wallet-info - Informations du wallet avec logs
+// GET /api/crypto/wallet-info - Informations du wallet
 router.get('/wallet-info',
   authenticateToken,
   async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('wallet_info');
-
     try {
       if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
         return res.status(401).json({ success: false, message: 'Authentification requise' });
       }
 
       const user: any = await User.findById(req.user.id);
       if (!user) {
-        requestLogger.error('Utilisateur non trouvé');
         return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
       }
 
       if (!user.cryptoWallet?.address) {
-        requestLogger.debug('Aucun wallet connecté');
+        console.log(`[CRYPTO] Wallet info - Aucun wallet: ${user.username}`);
         return res.json({
           success: true,
           wallet: null,
@@ -298,19 +171,13 @@ router.get('/wallet-info',
         });
       }
 
-      // Log avec niveau configurable
-      if (configManager.get('logging.modules.crypto.logAddresses', true)) {
-        requestLogger.debug('Informations wallet consultées', { 
-          address: ethersHelper.formatAddress(user.cryptoWallet.address),
-          connectionCount: user.cryptoWallet.connectionCount
-        });
-      }
+      console.log(`[CRYPTO] Wallet info consulté - User: ${user.username}, Address: ${ethersHelper.formatAddress(user.cryptoWallet.address)}`);
 
       res.json({
         success: true,
         wallet: {
           address: ethersHelper.formatAddress(user.cryptoWallet.address),
-          fullAddress: user.cryptoWallet.address, // Pour le client
+          fullAddress: user.cryptoWallet.address,
           connectedAt: user.cryptoWallet.connectedAt,
           lastActivity: user.cryptoWallet.lastActivity,
           connectionCount: user.cryptoWallet.connectionCount,
@@ -321,113 +188,25 @@ router.get('/wallet-info',
       });
 
     } catch (error) {
-      requestLogger.error('Erreur récupération wallet info', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
+      console.error(`[CRYPTO] Erreur wallet info:`, (error as Error).message);
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
   }
 );
 
-// POST /api/crypto/verify-signature - Vérification signature avec logs
-router.post('/verify-signature',
-  createCryptoLimiter(),
-  authenticateToken,
-  async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('verify_signature');
-
-    try {
-      const { address, message, signature } = req.body as {
-        address?: string;
-        message?: string;
-        signature?: string;
-      };
-
-      requestLogger.info('Vérification signature', { 
-        address: address ? ethersHelper.formatAddress(address) : undefined,
-        hasMessage: !!message,
-        hasSignature: !!signature
-      });
-
-      if (!address || !message || !signature) {
-        requestLogger.warn('Paramètres manquants pour vérification', { 
-          hasAddress: !!address,
-          hasMessage: !!message,
-          hasSignature: !!signature
-        });
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Adresse, message et signature requis' 
-        });
-      }
-
-      if (!ethersHelper.isValidAddress(address)) {
-        requestLogger.warn('Adresse invalide', { address });
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Adresse Ethereum invalide' 
-        });
-      }
-
-      const isValid = await ethersHelper.verifySignature(address, message, signature);
-
-      // Log signature seulement si activé (sécurité)
-      if (configManager.get('logging.modules.crypto.logSignatures', false)) {
-        requestLogger.debug('Résultat vérification signature', { 
-          address: ethersHelper.formatAddress(address),
-          valid: isValid,
-          signature: signature.substring(0, 10) + '...'
-        });
-      } else {
-        requestLogger.debug('Signature vérifiée', { 
-          address: ethersHelper.formatAddress(address),
-          valid: isValid
-        });
-      }
-
-      res.json({
-        success: true,
-        valid: isValid,
-        address: ethersHelper.formatAddress(address),
-        message: isValid ? 'Signature valide' : 'Signature invalide'
-      });
-
-    } catch (error) {
-      requestLogger.error('Erreur vérification signature', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
-      res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
-    }
-  }
-);
-
-// GET /api/crypto/challenge - Obtenir un challenge pour signature avec logs
+// GET /api/crypto/challenge - Obtenir un challenge pour signature
 router.get('/challenge',
   authenticateToken,
   async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('get_challenge');
-
     try {
       if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
         return res.status(401).json({ success: false, message: 'Authentification requise' });
       }
 
       const message = ethersHelper.generateConnectionMessage(req.user.id);
       const timestamp = Date.now();
 
-      requestLogger.debug('Challenge généré', { 
-        userId: req.user.id,
-        timestamp
-      });
+      console.log(`[CRYPTO] Challenge généré - User: ${req.user.id}`);
 
       res.json({
         success: true,
@@ -437,277 +216,10 @@ router.get('/challenge',
       });
 
     } catch (error) {
-      requestLogger.error('Erreur génération challenge', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
+      console.error(`[CRYPTO] Erreur génération challenge:`, (error as Error).message);
       res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
   }
 );
-
-// GET /api/crypto/balance - Balance crypto (placeholder pour futures fonctionnalités)
-router.get('/balance',
-  authenticateToken,
-  async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('get_balance');
-
-    try {
-      if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
-        return res.status(401).json({ success: false, message: 'Authentification requise' });
-      }
-
-      const user: any = await User.findById(req.user.id);
-      if (!user) {
-        requestLogger.error('Utilisateur non trouvé');
-        return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
-      }
-
-      if (!user.isWalletConnected()) {
-        requestLogger.warn('Wallet non connecté pour balance');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Wallet non connecté' 
-        });
-      }
-
-      // Pour l'instant, retourner balance fictive
-      const balance = user.cryptoWallet?.balance || 0;
-
-      requestLogger.debug('Balance consultée', { 
-        address: ethersHelper.formatAddress(user.cryptoWallet.address),
-        balance
-      });
-
-      res.json({
-        success: true,
-        balance,
-        currency: 'ETH',
-        address: ethersHelper.formatAddress(user.cryptoWallet.address)
-      });
-
-    } catch (error) {
-      requestLogger.error('Erreur récupération balance', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
-      res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
-    }
-  }
-);
-
-// POST /api/crypto/withdraw - Retrait crypto (placeholder sécurisé)
-router.post('/withdraw',
-  createCryptoLimiter(),
-  authenticateToken,
-  async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('withdraw');
-
-    try {
-      if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
-        return res.status(401).json({ success: false, message: 'Authentification requise' });
-      }
-
-      const { amount, toAddress, signature } = req.body as {
-        amount?: number;
-        toAddress?: string;
-        signature?: string;
-      };
-
-      requestLogger.warn('Tentative de retrait', { 
-        amount,
-        toAddress: toAddress ? ethersHelper.formatAddress(toAddress) : undefined,
-        hasSignature: !!signature
-      });
-
-      // Validation de base
-      if (!amount || !toAddress || !signature) {
-        requestLogger.warn('Paramètres retrait manquants', { 
-          hasAmount: !!amount,
-          hasToAddress: !!toAddress,
-          hasSignature: !!signature
-        });
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Montant, adresse de destination et signature requis' 
-        });
-      }
-
-      if (!ethersHelper.isValidAddress(toAddress)) {
-        requestLogger.warn('Adresse destination invalide', { 
-          toAddress: toAddress 
-        });
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Adresse de destination invalide' 
-        });
-      }
-
-      if (amount <= 0) {
-        requestLogger.warn('Montant retrait invalide', { amount });
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Montant invalide' 
-        });
-      }
-
-      const user: any = await User.findById(req.user.id);
-      if (!user || !user.isWalletConnected()) {
-        requestLogger.warn('Retrait sans wallet connecté');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Wallet non connecté' 
-        });
-      }
-
-      // Vérifier les limites de retrait
-      const maxWithdrawals = configManager.get('crypto.security.maxWithdrawalsPerDay', 5);
-      const withdrawalCount = user.cryptoWallet?.withdrawalCount || 0;
-      const lastWithdrawal = user.cryptoWallet?.lastWithdrawal;
-      
-      if (lastWithdrawal) {
-        const hoursSince = (Date.now() - new Date(lastWithdrawal).getTime()) / (1000 * 60 * 60);
-        if (hoursSince < 24 && withdrawalCount >= maxWithdrawals) {
-          requestLogger.warn('Limite retraits atteinte', { 
-            withdrawalCount,
-            maxWithdrawals,
-            hoursSince: Math.round(hoursSince * 100) / 100
-          });
-          return res.status(429).json({ 
-            success: false, 
-            message: `Limite de ${maxWithdrawals} retraits par 24h atteinte` 
-          });
-        }
-      }
-
-      // Pour l'instant, fonctionnalité non implémentée
-      requestLogger.info('Retrait demandé (non implémenté)', { 
-        amount,
-        toAddress: ethersHelper.formatAddress(toAddress),
-        fromAddress: ethersHelper.formatAddress(user.cryptoWallet.address)
-      });
-
-      res.status(501).json({
-        success: false,
-        message: 'Fonctionnalité de retrait en cours de développement',
-        code: 'NOT_IMPLEMENTED'
-      });
-
-    } catch (error) {
-      requestLogger.error('Erreur retrait', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
-      res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
-    }
-  }
-);
-
-// GET /api/crypto/transactions - Historique des transactions (placeholder)
-router.get('/transactions',
-  authenticateToken,
-  async (req: AuthenticatedRequest, res: Response) => {
-    const requestLogger = logger.crypto.withUser(
-      req.user!.id, 
-      req.ip
-    ).withRequest((req as any).requestId).withAction('get_transactions');
-
-    try {
-      if (!req.user?.id) {
-        requestLogger.error('Authentification manquante');
-        return res.status(401).json({ success: false, message: 'Authentification requise' });
-      }
-
-      const user: any = await User.findById(req.user.id);
-      if (!user || !user.isWalletConnected()) {
-        requestLogger.warn('Historique sans wallet connecté');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Wallet non connecté' 
-        });
-      }
-
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
-
-      requestLogger.debug('Historique transactions demandé', { 
-        address: ethersHelper.formatAddress(user.cryptoWallet.address),
-        limit,
-        offset
-      });
-
-      // Pour l'instant, retourner historique vide
-      res.json({
-        success: true,
-        transactions: [],
-        pagination: {
-          limit,
-          offset,
-          total: 0,
-          hasMore: false
-        },
-        wallet: {
-          address: ethersHelper.formatAddress(user.cryptoWallet.address)
-        }
-      });
-
-    } catch (error) {
-      requestLogger.error('Erreur historique transactions', { 
-error: (error as Error)?.message,
-stack: configManager.isDebug() ? (error as Error)?.stack : undefined
-      });
-      res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
-    }
-  }
-);
-
-// Middleware de détection d'activité suspecte pour toutes les routes crypto
-router.use('*', (req: Request, res: Response, next: NextFunction) => {
-  const requestLogger = logger.security.withRequest(
-    (req as any).requestId, 
-    req.ip, 
-    req.get('User-Agent')
-  );
-
-  // Détecter les patterns suspects
-  const suspiciousPatterns = [
-    req.path.includes('../'),
-    req.path.includes('..\\'),
-    req.get('User-Agent')?.includes('bot'),
-    req.get('User-Agent')?.includes('crawler'),
-    req.get('User-Agent')?.includes('scanner'),
-  ];
-
-  const triggeredPatterns = suspiciousPatterns.map((p, i) => ({ index: i, triggered: p })).filter(p => p.triggered);
-
-  if (triggeredPatterns.length > 0) {
-    requestLogger.warn('Pattern suspect détecté sur route crypto', { 
-      path: req.path,
-      method: req.method,
-      userAgent: req.get('User-Agent'),
-      patterns: triggeredPatterns
-    });
-  }
-
-  // Vérifier si auto-détection activée
-  if (configManager.get('crypto.security.autoDetectSuspicious', true)) {
-    // Log pour analyse future
-    requestLogger.debug('Activité crypto surveillée', { 
-      path: req.path,
-      method: req.method,
-      userId: (req as any).user?.id
-    });
-  }
-
-  next();
-});
 
 export default router;
