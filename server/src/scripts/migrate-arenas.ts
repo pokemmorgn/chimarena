@@ -171,9 +171,9 @@ async function runMigration(dryRun: boolean = false): Promise<void> {
     
     console.log(`🔄 Traitement du batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(usersToMigrate.length / batchSize)}`);
     
-    const bulkOps = batch.map((user: OldUser) => {
+    const bulkOps = batch.map((user: any) => {
       try {
-        const migration = migrateUser(user);
+        const migration = migrateUser(user as OldUser);
         
         return {
           updateOne: {
