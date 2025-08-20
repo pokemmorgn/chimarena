@@ -1,8 +1,8 @@
-// client/src/main.js - VERSION MISE À JOUR AVEC CLASHMENU
+// client/src/main.js - VERSION VITE AVEC CLASHMENU
 import Phaser from 'phaser';
 import AuthScene from './scenes/AuthScene';
 import WelcomeScene from './scenes/WelcomeScene';
-import ClashMenuScene from './scenes/ClashMenuScene'; // 🆕 NOUVEAU MENU CLASH ROYALE
+import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 
 // 📱 DÉTECTION DE L'APPAREIL
@@ -51,7 +51,7 @@ const createGameConfig = () => {
     height: dimensions.height,
     parent: 'game-container',
     backgroundColor: '#2c3e50',
-    scene: [AuthScene, WelcomeScene, ClashMenuScene], // 🔄 MENU CLASH AJOUTÉ
+    scene: [AuthScene, WelcomeScene, ClashMenuScene],
     render: { 
       antialias: !mobile, // Désactiver sur mobile pour performance
       pixelArt: false, 
@@ -70,7 +70,7 @@ const createGameConfig = () => {
       default: 'arcade', 
       arcade: { 
         gravity: { y: 0 }, 
-        debug: window.GameConfig.DEBUG 
+        debug: import.meta.env.DEV // 🔄 Utilise Vite env
       } 
     },
     scale: {
@@ -120,7 +120,7 @@ class ChimArenaGame {
     
     this.loadStoredData();
     this.setupSecurityMonitoring();
-    this.setupPortraitOptimizations(); // Optimisations portrait
+    this.setupPortraitOptimizations();
     this.createGame();
     this.setupGlobalEvents();
   }
@@ -220,7 +220,7 @@ class ChimArenaGame {
       this.updateSecurityStatus('warning');
     }
 
-    // Vérifier l'état global - 🔄 MISE À JOUR POUR CLASHMENU
+    // Vérifier l'état global
     if (!debugInfo.isAuthenticated && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('ClashMenuScene'))) {
       console.error('❌ État incohérent: Scène authentifiée active mais non authentifié');
       this.handleAuthenticationLoss('État de session incohérent');
@@ -251,7 +251,7 @@ class ChimArenaGame {
       this.wsConnection = null;
     }
     
-    // Rediriger vers AuthScene - 🔄 MISE À JOUR POUR CLASHMENU
+    // Rediriger vers AuthScene
     if (this.game && (this.game.scene.isActive('WelcomeScene') || this.game.scene.isActive('ClashMenuScene'))) {
       this.game.scene.start('AuthScene');
     }
@@ -320,14 +320,12 @@ class ChimArenaGame {
       gameplay: { autoSelectCards: false, fastMode: false, showDamageNumbers: true, confirmActions: true },
       interface: { language: 'fr', theme: 'default', showTooltips: true, compactMode: false },
       security: { autoLockMinutes: 60, requireConfirmForSensitiveActions: true, enableSecurityNotifications: true },
-      // 💰 NOUVEAUX PARAMÈTRES CRYPTO
       crypto: { showWalletWarnings: true, confirmTransactions: true, maxDailyWithdrawals: 5 }
     };
   }
 
   saveSettings() {
     try {
-      // Sauvegarder seulement les paramètres non sensibles
       localStorage.setItem('chimarena_settings', JSON.stringify(this.settings));
     } catch (err) {
       console.error('❌ Erreur sauvegarde paramètres:', err);
@@ -414,8 +412,6 @@ class ChimArenaGame {
     window.addEventListener('storage', (e) => {
       if (e.key && e.key.includes('token')) {
         console.warn('🚨 Tentative de manipulation de token détectée');
-        // Ne pas réagir aux changements de tokens localStorage
-        // car ils ne sont plus utilisés
       }
     });
     
@@ -466,57 +462,40 @@ class ChimArenaGame {
       this.wsConnection = null;
     }
     
-    // Les tokens sont automatiquement nettoyés par le client API
     console.log('🧹 Nettoyage sécurisé terminé');
   }
 
   // --- Méthodes d'interface pour les scènes ---
   
-  // ⚠️ MÉTHODES DÉPRÉCIÉES (compatibilité)
-  setAuthToken(token) {
-    console.warn('⚠️ setAuthToken est déprécié. Les tokens sont gérés automatiquement par le client sécurisé.');
-    // Ne rien faire, les tokens sont gérés par le nouveau client
-  }
-
   clearAuthData() {
     console.log('🧹 Nettoyage des données d\'authentification');
     this.currentUser = null;
     this.game?.registry.set('currentUser', null);
-    
-    // Le client API gère automatiquement le nettoyage des tokens
   }
 
-  // ✅ NOUVELLES MÉTHODES SÉCURISÉES
   setCurrentUser(user) {
     console.log('👤 Mise à jour des données utilisateur');
     this.currentUser = user;
     this.game?.registry.set('currentUser', user);
-    
-    // Ne pas sauvegarder en localStorage pour la sécurité
-    // Les données sont récupérées à chaque session
   }
 
   isAuthenticated() {
     return auth.isAuthenticated();
   }
 
-  // 🆕 MÉTHODES POUR WELCOMESCENE
   getUserWalletInfo() {
-    // Récupérer les infos wallet de l'utilisateur actuel
     return this.currentUser?.cryptoWallet || null;
   }
 
   updateUserWalletInfo(walletInfo) {
-    // Mettre à jour les infos wallet
     if (this.currentUser) {
       this.currentUser.cryptoWallet = walletInfo;
       this.game?.registry.set('currentUser', this.currentUser);
     }
   }
 
-  // Méthode pour obtenir les infos de debug (développement)
   getSecurityDebugInfo() {
-    if (window.GameConfig?.DEBUG) {
+    if (import.meta.env.DEV) { // 🔄 Utilise Vite env
       return {
         apiDebug: config.getDebugInfo(),
         gameInstance: {
@@ -528,27 +507,6 @@ class ChimArenaGame {
       };
     }
     return null;
-  }
-
-  // Wrapper pour les appels API (compatibilité)
-  async apiCall(endpoint, options = {}) {
-    console.warn('⚠️ apiCall est déprécié. Utilisez directement les modules auth/user/game/crypto de l\'API.');
-    
-    try {
-      // Rediriger vers le nouveau client selon l'endpoint
-      if (endpoint.startsWith('/auth/')) {
-        throw new Error('Utilisez les méthodes auth.* pour l\'authentification');
-      } else if (endpoint.startsWith('/user/')) {
-        throw new Error('Utilisez les méthodes user.* pour les données utilisateur');
-      } else if (endpoint.startsWith('/crypto/')) {
-        throw new Error('Utilisez les méthodes crypto.* pour les actions crypto');
-      }
-      
-      throw new Error('Endpoint non supporté par la méthode dépréciée');
-    } catch (err) {
-      this.handleError(err, 'API');
-      throw err;
-    }
   }
 
   handleError(error, context = '') {
@@ -563,14 +521,13 @@ class ChimArenaGame {
   }
 }
 
-// --- Utils globaux (étendus pour crypto) ---
+// --- Utils globaux (mis à jour pour Vite) ---
 window.GameUtils = {
   formatNumber: (n) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toString(),
   formatTime: (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`,
   generateId: () => Date.now().toString(36) + Math.random().toString(36).substr(2),
   isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
   
-  // Nouvelles méthodes de sécurité
   sanitizeInput: (input) => {
     if (typeof input !== 'string') return input;
     return input.replace(/[<>'"&]/g, '');
@@ -580,7 +537,6 @@ window.GameUtils = {
     return /^[a-zA-Z0-9_]{3,20}$/.test(username);
   },
 
-  // 💰 NOUVELLES MÉTHODES CRYPTO
   isValidEthereumAddress: (address) => {
     return /^0x[a-fA-F0-9]{40}$/.test(address);
   },
@@ -595,7 +551,6 @@ window.GameUtils = {
     return parseFloat(amount).toFixed(decimals);
   },
 
-  // 📱 NOUVELLES MÉTHODES PORTRAIT
   isMobileDevice: () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
            window.innerWidth <= 768 ||
@@ -611,25 +566,24 @@ window.GameUtils = {
   }
 };
 
+// Configuration mise à jour pour Vite
 window.GameConstants = {
-  ARENA: { WIDTH: 400, HEIGHT: 700, BRIDGE_Y: 350 }, // 📱 PORTRAIT
+  ARENA: { WIDTH: 400, HEIGHT: 700, BRIDGE_Y: 350 },
   CARDS: { DECK_SIZE: 8, HAND_SIZE: 4, MAX_LEVEL: 14 },
   BATTLE: { DURATION: 180, OVERTIME_DURATION: 60, ELIXIR_MAX: 10, ELIXIR_REGEN: 1000 },
   COLORS: { PRIMARY: 0x3498db, SECONDARY: 0x2ecc71, DANGER: 0xe74c3c, WARNING: 0xf39c12, DARK: 0x2c3e50, LIGHT: 0xecf0f1 },
   
-  // Nouvelles constantes de sécurité
   SECURITY: {
-    TOKEN_REFRESH_THRESHOLD: 2 * 60 * 1000, // 2 minutes
-    MAX_IDLE_TIME: 60 * 60 * 1000, // 1 heure
-    SESSION_CHECK_INTERVAL: 30 * 1000, // 30 secondes
+    TOKEN_REFRESH_THRESHOLD: 2 * 60 * 1000,
+    MAX_IDLE_TIME: 60 * 60 * 1000,
+    SESSION_CHECK_INTERVAL: 30 * 1000,
   },
 
-  // 💰 NOUVELLES CONSTANTES CRYPTO
   CRYPTO: {
-    SIGNATURE_VALIDITY: 5 * 60 * 1000, // 5 minutes
+    SIGNATURE_VALIDITY: 5 * 60 * 1000,
     MAX_WALLET_CONNECTIONS_PER_HOUR: 3,
     MAX_CRYPTO_ACTIONS_PER_HOUR: 5,
-    WITHDRAWAL_COOLDOWN: 24 * 60 * 60 * 1000, // 24 heures
+    WITHDRAWAL_COOLDOWN: 24 * 60 * 60 * 1000,
     SUPPORTED_NETWORKS: {
       ETHEREUM: 1,
       POLYGON: 137,
@@ -637,7 +591,6 @@ window.GameConstants = {
     }
   },
 
-  // 📱 NOUVELLES CONSTANTES PORTRAIT
   UI: {
     MOBILE_BREAKPOINT: 768,
     PORTRAIT_WIDTH: 400,
@@ -650,9 +603,9 @@ window.GameConstants = {
   }
 };
 
-// --- Entrée principale sécurisée ---
+// --- Entrée principale sécurisée avec Vite ---
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 DOM chargé, démarrage de ChimArena sécurisé avec ClashMenuScene...');
+  console.log('🚀 DOM chargé, démarrage de ChimArena avec Vite...');
   
   // Vérifier la compatibilité de sécurité
   if (!window.crypto || !window.crypto.getRandomValues) {
@@ -661,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // 💰 VÉRIFIER DISPONIBILITÉ METAMASK (optionnel)
+  // Vérifier disponibilité MetaMask
   if (typeof window.ethereum !== 'undefined') {
     console.log('🦊 MetaMask détecté');
     window.GameConstants.CRYPTO.METAMASK_AVAILABLE = true;
@@ -670,23 +623,24 @@ document.addEventListener('DOMContentLoaded', () => {
     window.GameConstants.CRYPTO.METAMASK_AVAILABLE = false;
   }
 
-  // 📱 DÉTECTER LE MODE D'AFFICHAGE
+  // Détecter le mode d'affichage
   const mobile = isMobile();
   console.log(`📱 Appareil détecté: ${mobile ? 'MOBILE' : 'PC'} - Mode PORTRAIT activé`);
   
   // Créer l'instance de jeu sécurisée
   window.ChimArenaInstance = new ChimArenaGame();
   
-  console.log('✅ ChimArena sécurisé initialisé avec ClashMenuScene');
+  console.log('✅ ChimArena avec Vite initialisé');
   console.log('🔐 Tokens stockés UNIQUEMENT en mémoire');
   console.log('🛡️ Monitoring de sécurité actif');
   console.log('📱 Mode PORTRAIT universel activé');
   console.log('💰 Support crypto: ' + (window.GameConstants.CRYPTO.METAMASK_AVAILABLE ? 'ACTIVÉ' : 'LIMITÉ'));
   console.log('🏆 Menu Clash Royale authentique prêt !');
+  console.log('⚡ Vite HMR activé pour développement');
   
   // Debug en développement
-  if (window.GameConfig?.DEBUG) {
-    console.log('🔧 Mode debug activé');
+  if (import.meta.env.DEV) {
+    console.log('🔧 Mode debug Vite activé');
     window.getSecurityDebug = () => window.ChimArenaInstance.getSecurityDebugInfo();
   }
 });
