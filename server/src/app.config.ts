@@ -1,5 +1,6 @@
-import { defineConfig } from "@colyseus/tools";
+import defineConfig from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
+import { Server as ColyseusServer } from "colyseus";
 import type express from "express";
 
 // 🌍 Rooms
@@ -11,19 +12,17 @@ import userRoutes from "./routes/userRoutes";
 import cryptoRoutes from "./routes/cryptoRoutes";
 
 export default defineConfig({
-  initializeGameServer: (gameServer) => {
+  initializeGameServer: (gameServer: ColyseusServer) => {
     gameServer.define("world", WorldRoom);
   },
 
   initializeExpress: (app: express.Application) => {
     console.log("✅ initializeExpress appelé");
 
-    // === API ROUTES ===
     app.use("/api/auth", authRoutes);
     app.use("/api/user", userRoutes);
     app.use("/api/crypto", cryptoRoutes);
 
-    // Health
     app.get("/health", (_req, res) => {
       res.json({
         status: "ok",
@@ -32,7 +31,6 @@ export default defineConfig({
       });
     });
 
-    // Monitor en dev uniquement
     if (process.env.NODE_ENV !== "production") {
       app.use("/colyseus", monitor());
     }
