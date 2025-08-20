@@ -1,14 +1,12 @@
-// server/src/scripts/migrate-arenas.ts - MIGRATION SIMPLE VERS LES ARÈNES
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-
-dotenv.config();
+// server/src/scripts/migrate-arenas.js - MIGRATION SIMPLE VERS LES ARÈNES
+const mongoose = require('mongoose');
+require('dotenv').config();
 
 console.log('🏟️ Migration vers le système d\'arènes ChimArena');
 console.log('===============================================');
 
 // Fonction pour calculer l'arène selon les trophées
-function getCurrentArenaId(trophies: number): number {
+function getCurrentArenaId(trophies) {
   if (trophies < 400) return 0;
   if (trophies < 800) return 1;
   if (trophies < 1200) return 2;
@@ -21,7 +19,7 @@ function getCurrentArenaId(trophies: number): number {
   return 9;
 }
 
-async function migrate(): Promise<void> {
+async function migrate() {
   try {
     // Connexion
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/chimarena');
