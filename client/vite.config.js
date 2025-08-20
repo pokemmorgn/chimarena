@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
               target: 'http://127.0.0.1:3000',
               changeOrigin: true,
             },
-            // WebSocket Colyseus -> 2567
+            // WebSocket Colyseus -> 3000
             '/colyseus': {
               target: 'http://127.0.0.1:3000',
               ws: true,
