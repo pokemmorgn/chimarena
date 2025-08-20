@@ -2,111 +2,115 @@ import { defineConfig } from 'vite';
 import legacy from '@vitejs/plugin-legacy';
 import { resolve } from 'path';
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
 
   return {
     // Point d'entrée
     root: './',
-    
-    // Configuration du serveur de développement
+
+    // Dév server
     server: {
       port: 8080,
       host: true,
       open: true,
       cors: true,
-      // Support HMR pour Phaser
+      // Proxy dev: évite CORS et mappe API/WS vers les backends locaux
+      proxy: !isProduction
+        ? {
+            // API -> Node (3000)
+            '/api': {
+              target: 'http://127.0.0.1:3000',
+              changeOrigin: true,
+            },
+            // WebSocket Colyseus -> 2567
+            '/colyseus': {
+              target: 'http://127.0.0.1:2567',
+              ws: true,
+              changeOrigin: true,
+              rewrite: (p) => p.replace(/^\/colyseus/, ''),
+            },
+          }
+        : undefined,
+      // HMR Phaser
       hmr: {
-        overlay: true
-      }
+        overlay: true,
+      },
     },
 
-    // Configuration de prévisualisation
+    // Preview (vite preview)
     preview: {
       port: 4173,
-      host: true
+      host: true,
     },
 
-    // Configuration des chemins d'alias
+    // Alias
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
         '@assets': resolve(__dirname, 'assets'),
         '@scenes': resolve(__dirname, 'src/scenes'),
         '@game': resolve(__dirname, 'src/game'),
-        '@utils': resolve(__dirname, 'src/utils')
-      }
+        '@utils': resolve(__dirname, 'src/utils'),
+      },
     },
 
-    // Configuration de build
+    // Build
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: isProduction ? true : false,
       minify: isProduction ? 'terser' : false,
-      
-      // Configuration pour optimiser Phaser
+
       rollupOptions: {
         input: {
-          main: resolve(__dirname, 'index.html')
+          main: resolve(__dirname, 'index.html'),
         },
         output: {
           manualChunks: {
-            // Séparer Phaser dans son propre chunk
             phaser: ['phaser'],
-            // Séparer Colyseus
-            colyseus: ['colyseus.js']
-          }
-        }
+            colyseus: ['colyseus.js'],
+          },
+        },
       },
 
-      // Options de compression
       terserOptions: {
         compress: {
           drop_console: isProduction,
-          drop_debugger: isProduction
-        }
+          drop_debugger: isProduction,
+        },
       },
 
-      // Taille des chunks
       chunkSizeWarningLimit: 1000,
-      
-      // Assets inline threshold
-      assetsInlineLimit: 4096
+      assetsInlineLimit: 4096,
     },
 
     // Plugins
     plugins: [
-      // Support des navigateurs legacy
       legacy({
         targets: ['> 1%', 'last 2 versions', 'not dead'],
-        additionalLegacyPolyfills: ['regenerator-runtime/runtime']
-      })
+        additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+      }),
     ],
 
-    // Configuration des assets statiques
     publicDir: 'public',
 
-    // Optimisation des dépendances
     optimizeDeps: {
       include: ['phaser', 'colyseus.js'],
-      exclude: []
+      exclude: [],
     },
 
-    // Variables d'environnement
     define: {
       __DEV__: !isProduction,
-      __PROD__: isProduction
+      __PROD__: isProduction,
     },
 
-    // Configuration CSS
     css: {
-      devSourcemap: !isProduction
+      devSourcemap: !isProduction,
     },
 
-    // Configuration du mode worker (si nécessaire)
     worker: {
-      format: 'es'
-    }
+      format: 'es',
+    },
   };
 });
