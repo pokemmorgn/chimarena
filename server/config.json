@@ -142,10 +142,10 @@
         "logSuspiciousPatterns": true
       },
       "api": {
-        "enabled": false,
+        "enabled": true,
         "level": "error",
-        "logRequests": false,
-        "logResponses": false,
+        "logRequests": true,
+        "logResponses": true,
         "logSlowRequests": true,
         "slowRequestThresholdMs": 1000
       },
@@ -161,9 +161,9 @@
         "enabled": true,
         "level": "info",
         "logMatches": true,
-        "logPlayerActions": false,
+        "logPlayerActions": true,
         "logMatchmaking": true,
-        "logCardActions": false
+        "logCardActions": true
       },
       "performance": {
         "enabled": false,
