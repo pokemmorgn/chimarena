@@ -2,8 +2,9 @@
 
 // === COMPOSANTS CORE (BASE) ===
 import BasePanel from './core/BasePanel.js';
-import ClashHeader from './core/ClashHeader.js';
-import ClashButton from './core/ClashButton.js';
+// ClashHeader et ClashButton sont encore dans l'ancien emplacement
+import ClashHeader from './ClashHeader.js';
+import ClashButton from './ClashButton.js';
 
 // === GESTIONNAIRE CENTRAL ===
 import PanelManager from './utils/PanelManager.js';
