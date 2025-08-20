@@ -1,4 +1,4 @@
-// server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE AVEC LOGS DÉTAILLÉS
+// server/src/rooms/WorldRoom.ts - ROOM MONDIALE ChimArena COMPLÈTE AVEC JWT
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 import * as jwt from 'jsonwebtoken';
@@ -33,15 +33,15 @@ interface IUser {
   save(): Promise<void>;
 }
 
-// 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
+// 🌍 ÉTAT DU JOUEUR DANS LE MONDE
 export class WorldPlayer extends Schema {
   userId: string = "";
   username: string = "";
   level: number = 1;
   trophies: number = 0;
   currentArenaId: number = 0;
-  status: string = "idle";
-  lastSeen: number = 0;  // ✅ CORRIGÉ : Pas Date.now() ici !
+  status: string = "idle"; // idle, searching, in_battle
+  lastSeen: number = Date.now();
   
   // Stats rapides pour l'affichage
   wins: number = 0;
@@ -87,25 +87,9 @@ export class WorldRoom extends Room<WorldState> {
   // Configurations JWT
   private JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
   
-  // Utilitaire mathématique pour remplacer Phaser.Math
-  private randomBetween(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-  
   onCreate(options: any) {
-    console.log('🌍 WorldRoom créée - Version DEBUG avec logs détaillés');
-    console.log('📦 Options onCreate:', JSON.stringify(options, null, 2));
-    
-    const state = new WorldState();
-    console.log('🔧 WorldState créé:', {
-      totalPlayers: state.totalPlayers,
-      playersOnline: state.playersOnline,
-      playersSearching: state.playersSearching,
-      playersMapSize: state.players.size
-    });
-    
-    this.setState(state);
-    console.log('✅ État défini sur la room');
+    console.log('🌍 WorldRoom créée avec options:', options);
+    this.setState(new WorldState());
     
     // Vérifier la configuration JWT
     if (!this.JWT_ACCESS_SECRET) {
@@ -113,30 +97,17 @@ export class WorldRoom extends Room<WorldState> {
       throw new Error('Configuration JWT manquante');
     }
     
-    // Augmenter le timeout des réservations
-    this.setSeatReservationTime(30); // 30 secondes
-    console.log('⏰ Timeout réservation défini à 30 secondes');
-    
     // 📨 HANDLERS DE MESSAGES
     this.onMessage("get_arena_info", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) {
-        this.handleGetArenaInfo(client, player);
-      }
+      this.handleGetArenaInfo(client, this.state.players.get(client.sessionId)!);
     });
     
     this.onMessage("search_battle", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) {
-        this.handleSearchBattle(client, player);
-      }
+      this.handleSearchBattle(client, this.state.players.get(client.sessionId)!);
     });
     
     this.onMessage("cancel_search", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) {
-        this.handleCancelSearch(client, player);
-      }
+      this.handleCancelSearch(client, this.state.players.get(client.sessionId)!);
     });
     
     this.onMessage("get_leaderboard", (client, message) => {
@@ -144,17 +115,11 @@ export class WorldRoom extends Room<WorldState> {
     });
     
     this.onMessage("update_status", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) {
-        this.handleUpdateStatus(client, player, message);
-      }
+      this.handleUpdateStatus(client, this.state.players.get(client.sessionId)!, message);
     });
     
     this.onMessage("heartbeat", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) {
-        this.handleHeartbeat(client, player);
-      }
+      this.handleHeartbeat(client, this.state.players.get(client.sessionId)!);
     });
     
     // Mise à jour périodique des stats
@@ -167,13 +132,12 @@ export class WorldRoom extends Room<WorldState> {
       this.cleanupInactivePlayers();
     }, 60000); // Toutes les minutes
     
-    console.log('✅ WorldRoom initialisée avec validation JWT et logs détaillés');
+    console.log('✅ WorldRoom initialisée avec validation JWT');
   }
 
-  // 🚪 CONNEXION D'UN JOUEUR AVEC LOGS DÉTAILLÉS
+  // 🚪 CONNEXION D'UN JOUEUR AVEC VALIDATION JWT
   async onJoin(client: Client, options: any) {
     console.log(`🚪 Joueur ${client.sessionId} rejoint la WorldRoom`);
-    console.log(`📦 Options reçues:`, JSON.stringify(options, null, 2));
     
     try {
       // Vérifier qu'un token est fourni
@@ -182,7 +146,6 @@ export class WorldRoom extends Room<WorldState> {
       }
       
       // 🔐 VALIDER LE JWT ET EXTRAIRE L'UTILISATEUR
-      console.log(`🔐 Validation JWT en cours...`);
       const decoded = await this.validateJWT(options.token);
       if (!decoded || !decoded.id) {
         throw new Error('Token JWT invalide');
@@ -191,21 +154,12 @@ export class WorldRoom extends Room<WorldState> {
       console.log(`🔐 JWT validé pour l'utilisateur: ${decoded.username} (${decoded.id})`);
       
       // Charger le profil utilisateur avec l'ID du token
-      console.log(`📖 Chargement profil utilisateur ${decoded.id}...`);
       const user = await this.loadUserProfile(decoded.id);
       if (!user) {
         throw new Error('Utilisateur non trouvé');
       }
       
-      console.log(`📖 Profil chargé:`, {
-        username: user.username,
-        level: user.playerStats.level,
-        trophies: user.playerStats.trophies,
-        wins: user.gameStats.wins,
-        losses: user.gameStats.losses
-      });
-      
-      // Vérifier si l'utilisateur est banni
+      // Vérifier si l'utilisateur est banni (même logique qu'HTTP)
       if (user.accountInfo?.isBanned) {
         const banMessage = user.accountInfo.banReason || 'Compte banni';
         const banExpires = user.accountInfo.banExpires;
@@ -213,60 +167,31 @@ export class WorldRoom extends Room<WorldState> {
         throw new Error(`Compte banni: ${banMessage}${banExpires ? ` (expire le ${banExpires})` : ''}`);
       }
       
-      // ✅ NOUVEAU : Log avant création du player
-      console.log(`🔧 Création WorldPlayer pour ${user.username}...`);
+      // Créer le joueur dans l'état
       const worldPlayer = new WorldPlayer();
-      console.log(`🔧 WorldPlayer créé (valeurs par défaut):`, {
-        userId: worldPlayer.userId,
-        username: worldPlayer.username,
-        level: worldPlayer.level,
-        trophies: worldPlayer.trophies,
-        status: worldPlayer.status,
-        lastSeen: worldPlayer.lastSeen
-      });
-      
-      // Assigner les valeurs
       worldPlayer.userId = (user._id as any).toString();
       worldPlayer.username = user.username;
       worldPlayer.level = user.playerStats.level;
       worldPlayer.trophies = user.playerStats.trophies;
       worldPlayer.currentArenaId = user.currentArenaId || 0;
       worldPlayer.status = "idle";
-      worldPlayer.lastSeen = Date.now();  // ✅ Assigné ici, pas dans la définition de classe
+      worldPlayer.lastSeen = Date.now();
       worldPlayer.wins = user.gameStats.wins;
       worldPlayer.losses = user.gameStats.losses;
       worldPlayer.winRate = user.gameStats.totalGames > 0 
         ? Math.round((user.gameStats.wins / user.gameStats.totalGames) * 100) 
         : 0;
       
-      // ✅ NOUVEAU : Log après assignation
-      console.log(`🔧 WorldPlayer après assignation:`, {
-        userId: worldPlayer.userId,
-        username: worldPlayer.username,
-        level: worldPlayer.level,
-        trophies: worldPlayer.trophies,
-        status: worldPlayer.status,
-        lastSeen: worldPlayer.lastSeen,
-        wins: worldPlayer.wins,
-        losses: worldPlayer.losses,
-        winRate: worldPlayer.winRate
-      });
-      
-      // ✅ NOUVEAU : Log avant ajout à l'état
-      console.log(`🔧 Ajout à l'état... Players actuels: ${this.state.players.size}`);
+      // Ajouter à l'état
       this.state.players.set(client.sessionId, worldPlayer);
-      console.log(`🔧 Player ajouté. Nouveau total: ${this.state.players.size}`);
       
       // Mettre en cache
       this.userCache.set(client.sessionId, user);
-      console.log(`💾 Utilisateur mis en cache`);
       
       // Mettre à jour les stats globales
       this.updateGlobalStats();
-      console.log(`📊 Stats globales mises à jour`);
       
       // Envoyer les données personnelles au client
-      console.log(`📨 Envoi du profil au client...`);
       client.send("player_profile", {
         profile: {
           userId: (user._id as any).toString(),
@@ -285,35 +210,23 @@ export class WorldRoom extends Room<WorldState> {
       console.log(`✅ ${user.username} connecté à la WorldRoom (${user.playerStats.trophies} trophées)`);
       
     } catch (error) {
-      console.error(`❌ Erreur détaillée onJoin:`, {
-        message: error.message,
-        stack: error.stack,
-        sessionId: client.sessionId,
-        options: options
-      });
+      console.error(`❌ Erreur connexion WorldRoom:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       client.leave(4000, `Erreur d'authentification: ${errorMessage}`);
     }
   }
 
-  // 🔐 VALIDATION DU JWT
+  // 🔐 VALIDATION DU JWT (EXACTEMENT comme authMiddleware.ts)
   private async validateJWT(token: string): Promise<any> {
     try {
       if (!this.JWT_ACCESS_SECRET) {
         throw new Error('JWT_ACCESS_SECRET non configuré');
       }
       
-      console.log(`🔐 Validation JWT avec secret de longueur: ${this.JWT_ACCESS_SECRET.length}`);
-      
-      // Décoder et valider le JWT
+      // Décoder et valider le JWT (même logique qu'authMiddleware)
       const decoded = jwt.verify(token, this.JWT_ACCESS_SECRET);
-      console.log(`🔐 JWT décodé:`, {
-        id: (decoded as any).id,
-        username: (decoded as any).username,
-        exp: (decoded as any).exp,
-        iat: (decoded as any).iat
-      });
       
+      // Vérifier que le token n'est pas expiré (déjà géré par jwt.verify)
       return decoded;
     } catch (error) {
       console.error('❌ Erreur validation JWT:', error);
@@ -327,18 +240,16 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  // 🚪 DÉCONNEXION D'UN JOUEUR AVEC LOGS
+  // 🚪 DÉCONNEXION D'UN JOUEUR  
   onLeave(client: Client, consented: boolean) {
     const player = this.state.players.get(client.sessionId);
     console.log(`🚪 Joueur ${player?.username || client.sessionId} quitte la WorldRoom (consented: ${consented})`);
-    console.log(`🔧 Players avant suppression: ${this.state.players.size}`);
     
     // Supprimer du cache
     this.userCache.delete(client.sessionId);
     
     // Supprimer de l'état
     this.state.players.delete(client.sessionId);
-    console.log(`🔧 Players après suppression: ${this.state.players.size}`);
     
     // Mettre à jour les stats
     this.updateGlobalStats();
@@ -347,14 +258,12 @@ export class WorldRoom extends Room<WorldState> {
   // 🏟️ INFORMATIONS SUR L'ARÈNE
   private handleGetArenaInfo(client: Client, player: WorldPlayer) {
     try {
-      console.log(`🏟️ Demande info arène pour ${player.username} (${player.trophies} trophées)`);
-      
       const currentArena = ArenaManager.getCurrentArena(player.trophies);
       const nextArena = ArenaManager.getNextArena(currentArena);
       const progress = ArenaManager.getArenaProgress(player.trophies);
       const trophiesToNext = ArenaManager.getTrophiesToNextArena(player.trophies);
       
-      const arenaInfo = {
+      client.send("arena_info", {
         current: {
           id: currentArena.id,
           nameId: currentArena.nameId,
@@ -371,10 +280,7 @@ export class WorldRoom extends Room<WorldState> {
         progress: Math.round(progress),
         trophiesToNext,
         rank: ArenaManager.getArenaRank(player.trophies)
-      };
-      
-      console.log(`🏟️ Info arène envoyée:`, arenaInfo);
-      client.send("arena_info", arenaInfo);
+      });
     } catch (error) {
       console.error('❌ Erreur get_arena_info:', error);
       client.send("error", { message: "Erreur lors de la récupération des infos d'arène" });
@@ -383,17 +289,15 @@ export class WorldRoom extends Room<WorldState> {
 
   // ⚔️ RECHERCHE DE BATAILLE
   private handleSearchBattle(client: Client, player: WorldPlayer) {
-    console.log(`⚔️ ${player.username} recherche une bataille (status actuel: ${player.status})`);
+    console.log(`⚔️ ${player.username} recherche une bataille`);
     
     if (player.status !== "idle") {
-      console.log(`⚠️ ${player.username} déjà occupé (${player.status})`);
       client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
       return;
     }
     
     // Mettre en recherche
     player.status = "searching";
-    console.log(`🔄 ${player.username} mis en statut 'searching'`);
     
     // Mettre à jour les stats globales
     this.updateGlobalStats();
@@ -404,19 +308,14 @@ export class WorldRoom extends Room<WorldState> {
     });
     
     // Simulation d'un match trouvé après quelques secondes
-    const delay = this.randomBetween(3000, 8000);
-    console.log(`⏰ Match simulé dans ${delay}ms pour ${player.username}`);
-    
     this.clock.setTimeout(() => {
       if (player.status === "searching") {
         this.simulateMatchFound(client, player);
-      } else {
-        console.log(`⚠️ ${player.username} n'est plus en recherche (${player.status})`);
       }
-    }, delay);
+    }, Phaser.Math.Between(3000, 8000)); // 3-8 secondes aléatoires
   }
 
-  // 🎯 SIMULATION MATCH TROUVÉ
+  // 🎯 SIMULATION MATCH TROUVÉ (temporaire)
   private simulateMatchFound(client: Client, player: WorldPlayer) {
     console.log(`🎯 Match simulé trouvé pour ${player.username}`);
     
@@ -426,7 +325,7 @@ export class WorldRoom extends Room<WorldState> {
     const opponentTrophies = player.trophies + Math.floor(Math.random() * 200 - 100);
     const opponentLevel = Math.max(1, player.level + Math.floor(Math.random() * 4 - 2));
     
-    const matchInfo = {
+    client.send("match_found", {
       opponent: {
         username: `Bot_${Math.floor(Math.random() * 1000)}`,
         level: opponentLevel,
@@ -435,24 +334,17 @@ export class WorldRoom extends Room<WorldState> {
       },
       battleRoomId: "battle_" + Date.now(),
       countdown: 3
-    };
-    
-    console.log(`🎯 Match info:`, matchInfo);
-    client.send("match_found", matchInfo);
+    });
     
     // Simuler fin de combat après 20-40 secondes
-    const battleDuration = this.randomBetween(20000, 40000);
-    console.log(`⏰ Fin de combat simulée dans ${battleDuration}ms`);
-    
+    const battleDuration = Phaser.Math.Between(20000, 40000);
     this.clock.setTimeout(() => {
       this.simulateBattleEnd(client, player, Math.max(0, opponentTrophies));
     }, battleDuration);
   }
 
-  // 🏆 SIMULATION FIN DE COMBAT AVEC LOGS
+  // 🏆 SIMULATION FIN DE COMBAT (temporaire)
   private async simulateBattleEnd(client: Client, player: WorldPlayer, opponentTrophies: number) {
-    console.log(`🏆 Fin de combat pour ${player.username} vs Bot (${opponentTrophies} trophées)`);
-    
     // Calculer les chances de victoire selon la différence de trophées
     const trophyDifference = opponentTrophies - player.trophies;
     let winChance = 0.5; // 50% de base
@@ -463,8 +355,6 @@ export class WorldRoom extends Room<WorldState> {
     
     const isWin = Math.random() < winChance;
     const trophyChange = ArenaManager.calculateTrophyChange(player.trophies, opponentTrophies, isWin);
-    
-    console.log(`🎲 Résultat: ${isWin ? 'Victoire' : 'Défaite'}, changement trophées: ${trophyChange}`);
     
     // Mettre à jour les trophées
     const newTrophies = Math.max(0, player.trophies + trophyChange);
@@ -485,13 +375,6 @@ export class WorldRoom extends Room<WorldState> {
     const totalGames = player.wins + player.losses;
     player.winRate = totalGames > 0 ? Math.round((player.wins / totalGames) * 100) : 0;
     
-    console.log(`📊 Stats mises à jour:`, {
-      trophies: `${player.trophies - trophyChange} → ${player.trophies}`,
-      wins: player.wins,
-      losses: player.losses,
-      winRate: player.winRate
-    });
-    
     // Mettre à jour en base de données
     try {
       await this.updateUserInDatabase(player.userId, {
@@ -506,10 +389,10 @@ export class WorldRoom extends Room<WorldState> {
     // Calculer les récompenses
     const baseGold = isWin ? 100 : 25;
     const baseExp = isWin ? 50 : 10;
-    const bonusGold = Math.abs(trophyChange) * 2;
+    const bonusGold = Math.abs(trophyChange) * 2; // Bonus selon les trophées gagnés/perdus
     
     // Envoyer le résultat
-    const battleResult = {
+    client.send("battle_result", {
       victory: isWin,
       trophyChange,
       newTrophies,
@@ -520,12 +403,9 @@ export class WorldRoom extends Room<WorldState> {
         experience: baseExp,
         cards: isWin ? 1 : 0
       },
-      battleDuration: "2:34",
+      battleDuration: "2:34", // Durée fictive
       opponentTrophies
-    };
-    
-    console.log(`📨 Envoi résultat bataille:`, battleResult);
-    client.send("battle_result", battleResult);
+    });
     
     // Mettre à jour les stats globales
     this.updateGlobalStats();
@@ -535,15 +415,12 @@ export class WorldRoom extends Room<WorldState> {
 
   // ❌ ANNULER LA RECHERCHE
   private handleCancelSearch(client: Client, player: WorldPlayer) {
-    console.log(`❌ ${player.username} tente d'annuler sa recherche (status: ${player.status})`);
-    
     if (player.status === "searching") {
       player.status = "idle";
       this.updateGlobalStats();
       client.send("search_cancelled", { message: "Recherche annulée" });
-      console.log(`✅ ${player.username} a annulé sa recherche`);
+      console.log(`❌ ${player.username} a annulé sa recherche`);
     } else {
-      console.log(`⚠️ ${player.username} ne peut pas annuler (status: ${player.status})`);
       client.send("error", { message: "Aucune recherche en cours à annuler" });
     }
   }
@@ -551,7 +428,6 @@ export class WorldRoom extends Room<WorldState> {
   // 🏆 CLASSEMENT
   private handleGetLeaderboard(client: Client, message: any) {
     const limit = Math.min(message.limit || 50, 100);
-    console.log(`🏆 Demande leaderboard (limit: ${limit})`);
     
     // Trier les joueurs par trophées
     const leaderboard = Array.from(this.state.players.values())
@@ -567,32 +443,25 @@ export class WorldRoom extends Room<WorldState> {
         isOnline: Date.now() - player.lastSeen < 120000 // En ligne dans les 2 dernières minutes
       }));
     
-    const leaderboardData = { 
+    client.send("leaderboard", { 
       players: leaderboard,
       total: this.state.players.size,
       timestamp: Date.now()
-    };
-    
-    console.log(`🏆 Leaderboard généré: ${leaderboard.length} joueurs`);
-    client.send("leaderboard", leaderboardData);
+    });
     
     console.log(`🏆 Leaderboard envoyé à ${client.sessionId} (${leaderboard.length} joueurs)`);
   }
 
   // 📊 MISE À JOUR DU STATUT
   private handleUpdateStatus(client: Client, player: WorldPlayer, message: any) {
-    console.log(`📊 ${player.username} change de statut: ${player.status} → ${message.status}`);
-    
     if (message.status && ['idle', 'away'].includes(message.status)) {
       const oldStatus = player.status;
       player.status = message.status;
       player.lastSeen = Date.now();
       
       if (oldStatus !== player.status) {
-        console.log(`📊 ${player.username} status confirmé: ${oldStatus} → ${player.status}`);
+        console.log(`📊 ${player.username} status: ${oldStatus} -> ${player.status}`);
       }
-    } else {
-      console.log(`⚠️ Statut invalide: ${message.status}`);
     }
   }
 
@@ -603,34 +472,16 @@ export class WorldRoom extends Room<WorldState> {
       timestamp: Date.now(),
       serverTime: new Date().toISOString()
     });
-    // Log silencieux pour heartbeat
   }
 
-  // 📊 MISE À JOUR DES STATS GLOBALES AVEC LOGS
+  // 📊 MISE À JOUR DES STATS GLOBALES
   private updateGlobalStats() {
     const now = Date.now();
     const players = Array.from(this.state.players.values());
     
-    const oldStats = {
-      totalPlayers: this.state.totalPlayers,
-      playersOnline: this.state.playersOnline,
-      playersSearching: this.state.playersSearching
-    };
-    
     this.state.totalPlayers = players.length;
-    this.state.playersOnline = players.filter(p => now - p.lastSeen < 120000).length;
+    this.state.playersOnline = players.filter(p => now - p.lastSeen < 120000).length; // 2 minutes
     this.state.playersSearching = players.filter(p => p.status === "searching").length;
-    
-    // Log seulement si les stats changent
-    if (this.state.totalPlayers !== oldStats.totalPlayers || 
-        this.state.playersOnline !== oldStats.playersOnline || 
-        this.state.playersSearching !== oldStats.playersSearching) {
-      console.log(`📊 Stats globales mises à jour:`, {
-        totalPlayers: `${oldStats.totalPlayers} → ${this.state.totalPlayers}`,
-        playersOnline: `${oldStats.playersOnline} → ${this.state.playersOnline}`,
-        playersSearching: `${oldStats.playersSearching} → ${this.state.playersSearching}`
-      });
-    }
   }
 
   // 🧹 NETTOYAGE DES JOUEURS INACTIFS
@@ -657,20 +508,16 @@ export class WorldRoom extends Room<WorldState> {
   // 💾 CHARGER LE PROFIL UTILISATEUR
   private async loadUserProfile(userId: string): Promise<any> {
     try {
-      console.log(`💾 Recherche utilisateur en base: ${userId}`);
       const user = await User.findById(userId);
       if (!user) {
         throw new Error(`Utilisateur ${userId} non trouvé`);
       }
-      
-      console.log(`💾 Utilisateur trouvé: ${user.username}`);
       
       // S'assurer que le système d'arène est initialisé
       if (!user.currentArenaId && user.currentArenaId !== 0) {
         console.log(`🔄 Migration arène pour ${user.username}`);
         await user.autoMigrateToArenaSystem();
         await user.save();
-        console.log(`✅ Migration arène terminée pour ${user.username}`);
       }
       
       return user;
@@ -683,8 +530,6 @@ export class WorldRoom extends Room<WorldState> {
   // 💾 METTRE À JOUR L'UTILISATEUR EN BASE
   private async updateUserInDatabase(userId: string, updates: any): Promise<void> {
     try {
-      console.log(`💾 Mise à jour BDD pour ${userId}:`, updates);
-      
       const user = await User.findById(userId);
       if (!user) {
         console.warn(`⚠️ Utilisateur ${userId} non trouvé pour mise à jour`);
@@ -703,13 +548,14 @@ export class WorldRoom extends Room<WorldState> {
       if (updates.isWin !== undefined) {
         if (updates.isWin) {
           user.gameStats.wins++;
+          // Gérer les win streaks
           user.gameStats.winStreak++;
           if (user.gameStats.winStreak > user.gameStats.bestWinStreak) {
             user.gameStats.bestWinStreak = user.gameStats.winStreak;
           }
         } else {
           user.gameStats.losses++;
-          user.gameStats.winStreak = 0;
+          user.gameStats.winStreak = 0; // Reset win streak
         }
         user.gameStats.totalGames++;
         
@@ -724,21 +570,16 @@ export class WorldRoom extends Room<WorldState> {
       }
       
       await user.save();
-      console.log(`💾 Profil sauvegardé pour ${user.username} (${user.playerStats.trophies} trophées)`);
+      console.log(`💾 Profil mis à jour pour ${user.username} (${user.playerStats.trophies} trophées)`);
       
     } catch (error) {
       console.error(`❌ Erreur mise à jour profil ${userId}:`, error);
     }
   }
 
-  // 🔧 GESTION DES ERREURS AVEC LOGS DÉTAILLÉS
+  // 🔧 GESTION DES ERREURS
   onError(client: Client, error: Error) {
-    console.error(`🔧 Erreur client ${client.sessionId}:`, {
-      message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    });
-    
+    console.error(`🔧 Erreur client ${client.sessionId}:`, error);
     client.send("error", { 
       message: "Erreur serveur", 
       code: "INTERNAL_ERROR",
@@ -749,8 +590,32 @@ export class WorldRoom extends Room<WorldState> {
   // 🗑️ NETTOYAGE À LA FERMETURE
   onDispose() {
     console.log('🗑️ WorldRoom fermée - Nettoyage en cours...');
-    console.log(`📊 Stats finales: ${this.state.players.size} joueurs, cache: ${this.userCache.size} entrées`);
+    
+    // Nettoyer le cache
     this.userCache.clear();
+    
+    // Arrêter tous les timers (géré automatiquement par Colyseus)
+    
     console.log('✅ WorldRoom nettoyée');
   }
+}
+
+// 🧮 AJOUT DE PHASER.MATH POUR LA COMPATIBILITÉ
+declare global {
+  namespace Phaser {
+    namespace Math {
+      function Between(min: number, max: number): number;
+    }
+  }
+}
+
+// Fallback si Phaser.Math n'est pas disponible côté serveur
+if (typeof Phaser === 'undefined') {
+  (global as any).Phaser = {
+    Math: {
+      Between: (min: number, max: number): number => {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+    }
+  };
 }
