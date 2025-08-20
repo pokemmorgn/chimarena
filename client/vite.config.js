@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
             },
             // WebSocket Colyseus -> 2567
             '/colyseus': {
-              target: 'http://127.0.0.1:2567',
+              target: 'http://127.0.0.1:3000',
               ws: true,
               changeOrigin: true,
               rewrite: (p) => p.replace(/^\/colyseus/, ''),
