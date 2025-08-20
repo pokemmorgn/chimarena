@@ -45,6 +45,33 @@ class ColyseusManager {
     }
     
     /**
+     * 🔐 OBTENIR LE TOKEN JWT (même méthode que l'API HTTP)
+     */
+    getAuthToken() {
+        try {
+            // Le plus simple : utiliser la même méthode que l'API HTTP
+            // Dans auth.js, il y a apiClient.getHeaders() qui retourne les headers avec Authorization
+            if (auth.apiClient && typeof auth.apiClient.getHeaders === 'function') {
+                const headers = auth.apiClient.getHeaders();
+                const authHeader = headers.Authorization;
+                
+                if (authHeader && authHeader.startsWith('Bearer ')) {
+                    const token = authHeader.substring(7); // Enlever "Bearer "
+                    console.log('🔐 Token JWT récupéré depuis apiClient');
+                    return token;
+                }
+            }
+            
+            console.warn('⚠️ Impossible d\'obtenir le token JWT depuis apiClient');
+            return null;
+            
+        } catch (error) {
+            console.error('❌ Erreur récupération token:', error);
+            return null;
+        }
+    }
+    
+    /**
      * Obtenir l'URL du serveur Colyseus
      */
     getServerUrl() {
@@ -85,17 +112,16 @@ class ColyseusManager {
             // Créer le client Colyseus
             this.client = new Client(this.serverUrl);
             
-            // Obtenir les données d'auth
-            const tokenInfo = auth.getTokenInfo();
-            if (!tokenInfo) {
-                throw new Error('Token invalide');
+            // Obtenir le token JWT depuis l'auth
+            const token = this.getAuthToken();
+            if (!token) {
+                throw new Error('Token d\'authentification manquant');
             }
             
-            // Se connecter à la WorldRoom
+            // Se connecter à la WorldRoom avec seulement le token
+            // Le serveur extraira userId et username du JWT
             this.worldRoom = await this.client.joinOrCreate('world', {
-                userId: tokenInfo.userId,
-                username: tokenInfo.username,
-                token: auth.getToken() // Token pour validation côté serveur
+                token: token // ✅ SEUL LE TOKEN EST NÉCESSAIRE
             });
             
             console.log('✅ Connecté à la WorldRoom:', this.worldRoom.sessionId);
