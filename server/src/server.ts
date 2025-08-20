@@ -3,6 +3,7 @@
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
+console.log('CWD =', process.cwd());
 
 // ✅ Charger .env à partir de la racine du projet
 dotenv.config({ path: path.join(__dirname, "../.env") });
