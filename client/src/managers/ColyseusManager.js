@@ -154,29 +154,44 @@ class ColyseusManager {
     console.log('🔧 Setup handlers Colyseus sécurisés...');
     
     // ✅ ÉTAT INITIAL AVEC PROTECTION
-    this.worldRoom.onStateChange.once((state) => {
-      console.log('📊 PREMIER ÉTAT REÇU');
-      console.log('État complet:', state);
-      
-      // 🔍 VÉRIFIER STRUCTURE ÉTAT
-      if (state) {
-        console.log('Propriétés état:', Object.keys(state));
-        console.log('Type players:', typeof state.players);
-        console.log('Players est Map?', state.players instanceof Map);
-        console.log('Players est Schema?', state.players?.constructor?.name);
-      }
-      
-      try {
-        this.updatePlayersFromStateSafe(state);
-        this.triggerCallback('globalStatsUpdated', {
-          totalPlayers: state.totalPlayers || 0,
-          playersOnline: state.playersOnline || 0,
-          playersSearching: state.playersSearching || 0
+   this.worldRoom.onStateChange.once((state) => {
+  console.log('📊 PREMIER ÉTAT REÇU');
+  
+  // ✅ MAINTENANT CONFIGURER onAdd/onRemove
+  if (state && state.players) {
+    try {
+      state.players.onAdd = (player, sessionId) => {
+        console.log('👤 Joueur ajouté:', sessionId, player.username);
+        this.worldPlayers.set(sessionId, {
+          sessionId,
+          username: player.username || 'Unknown',
+          level: player.level || 1,
+          trophies: player.trophies || 0,
+          status: player.status || 'online'
         });
-      } catch (error) {
-        console.error('❌ Erreur traitement état initial:', error);
-      }
-    });
+        this.triggerCallback('playersUpdated', this.worldPlayers);
+      };
+
+      state.players.onRemove = (player, sessionId) => {
+        console.log('👤 Joueur supprimé:', sessionId);
+        this.worldPlayers.delete(sessionId);
+        this.triggerCallback('playersUpdated', this.worldPlayers);
+      };
+      
+      console.log('✅ onAdd/onRemove configurés après réception état');
+    } catch (error) {
+      console.error('❌ Erreur configuration onAdd/onRemove:', error);
+    }
+  }
+  
+  // Traiter l'état initial
+  this.updatePlayersFromStateSafe(state);
+  this.triggerCallback('globalStatsUpdated', {
+    totalPlayers: state.totalPlayers || 0,
+    playersOnline: state.playersOnline || 0,
+    playersSearching: state.playersSearching || 0
+  });
+});
     
     // ✅ CHANGEMENTS D'ÉTAT AVEC PROTECTION
     this.worldRoom.onStateChange((state) => {
