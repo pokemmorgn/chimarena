@@ -1,4 +1,4 @@
-// server/src/rooms/WorldRoom.ts - SYSTÈME DE STATUT SIMPLE POUR ÉVITER LES ERREURS
+// server/src/rooms/WorldRoom.ts - CORRECTION CONNEXIONS MULTIPLES
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 import * as jwt from 'jsonwebtoken';
@@ -33,14 +33,14 @@ interface IUser {
   save(): Promise<void>;
 }
 
-// 🌍 ÉTAT DU JOUEUR DANS LE MONDE - AVEC STATUT SIMPLE
+// 🌍 ÉTAT DU JOUEUR DANS LE MONDE
 export class WorldPlayer extends Schema {
   userId: string = "";
   username: string = "";
   level: number = 1;
   trophies: number = 0;
   currentArenaId: number = 0;
-  status: string = "connecting"; // ✅ NOUVEAU: connecting, ready, idle, searching, in_battle
+  status: string = "connecting";
   lastSeen: number = Date.now();
   
   // Stats rapides pour l'affichage
@@ -55,7 +55,7 @@ export class WorldPlayer extends Schema {
     this.level = 1;
     this.trophies = 0;
     this.currentArenaId = 0;
-    this.status = "connecting"; // ✅ Toujours commencer par "connecting"
+    this.status = "connecting";
     this.lastSeen = Date.now();
     this.wins = 0;
     this.losses = 0;
@@ -99,18 +99,21 @@ defineTypes(WorldState, {
   playersSearching: "number"
 });
 
-// 🌍 WORLD ROOM - Hub central avec système de statut
+// 🌍 WORLD ROOM - avec gestion des connexions multiples
 export class WorldRoom extends Room<WorldState> {
   maxClients = 1000;
   
   // Cache des utilisateurs
   private userCache = new Map<string, any>();
   
+  // ✅ NOUVEAU: Tracker des utilisateurs par userId pour éviter les doublons
+  private userSessions = new Map<string, string>(); // userId -> sessionId actuel
+  
   // Configurations JWT
   private JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
   
   onCreate(options: any) {
-    console.log('🌍 WorldRoom créée avec système de statut');
+    console.log('🌍 WorldRoom créée avec gestion connexions multiples');
     this.setState(new WorldState());
     
     if (!this.JWT_ACCESS_SECRET) {
@@ -118,12 +121,12 @@ export class WorldRoom extends Room<WorldState> {
       throw new Error('Configuration JWT manquante');
     }
     
-    // ✅ NOUVEAU: Handler pour client prêt
+    // Handler pour client prêt
     this.onMessage("client_ready", (client, message) => {
       this.handleClientReady(client, message);
     });
     
-    // 📨 HANDLERS DE MESSAGES - AVEC VÉRIFICATION DE STATUT
+    // HANDLERS DE MESSAGES - AVEC VÉRIFICATION DE STATUT
     this.onMessage("get_arena_info", (client, message) => {
       const player = this.state.players.get(client.sessionId);
       if (this.isPlayerReady(player)) {
@@ -171,7 +174,6 @@ export class WorldRoom extends Room<WorldState> {
     
     this.onMessage("heartbeat", (client, message) => {
       const player = this.state.players.get(client.sessionId);
-      // Heartbeat fonctionne même en connecting
       if (player) {
         this.handleHeartbeat(client, player);
       }
@@ -182,17 +184,18 @@ export class WorldRoom extends Room<WorldState> {
       this.updateGlobalStats();
     }, 30000);
     
-    // Nettoyage des joueurs inactifs
+    // Nettoyage des joueurs inactifs et connexions orphelines
     this.clock.setInterval(() => {
       this.cleanupInactivePlayers();
+      this.cleanupOrphanedConnections();
     }, 60000);
     
-    console.log('✅ WorldRoom initialisée avec système de statut');
+    console.log('✅ WorldRoom initialisée avec gestion connexions multiples');
   }
 
-  // 🚪 CONNEXION D'UN JOUEUR - STATUT "connecting"
+  // 🚪 CONNEXION AVEC GESTION DES DOUBLONS
   async onJoin(client: Client, options: any) {
-    console.log(`🚪 Joueur ${client.sessionId} rejoint (statut: connecting)`);
+    console.log(`🚪 Joueur ${client.sessionId} tente de rejoindre`);
     
     try {
       // Validation JWT
@@ -205,10 +208,38 @@ export class WorldRoom extends Room<WorldState> {
         throw new Error('Token JWT invalide');
       }
       
-      console.log(`🔐 JWT validé pour: ${decoded.username} (${decoded.id})`);
+      const userId = decoded.id;
+      console.log(`🔐 JWT validé pour: ${decoded.username} (${userId})`);
+      
+      // ✅ NOUVEAU: Vérifier s'il y a déjà une session active pour cet utilisateur
+      const existingSessionId = this.userSessions.get(userId);
+      if (existingSessionId && existingSessionId !== client.sessionId) {
+        console.log(`🔄 Utilisateur ${decoded.username} déjà connecté avec session ${existingSessionId}`);
+        
+        // Déconnecter l'ancienne session
+        const existingPlayer = this.state.players.get(existingSessionId);
+        if (existingPlayer) {
+          console.log(`🚪 Déconnexion ancienne session ${existingSessionId} pour ${existingPlayer.username}`);
+          this.state.players.delete(existingSessionId);
+          this.userCache.delete(existingSessionId);
+          
+          // Essayer de fermer proprement l'ancienne connexion
+          try {
+            const existingClient = this.clients.find(c => c.sessionId === existingSessionId);
+            if (existingClient) {
+              existingClient.leave(4001, 'Nouvelle connexion détectée');
+            }
+          } catch (error) {
+            console.warn(`⚠️ Erreur fermeture ancienne session:`, error);
+          }
+        }
+        
+        // Nettoyer le mapping
+        this.userSessions.delete(userId);
+      }
       
       // Charger le profil utilisateur
-      const user = await this.loadUserProfile(decoded.id);
+      const user = await this.loadUserProfile(userId);
       if (!user) {
         throw new Error('Utilisateur non trouvé');
       }
@@ -220,14 +251,14 @@ export class WorldRoom extends Room<WorldState> {
         throw new Error(`Compte banni: ${banMessage}`);
       }
       
-      // ✅ CRÉER LE JOUEUR AVEC STATUT "connecting"
+      // Créer le joueur avec statut "connecting"
       const worldPlayer = new WorldPlayer();
-      worldPlayer.userId = (user._id as any).toString();
+      worldPlayer.userId = userId;
       worldPlayer.username = user.username;
       worldPlayer.level = user.playerStats.level;
       worldPlayer.trophies = user.playerStats.trophies;
       worldPlayer.currentArenaId = user.currentArenaId || 0;
-      worldPlayer.status = "connecting"; // ✅ IMPORTANT: Commence par connecting
+      worldPlayer.status = "connecting";
       worldPlayer.lastSeen = Date.now();
       worldPlayer.wins = user.gameStats.wins;
       worldPlayer.losses = user.gameStats.losses;
@@ -241,19 +272,22 @@ export class WorldRoom extends Room<WorldState> {
       // Mettre en cache
       this.userCache.set(client.sessionId, user);
       
+      // ✅ NOUVEAU: Enregistrer le mapping userId -> sessionId
+      this.userSessions.set(userId, client.sessionId);
+      
       // Mettre à jour les stats
       this.updateGlobalStats();
       
-      console.log(`✅ ${user.username} ajouté en statut "connecting" - En attente client_ready`);
+      console.log(`✅ ${user.username} connecté (session: ${client.sessionId})`);
       
     } catch (error) {
-      console.error(`❌ Erreur connexion:`, error);
+      console.error(`❌ Erreur connexion ${client.sessionId}:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       client.leave(4000, `Erreur d'authentification: ${errorMessage}`);
     }
   }
 
-  // ✅ NOUVEAU: Gérer le signal client prêt
+  // ✅ Gérer le signal client prêt
   private async handleClientReady(client: Client, message: any) {
     const player = this.state.players.get(client.sessionId);
     if (!player) {
@@ -261,12 +295,12 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
     
-    console.log(`🤝 CLIENT READY: ${player.username}`, {
-      oldStatus: player.status,
-      timestamp: message.timestamp
-    });
+    console.log(`🤝 CLIENT READY: ${player.username} (${client.sessionId})`);
     
-    // ✅ CHANGER LE STATUT DE "connecting" À "ready" PUIS "idle"
+    // ✅ ATTENDRE UN PEU pour s'assurer que l'état est complètement synchronisé
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Changer le statut
     player.status = "ready";
     player.lastSeen = Date.now();
     
@@ -276,19 +310,19 @@ export class WorldRoom extends Room<WorldState> {
       message: "Serveur prêt"
     });
     
-    // ✅ MAINTENANT envoyer les données personnelles
-    await this.sendPlayerData(client, player);
-    
-    // ✅ Passer en statut "idle" après envoi des données
-    this.clock.setTimeout(() => {
+    // ✅ ATTENDRE ENCORE UN PEU avant d'envoyer les données
+    this.clock.setTimeout(async () => {
+      await this.sendPlayerData(client, player);
+      
+      // Passer en idle
       if (player.status === "ready") {
         player.status = "idle";
         console.log(`✅ ${player.username} maintenant en statut "idle"`);
       }
-    }, 1000); // 1 seconde pour s'assurer que tout est synchronisé
+    }, 200); // 200ms pour être sûr
   }
   
-  // ✅ NOUVEAU: Envoyer les données du joueur une fois prêt
+  // Envoyer les données du joueur
   private async sendPlayerData(client: Client, player: WorldPlayer) {
     try {
       const user = this.userCache.get(client.sessionId);
@@ -297,10 +331,16 @@ export class WorldRoom extends Room<WorldState> {
         return;
       }
       
+      // ✅ VÉRIFIER que le client est toujours connecté avant d'envoyer
+      if (!this.state.players.has(client.sessionId)) {
+        console.warn(`⚠️ Client ${client.sessionId} plus dans l'état, annulation envoi`);
+        return;
+      }
+      
       // Envoyer le profil complet
       client.send("player_profile", {
         profile: {
-          userId: (user._id as any).toString(),
+          userId: user._id.toString(),
           username: user.username,
           level: user.playerStats.level,
           experience: user.playerStats.experience,
@@ -320,13 +360,13 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
   
-  // ✅ NOUVEAU: Vérifier si un joueur est prêt
+  // Vérifier si un joueur est prêt
   private isPlayerReady(player: WorldPlayer | undefined): boolean {
     if (!player) return false;
-    return player.status !== "connecting"; // Tout sauf "connecting"
+    return player.status !== "connecting";
   }
 
-  // 🔐 VALIDATION JWT (inchangée)
+  // 🔐 VALIDATION JWT
   private async validateJWT(token: string): Promise<any> {
     try {
       if (!this.JWT_ACCESS_SECRET) {
@@ -347,13 +387,24 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  // 🚪 DÉCONNEXION (inchangée)
+  // 🚪 DÉCONNEXION - AVEC NETTOYAGE MAPPING
   onLeave(client: Client, consented: boolean) {
     const player = this.state.players.get(client.sessionId);
     console.log(`🚪 Joueur ${player?.username || client.sessionId} quitte (${player?.status})`);
     
+    // ✅ NOUVEAU: Nettoyer le mapping userId -> sessionId
+    if (player?.userId) {
+      const currentSessionForUser = this.userSessions.get(player.userId);
+      if (currentSessionForUser === client.sessionId) {
+        this.userSessions.delete(player.userId);
+        console.log(`🧹 Mapping supprimé pour userId: ${player.userId}`);
+      }
+    }
+    
+    // Nettoyer les caches
     this.userCache.delete(client.sessionId);
     
+    // Supprimer de l'état
     if (this.state.players.has(client.sessionId)) {
       this.state.players.delete(client.sessionId);
     }
@@ -361,7 +412,25 @@ export class WorldRoom extends Room<WorldState> {
     this.updateGlobalStats();
   }
 
-  // 🏟️ HANDLERS DE MESSAGES (avec vérification de statut déjà faite)
+  // ✅ NOUVEAU: Nettoyage des connexions orphelines
+  private cleanupOrphanedConnections() {
+    const orphanedSessions: string[] = [];
+    
+    // Vérifier les mappings userId -> sessionId
+    for (const [userId, sessionId] of this.userSessions.entries()) {
+      const player = this.state.players.get(sessionId);
+      if (!player || player.userId !== userId) {
+        orphanedSessions.push(sessionId);
+        this.userSessions.delete(userId);
+      }
+    }
+    
+    if (orphanedSessions.length > 0) {
+      console.log(`🧹 Nettoyage ${orphanedSessions.length} connexions orphelines:`, orphanedSessions);
+    }
+  }
+
+  // HANDLERS DE MESSAGES (inchangés)
   private handleGetArenaInfo(client: Client, player: WorldPlayer) {
     try {
       const currentArena = ArenaManager.getCurrentArena(player.trophies);
@@ -459,7 +528,7 @@ export class WorldRoom extends Room<WorldState> {
     
     player.trophies = newTrophies;
     player.currentArenaId = newArenaId;
-    player.status = "idle"; // ✅ Retour en idle après combat
+    player.status = "idle";
     
     if (isWin) {
       player.wins++;
@@ -520,7 +589,7 @@ export class WorldRoom extends Room<WorldState> {
     const limit = Math.min(message.limit || 50, 100);
     
     const leaderboard = Array.from(this.state.players.values())
-      .filter(p => p.status !== "connecting") // ✅ Exclure les connecting
+      .filter(p => p.status !== "connecting")
       .sort((a, b) => b.trophies - a.trophies)
       .slice(0, limit)
       .map((player, index) => ({
@@ -562,18 +631,18 @@ export class WorldRoom extends Room<WorldState> {
     });
   }
 
-  // 📊 MISE À JOUR STATS GLOBALES - AVEC FILTRAGE DES "connecting"
+  // MISE À JOUR STATS GLOBALES
   private updateGlobalStats() {
     const now = Date.now();
     const players = Array.from(this.state.players.values());
     const readyPlayers = players.filter(p => p.status !== "connecting");
     
-    this.state.totalPlayers = readyPlayers.length; // ✅ Seulement les prêts
+    this.state.totalPlayers = readyPlayers.length;
     this.state.playersOnline = readyPlayers.filter(p => now - p.lastSeen < 120000).length;
     this.state.playersSearching = readyPlayers.filter(p => p.status === "searching").length;
   }
 
-  // 🧹 NETTOYAGE - INCLURE LES "connecting" TROP ANCIENS
+  // NETTOYAGE
   private cleanupInactivePlayers() {
     const now = Date.now();
     const timeout = 10 * 60 * 1000; // 10 minutes
@@ -589,6 +658,12 @@ export class WorldRoom extends Room<WorldState> {
       
       if (shouldClean) {
         console.log(`🧹 Nettoyage ${player.username} (${player.status}, inactif ${Math.round(inactiveTime/60000)}min)`);
+        
+        // Nettoyer le mapping
+        if (player.userId) {
+          this.userSessions.delete(player.userId);
+        }
+        
         this.state.players.delete(sessionId);
         this.userCache.delete(sessionId);
         cleaned.push(player.username);
@@ -601,7 +676,7 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  // 💾 MÉTHODES UTILITAIRES (inchangées)
+  // MÉTHODES UTILITAIRES (inchangées)
   private async loadUserProfile(userId: string): Promise<any> {
     try {
       const user = await User.findById(userId);
@@ -667,7 +742,6 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
-  // 🔧 GESTION ERREURS
   onError(client: Client, error: Error) {
     console.error(`🔧 Erreur client ${client.sessionId}:`, error);
     client.send("error", { 
@@ -677,15 +751,15 @@ export class WorldRoom extends Room<WorldState> {
     });
   }
 
-  // 🗑️ NETTOYAGE FERMETURE
   onDispose() {
     console.log('🗑️ WorldRoom fermée');
     this.userCache.clear();
+    this.userSessions.clear(); // ✅ NOUVEAU: Nettoyer le mapping
     console.log('✅ WorldRoom nettoyée');
   }
 }
 
-// 🧮 FALLBACK PHASER.MATH
+// FALLBACK PHASER.MATH
 declare global {
   namespace Phaser {
     namespace Math {
