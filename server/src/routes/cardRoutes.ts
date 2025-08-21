@@ -83,7 +83,9 @@ router.get('/', cardLimiter, async (req: Request, res: Response) => {
         unlockedAtArena: card.unlockedAtArena,
         maxLevel: card.maxLevel,
         baseStats: card.baseStats,
-        imageUrl: card.imageUrl,
+        cardImageUrl: card.cardImageUrl,
+        gameSprite: card.gameSprite,
+        scriptName: card.scriptName,
         tags: card.tags
       })),
       pagination: {
@@ -150,7 +152,9 @@ router.get('/:cardId', cardLimiter, async (req: Request, res: Response) => {
         baseStats: card.baseStats,
         currentLevel: validLevel,
         statsAtLevel,
-        imageUrl: card.imageUrl,
+        cardImageUrl: card.cardImageUrl,
+        gameSprite: card.gameSprite,
+        scriptName: card.scriptName,
         tags: card.tags,
         version: card.version
       }
@@ -260,7 +264,9 @@ const cards = searchCriteria.slice(0, 50); // Limiter à 50 résultats
         elixirCost: card.elixirCost,
         unlockedAtArena: card.unlockedAtArena,
         baseStats: card.baseStats,
-        imageUrl: card.imageUrl,
+        cardImageUrl: card.cardImageUrl,
+        gameSprite: card.gameSprite,
+        scriptName: card.scriptName,
         tags: card.tags
       }))
     });
