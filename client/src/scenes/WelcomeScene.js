@@ -3,7 +3,8 @@
 import Phaser from 'phaser';
 import { auth, user, crypto, config } from '../api';
 import metaMaskHelper from '../utils/metamask';
-import colyseusManager from '../managers/ColyseusManager';
+import * as ColyseusManagerModule from '../managers/ColyseusManager.js';
+const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
 
 export default class WelcomeScene extends Phaser.Scene {
     constructor() {
