@@ -633,7 +633,10 @@ export class WorldRoom extends Room<WorldState> {
    * Gérer un match trouvé par le service de matchmaking
    */
   private handleMatchFound(match: MatchResult): void {
-    console.log(`🎯 Match trouvé: ${match.player1.username} vs ${match.player2.username}`);
+  console.log(`🎯 Match trouvé: ${match.player1.username} vs ${match.player2.username}`);
+  console.log(`   🃏 Deck ${match.player1.username}: ${match.player1.deck.join(', ')}`);
+  console.log(`   🃏 Deck ${match.player2.username}: ${match.player2.deck.join(', ')}`);
+  console.log(`   ⚖️ Qualité du match: ${match.matchQuality}%, Équilibre: ${match.estimatedBalance}%`);
     
     // Trouver les clients correspondants
     const client1 = Array.from(this.clients).find(client => client.sessionId === match.player1.sessionId);
