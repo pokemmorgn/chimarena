@@ -6,29 +6,111 @@ import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 import { LoadingManager } from './utils/LoadingManager.js';
 // 🔍 IMPORT COLYSEUS TÔT POUR DEBUG
-import * as ColyseusManagerModule from './managers/ColyseusManager.js';
-const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
+
 window.GameConfig.DEBUG = import.meta.env.DEV;
 
-// === COLYSEUS MANAGER INLINE ===
-class ColyseusManager {
+// SUPPRIMER CES LIGNES :
+// import * as ColyseusManagerModule from './managers/ColyseusManager.js';
+// const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
+
+// REMPLACER PAR CE CODE INLINE :
+class ColyseusManagerInline {
   constructor() {
+    this.client = null;
+    this.worldRoom = null;
     this.isConnected = false;
+    this.isConnecting = false;
+    this.serverUrl = 'wss://chimarena.cloud/ws';
+    this.callbacks = new Map();
     console.log('🌐 ColyseusManager créé inline');
   }
-  
-  getDebugInfo() {
-    return { isConnected: this.isConnected, inline: true };
+
+  async connect() {
+    console.log('🌐 Connexion Colyseus inline...');
+    
+    if (!window.auth?.isAuthenticated()) {
+      console.error('❌ Non authentifié');
+      return false;
+    }
+
+    try {
+      this.isConnecting = true;
+      
+      if (!window.Colyseus) {
+        throw new Error('Colyseus non disponible');
+      }
+
+      this.client = new window.Colyseus.Client(this.serverUrl);
+      
+      const tokenInfo = window.auth.getTokenInfo();
+      const joinOptions = { 
+        token: tokenInfo.token,
+        username: tokenInfo.username || 'Player'
+      };
+
+      this.worldRoom = await this.client.joinOrCreate('world', joinOptions);
+      
+      // Messages simples
+      this.worldRoom.onMessage("player_profile", (data) => {
+        console.log('📨 PROFIL REÇU:', data.profile?.username);
+      });
+
+      this.worldRoom.onStateChange((state) => {
+        console.log('📊 État reçu:', {
+          totalPlayers: state.totalPlayers,
+          playersOnline: state.playersOnline
+        });
+      });
+
+      this.isConnected = true;
+      this.isConnecting = false;
+      
+      console.log('✅ Connexion Colyseus inline réussie');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Erreur connexion inline:', error);
+      this.isConnecting = false;
+      return false;
+    }
   }
-  
+
+  async disconnect() {
+    if (this.worldRoom) {
+      await this.worldRoom.leave();
+      this.worldRoom = null;
+    }
+    this.isConnected = false;
+  }
+
   fullReset() {
     console.log('🔄 Reset inline');
+    this.disconnect();
+    setTimeout(() => this.connect(), 1000);
   }
+
+  getDebugInfo() {
+    return {
+      isConnected: this.isConnected,
+      isConnecting: this.isConnecting,
+      hasRoom: !!this.worldRoom,
+      inline: true,
+      auth: window.auth?.isAuthenticated() || false
+    };
+  }
+
+  isColyseusConnected() {
+    return this.isConnected && !!this.worldRoom;
+  }
+
+  on() {}
+  off() {}
+  emergencyStop() { this.disconnect(); }
 }
 
-window.colyseusManager = new ColyseusManager();
-console.log('🌐 ColyseusManager inline exposé');
-
+const colyseusManager = new ColyseusManagerInline();
+window.colyseusManager = colyseusManager;
+console.log('✅ ColyseusManager inline exposé globalement');
 // 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
 console.log('🔍 EXPOSITION FONCTIONS DEBUG COLYSEUS...');
 
