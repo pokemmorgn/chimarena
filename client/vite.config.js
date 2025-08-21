@@ -69,7 +69,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             phaser: ['phaser'],
-            colyseus: ['colyseus.js'],
           },
         },
       },
@@ -96,7 +95,6 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
 
     optimizeDeps: {
-      include: ['phaser', 'colyseus.js'],
       exclude: [],
     },
 
