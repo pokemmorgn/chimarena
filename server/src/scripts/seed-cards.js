@@ -65,7 +65,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/knight.png",
+    cardImageUrl: "/assets/cards/knight.png",
+    gameSprite: "/assets/sprites/knight.png",
+    scriptName: "knight",
+    spriteConfig: {
+      idle: "knight_idle.png",
+      walk: "knight_walk.png", 
+      attack: "knight_attack.png",
+      death: "knight_death.png"
+    },
+    soundEffects: {
+      deploy: "knight_deploy.wav",
+      attack: "knight_attack.wav",
+      death: "knight_death.wav"
+    },
+    animationDuration: 1000,
     tags: ["melee", "tank", "ground"]
   },
   {
@@ -91,7 +105,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/archers.png",
+    cardImageUrl: "/assets/cards/archers.png",
+    gameSprite: "/assets/sprites/archers.png",
+    scriptName: "archers",
+    spriteConfig: {
+      idle: "archers_idle.png",
+      walk: "archers_walk.png",
+      attack: "archers_attack.png",
+      death: "archers_death.png"
+    },
+    soundEffects: {
+      deploy: "archers_deploy.wav",
+      attack: "archers_attack.wav",
+      death: "archers_death.wav"
+    },
+    animationDuration: 1000,
     tags: ["ranged", "air_defense", "duo"]
   },
   {
@@ -111,7 +139,13 @@ const clashRoyaleCards = [
     statsProgression: {
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/arrows.png",
+    cardImageUrl: "/assets/cards/arrows.png",
+    gameSprite: "/assets/effects/arrows.png", // Effet visuel
+    scriptName: "arrows",
+    soundEffects: {
+      deploy: "arrows_cast.wav"
+    },
+    animationDuration: 500,
     tags: ["spell", "area_damage", "instant"]
   },
   {
@@ -131,7 +165,14 @@ const clashRoyaleCards = [
     statsProgression: {
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/fireball.png",
+    cardImageUrl: "/assets/cards/fireball.png",
+    gameSprite: "/assets/effects/fireball.png", // Effet visuel
+    scriptName: "fireball",
+    soundEffects: {
+      deploy: "fireball_cast.wav",
+      attack: "fireball_explosion.wav"
+    },
+    animationDuration: 1000,
     tags: ["spell", "area_damage", "knockback"]
   },
 
@@ -159,7 +200,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/barbarians.png",
+    cardImageUrl: "/assets/cards/barbarians.png",
+    gameSprite: "/assets/sprites/barbarian.png", // Un seul barbare, x4
+    scriptName: "barbarians",
+    spriteConfig: {
+      idle: "barbarian_idle.png",
+      walk: "barbarian_walk.png",
+      attack: "barbarian_attack.png",
+      death: "barbarian_death.png"
+    },
+    soundEffects: {
+      deploy: "barbarians_deploy.wav",
+      attack: "barbarian_attack.wav",
+      death: "barbarian_death.wav"
+    },
+    animationDuration: 1000,
     tags: ["melee", "swarm", "ground"]
   },
   {
@@ -185,7 +240,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/minions.png",
+    cardImageUrl: "/assets/cards/minions.png",
+    gameSprite: "/assets/sprites/minion.png", // Un seul minion, x3
+    scriptName: "minions",
+    spriteConfig: {
+      idle: "minion_idle.png",
+      fly: "minion_fly.png",
+      attack: "minion_attack.png",
+      death: "minion_death.png"
+    },
+    soundEffects: {
+      deploy: "minions_deploy.wav",
+      attack: "minion_attack.wav",
+      death: "minion_death.wav"
+    },
+    animationDuration: 800,
     tags: ["flying", "swarm", "air"]
   },
 
@@ -213,7 +282,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/giant.png",
+    cardImageUrl: "/assets/cards/giant.png",
+    gameSprite: "/assets/sprites/giant.png",
+    scriptName: "giant",
+    spriteConfig: {
+      idle: "giant_idle.png",
+      walk: "giant_walk.png",
+      attack: "giant_attack.png",
+      death: "giant_death.png"
+    },
+    soundEffects: {
+      deploy: "giant_deploy.wav",
+      attack: "giant_punch.wav",
+      death: "giant_death.wav"
+    },
+    animationDuration: 1500,
     tags: ["tank", "building_targeting", "slow"]
   },
   {
@@ -238,7 +321,20 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/cannon.png",
+    cardImageUrl: "/assets/cards/cannon.png",
+    gameSprite: "/assets/sprites/cannon.png",
+    scriptName: "cannon",
+    spriteConfig: {
+      idle: "cannon_idle.png",
+      attack: "cannon_fire.png",
+      destroyed: "cannon_destroyed.png"
+    },
+    soundEffects: {
+      deploy: "cannon_deploy.wav",
+      attack: "cannon_fire.wav",
+      death: "cannon_destroyed.wav"
+    },
+    animationDuration: 1200,
     tags: ["building", "defense", "ground_only"]
   },
 
@@ -266,7 +362,21 @@ const clashRoyaleCards = [
       healthGrowth: 10,
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/musketeer.png",
+    cardImageUrl: "/assets/cards/musketeer.png",
+    gameSprite: "/assets/sprites/musketeer.png",
+    scriptName: "musketeer",
+    spriteConfig: {
+      idle: "musketeer_idle.png",
+      walk: "musketeer_walk.png",
+      attack: "musketeer_shoot.png",
+      death: "musketeer_death.png"
+    },
+    soundEffects: {
+      deploy: "musketeer_deploy.wav",
+      attack: "musketeer_shot.wav",
+      death: "musketeer_death.wav"
+    },
+    animationDuration: 1000,
     tags: ["ranged", "air_defense", "sharpshooter"]
   },
 
@@ -289,7 +399,14 @@ const clashRoyaleCards = [
     statsProgression: {
       damageGrowth: 10
     },
-    imageUrl: "/assets/cards/lightning.png",
+    cardImageUrl: "/assets/cards/lightning.png",
+    gameSprite: "/assets/effects/lightning.png", // Effet visuel
+    scriptName: "lightning",
+    soundEffects: {
+      deploy: "lightning_cast.wav",
+      attack: "lightning_strike.wav"
+    },
+    animationDuration: 1000,
     tags: ["spell", "area_damage", "stun", "high_hitpoints"]
   }
 ];
