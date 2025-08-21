@@ -4,7 +4,7 @@ import Card from '../models/Card';
 import { authenticateToken, optionalAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import User from '../models/User';
 import rateLimit from 'express-rate-limit';
-
+import { cardManager } from '../services/CardManager';
 const router = Router();
 
 // Rate limiting pour les API cards
@@ -338,13 +338,16 @@ router.post('/validate-deck', cardLimiter, optionalAuth, async (req: Authenticat
 
     console.log(`[CARDS] Validation deck: ${cardIds.length} cartes, CheckUnlocked: ${checkUnlocked}`);
 
-    // Validation basique du deck
-    const baseValidation = (Card as any).validateDeck(cardIds);
-    if (!baseValidation.isValid) {
+    // Validation complète avec CardManager
+    const userArena = checkUnlocked && req.user?.id ? 
+      (await User.findById(req.user.id).select('currentArenaId'))?.currentArenaId : 
+      undefined;
+    const validation = await cardManager.validateDeck(cardIds, userArena);
+    if (!validation.isValid) {
       console.log(`[CARDS] Deck invalide: ${baseValidation.error}`);
       return res.status(400).json({
         success: false,
-        message: baseValidation.error
+        message: validation.errors.join(', ') || 'Deck invalide'
       });
     }
 
