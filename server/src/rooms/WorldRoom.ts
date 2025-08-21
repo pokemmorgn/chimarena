@@ -557,37 +557,40 @@ export class WorldRoom extends Room<WorldState> {
   private handleMatchFound(match: MatchResult): void {
     console.log(`🎯 Match trouvé: ${match.player1.username} vs ${match.player2.username}`);
     
-    // Envoyer la notification aux deux joueurs
-    this.broadcast("match_found", {
-      battleRoomId: match.battleRoomId,
-      opponent: {
-        username: match.player2.username,
-        level: match.player2.level,
-        trophies: match.player2.trophies,
-        arenaId: match.player2.arenaId
-      },
-      arena: match.arena,
-      matchQuality: match.matchQuality,
-      estimatedBalance: match.estimatedBalance,
-      countdown: 3
-    }, {
-      except: [match.player1.sessionId]
-    });
+    // Trouver les clients correspondants
+    const client1 = Array.from(this.clients).find(client => client.sessionId === match.player1.sessionId);
+    const client2 = Array.from(this.clients).find(client => client.sessionId === match.player2.sessionId);
     
-    this.broadcast("match_found", {
-      battleRoomId: match.battleRoomId,
-      opponent: {
-        username: match.player1.username,
-        level: match.player1.level,
-        trophies: match.player1.trophies,
-        arenaId: match.player1.arenaId
-      },
-      arena: match.arena,
-      matchQuality: match.matchQuality,
-      estimatedBalance: 100 - match.estimatedBalance, // Inverser pour le joueur 2
-      countdown: 3
-    }, {
-      except: [match.player2.sessionId]
-    });
+    if (client1) {
+      client1.send("match_found", {
+        battleRoomId: match.battleRoomId,
+        opponent: {
+          username: match.player2.username,
+          level: match.player2.level,
+          trophies: match.player2.trophies,
+          arenaId: match.player2.arenaId
+        },
+        arena: match.arena,
+        matchQuality: match.matchQuality,
+        estimatedBalance: match.estimatedBalance,
+        countdown: 3
+      });
+    }
+    
+    if (client2) {
+      client2.send("match_found", {
+        battleRoomId: match.battleRoomId,
+        opponent: {
+          username: match.player1.username,
+          level: match.player1.level,
+          trophies: match.player1.trophies,
+          arenaId: match.player1.arenaId
+        },
+        arena: match.arena,
+        matchQuality: match.matchQuality,
+        estimatedBalance: 100 - match.estimatedBalance, // Inverser pour le joueur 2
+        countdown: 3
+      });
+    }
   }
 }
