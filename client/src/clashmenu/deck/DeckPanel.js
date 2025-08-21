@@ -1,12 +1,8 @@
 // client/src/clashmenu/deck/DeckPanel.js - PANEL DECK AVEC SOUS-ONGLETS
 import BasePanel from '../core/BasePanel.js';
 export default class DeckPanel extends BasePanel {
- constructor(scene, config = {}) {
-    // Initialisation minimale avant super()
-    this.deckElements = {};
-    this.subPanels = {};
-    this.deckState = { currentSubTab: 'deck' };
-    
+ 
+constructor(scene, config = {}) {
     super(scene, {
         name: 'DeckPanel',
         title: 'DECK',
@@ -15,6 +11,11 @@ export default class DeckPanel extends BasePanel {
         enableTitle: false, // On va créer un titre custom avec sous-onglets
         ...config
     });
+    
+    // MAINTENANT initialiser les propriétés
+    this.deckElements = {};
+    this.subPanels = {};
+    this.deckState = { currentSubTab: 'deck' };
     
     // Compléter l'initialisation après super()
     this.deckState.currentDeck = this.initializeDefaultDeck();
