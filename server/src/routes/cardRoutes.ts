@@ -321,7 +321,7 @@ router.get('/search', cardLimiter, async (req: Request, res: Response) => {
   }
 });
 
-// 🎮 POST /api/cards/validate-deck - Valider un deck
+// 🎮 POST /api/cards/validate-deck - Valider un deck avec CardManager
 router.post('/validate-deck', cardLimiter, optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { cardIds, checkUnlocked = false } = req.body as {
@@ -343,15 +343,18 @@ router.post('/validate-deck', cardLimiter, optionalAuth, async (req: Authenticat
       (await User.findById(req.user.id).select('currentArenaId'))?.currentArenaId : 
       undefined;
     const validation = await cardManager.validateDeck(cardIds, userArena);
+
     if (!validation.isValid) {
-      console.log(`[CARDS] Deck invalide: ${baseValidation.error}`);
+      console.log(`[CARDS] Deck invalide: ${validation.errors.join(', ')}`);
       return res.status(400).json({
         success: false,
-        message: validation.errors.join(', ') || 'Deck invalide'
+        message: validation.errors.join(', ') || 'Deck invalide',
+        errors: validation.errors,
+        warnings: validation.warnings
       });
     }
 
-    // Vérifier que toutes les cartes existent
+    // Si validation OK, récupérer les détails des cartes pour la réponse
     const cards = await Card.find({
       cardId: { $in: cardIds },
       isEnabled: true
@@ -369,32 +372,18 @@ router.post('/validate-deck', cardLimiter, optionalAuth, async (req: Authenticat
       });
     }
 
-    // Calculer les statistiques du deck
-    const totalElixirCost = cards.reduce((sum, card) => sum + card.elixirCost, 0);
-    const averageElixirCost = totalElixirCost / 8;
-    
-    const typeDistribution = cards.reduce((dist, card) => {
-      dist[card.type] = (dist[card.type] || 0) + 1;
-      return dist;
-    }, {} as { [key: string]: number });
-
-    const rarityDistribution = cards.reduce((dist, card) => {
-      dist[card.rarity] = (dist[card.rarity] || 0) + 1;
-      return dist;
-    }, {} as { [key: string]: number });
-
     // Vérification des cartes débloquées si utilisateur connecté
     let unlockedStatus = null;
     if (checkUnlocked && req.user?.id) {
       try {
         const user = await User.findById(req.user.id).select('currentArenaId');
         if (user) {
-          const userArena = user.currentArenaId || 0;
-          const unlockedCards = cards.filter(card => card.unlockedAtArena <= userArena);
-          const lockedCards = cards.filter(card => card.unlockedAtArena > userArena);
+          const userArenaId = user.currentArenaId || 0;
+          const unlockedCards = cards.filter(card => card.unlockedAtArena <= userArenaId);
+          const lockedCards = cards.filter(card => card.unlockedAtArena > userArenaId);
           
           unlockedStatus = {
-            userArena,
+            userArena: userArenaId,
             allUnlocked: lockedCards.length === 0,
             unlockedCount: unlockedCards.length,
             lockedCards: lockedCards.map(card => ({
@@ -409,18 +398,16 @@ router.post('/validate-deck', cardLimiter, optionalAuth, async (req: Authenticat
       }
     }
 
-    console.log(`[CARDS] Deck valide - Coût moyen: ${averageElixirCost.toFixed(1)}`);
+    console.log(`[CARDS] Deck valide - Coût moyen: ${validation.stats.averageElixirCost}`);
 
     res.json({
       success: true,
       isValid: true,
-      deckStats: {
-        totalElixirCost,
-        averageElixirCost: Math.round(averageElixirCost * 10) / 10,
-        typeDistribution,
-        rarityDistribution,
-        cardCount: cards.length
-      },
+      // Utiliser les stats calculées par le CardManager
+      deckStats: validation.stats,
+      // Ajouter les warnings et recommendations du CardManager
+      warnings: validation.warnings,
+      recommendations: validation.recommendations,
       unlockedStatus,
       cards: cards.map(card => ({
         cardId: card.cardId,
