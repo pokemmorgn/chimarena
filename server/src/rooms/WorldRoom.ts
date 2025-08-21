@@ -97,7 +97,9 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage("get_matchmaking_stats", (client, message) => {
       this.handleGetMatchmakingStats(client);
     });
-
+    this.onMessage("battle_finished", (client, message) => {
+      this.handleBattleFinished(client, message);
+    });
     this.onMessage("get_deck_info", (client, message) => {
     this.handleGetDeckInfo(client, this.state.players.get(client.sessionId)!);
     });
@@ -797,6 +799,49 @@ private async handleValidateDeck(client: Client, player: WorldPlayer, message: a
   } catch (error) {
     console.error(`❌ Erreur validation deck:`, error);
     client.send("deck_validation_error", { message: "Erreur lors de la validation" });
+  }
+}
+  /**
+ * Gérer le retour d'un joueur après un combat
+ */
+private async handleBattleFinished(client: Client, message: any) {
+  try {
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+
+    console.log(`🏁 ${player.username} revient de combat`);
+    
+    player.status = "idle";
+    
+    // Mettre à jour les stats si fournies
+    if (message.result) {
+      const { isWin, trophyChange, newTrophies } = message.result;
+      
+      if (typeof newTrophies === 'number') {
+        player.trophies = newTrophies;
+        
+        // Mettre à jour en base de données
+        try {
+          await this.updateUserInDatabase(player.userId, {
+            trophies: newTrophies,
+            isWin
+          });
+        } catch (error) {
+          console.error('❌ Erreur mise à jour BDD après combat:', error);
+        }
+      }
+      
+      console.log(`🏆 ${player.username}: ${isWin ? 'Victoire' : 'Défaite'} (${trophyChange > 0 ? '+' : ''}${trophyChange} trophées)`);
+    }
+    
+    // Confirmer le retour
+    client.send("welcome_back", {
+      message: "Bienvenue dans le lobby !",
+      newTrophies: player.trophies
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur retour de combat:', error);
   }
 }
 }
