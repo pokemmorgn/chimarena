@@ -36,25 +36,36 @@ contentStartY: 200,
     /**
      * Créer le contenu du panel deck
      */
-    createContent() {
-        this.log('Création contenu deck avec sous-onglets...');
-        
-        // 1. Header custom avec sous-navigation
-        this.createDeckHeader();
-        
-        // 2. Container pour les sous-panels
-        this.createSubPanelsContainer();
-        
-        // 3. Créer les sous-panels
-        this.createDeckSubPanel();
-        this.createCollectionSubPanel();
-        this.createDefisSubPanel();
-        
-        // 4. Afficher le premier sous-panel
-        this.switchSubTab('deck');
-        
-        this.log('Contenu deck créé', 'success');
+   createContent() {
+    this.log('Création contenu deck avec sous-onglets...');
+    
+    // SOLUTION: Initialiser ici si pas déjà fait
+    if (!this.deckElements) {
+        this.deckElements = {};
     }
+    if (!this.subPanels) {
+        this.subPanels = {};
+    }
+    if (!this.deckState) {
+        this.deckState = { currentSubTab: 'deck' };
+    }
+    
+    // 1. Header custom avec sous-navigation
+    this.createDeckHeader();
+    
+    // 2. Container pour les sous-panels
+    this.createSubPanelsContainer();
+    
+    // 3. Créer les sous-panels
+    this.createDeckSubPanel();
+    this.createCollectionSubPanel();
+    this.createDefisSubPanel();
+    
+    // 4. Afficher le premier sous-panel
+    this.switchSubTab('deck');
+    
+    this.log('Contenu deck créé', 'success');
+}
     
     /**
      * Rafraîchir les données du panel
