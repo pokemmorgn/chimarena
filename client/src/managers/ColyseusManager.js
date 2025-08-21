@@ -1,4 +1,5 @@
 // client/src/managers/ColyseusManager.js - VERSION SIMPLIFIÉE COMPATIBLE
+import { WorldState, WorldPlayer } from "../schema/WorldState.js";
 
 class ColyseusManager {
   constructor() {
@@ -155,22 +156,23 @@ class ColyseusManager {
     
     // ✅ ÉTAT SIMPLIFIÉ - PAS DE onAdd/onRemove
     this.worldRoom.onStateChange.once((state) => {
-      console.log('📊 PREMIER ÉTAT REÇU');
-      console.log('State:', {
-        totalPlayers: state.totalPlayers,
-        playersOnline: state.playersOnline,
-        playersSearching: state.playersSearching,
-        playersSize: state.players?.size
-      });
-      
-      this.updateGlobalStats(state);
-      this.updatePlayersSimple(state);
-    });
-    
-    this.worldRoom.onStateChange((state) => {
-      this.updateGlobalStats(state);
-      this.updatePlayersSimple(state);
-    });
+  console.log('📊 PREMIER ÉTAT REÇU');
+  console.log('State:', {
+    totalPlayers: state.totalPlayers,
+    playersOnline: state.playersOnline,
+    playersSearching: state.playersSearching,
+    playersSize: state.players?.size
+  });
+
+  this.updateGlobalStats(state);
+  this.updatePlayersSimple(state);
+});
+
+this.worldRoom.onStateChange((state) => {
+  this.updateGlobalStats(state);
+  this.updatePlayersSimple(state);
+});
+
     
     // ✅ ÉVÉNEMENTS CONNEXION
     this.worldRoom.onLeave((code) => {
