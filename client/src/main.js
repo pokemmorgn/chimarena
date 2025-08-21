@@ -1,12 +1,51 @@
-// client/src/main.js - VERSION VITE AVEC CLASHMENU
+// client/src/main.js - VERSION AVEC DEBUG PRÉCOCE
 import Phaser from 'phaser';
 import AuthScene from './scenes/AuthScene';
 import WelcomeScene from './scenes/WelcomeScene';
 import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 import { LoadingManager } from './utils/LoadingManager.js';
+// 🔍 IMPORT COLYSEUS TÔT POUR DEBUG
+import colyseusManager from './managers/ColyseusManager.js';
 
 window.GameConfig.DEBUG = import.meta.env.DEV;
+
+// 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
+console.log('🔍 EXPOSITION FONCTIONS DEBUG COLYSEUS...');
+
+// Exposer immédiatement les fonctions debug
+window.debugColyseus = () => {
+    console.log('🔍 DEBUG COLYSEUS:', colyseusManager.getDebugInfo());
+    return colyseusManager.getDebugInfo();
+};
+
+window.colyseusHistory = () => {
+    colyseusManager.printConnectionHistory();
+};
+
+window.colyseusStop = () => {
+    console.log('🛑 ARRÊT FORCÉ COLYSEUS');
+    colyseusManager.emergencyStop();
+};
+
+window.colyseusReset = () => {
+    console.log('🔄 RESET COMPLET COLYSEUS');
+    colyseusManager.fullReset();
+};
+
+window.colyseusReconnect = () => {
+    console.log('🔄 FORCE RECONNEXION COLYSEUS');
+    colyseusManager.connect();
+};
+
+window.colyseusManager = colyseusManager; // Accès direct
+
+console.log('✅ FONCTIONS DEBUG COLYSEUS EXPOSÉES GLOBALEMENT');
+console.log('▶️ debugColyseus() - État détaillé');
+console.log('▶️ colyseusHistory() - Historique');
+console.log('▶️ colyseusStop() - Arrêt d\'urgence');
+console.log('▶️ colyseusReset() - Reset complet');
+console.log('▶️ colyseusReconnect() - Force reconnexion');
 
 // 📱 DÉTECTION DE L'APPAREIL
 const isMobile = () => {
@@ -110,6 +149,9 @@ class ChimArenaGame {
     this.securityMonitor = null;
     this.isMobile = isMobile();
     
+    // 🔍 EXPOSER L'INSTANCE POUR DEBUG
+    window.gameInstance = this;
+    
     this.init();
   }
 
@@ -126,6 +168,37 @@ class ChimArenaGame {
     this.setupPortraitOptimizations();
     this.createGame();
     this.setupGlobalEvents();
+    
+    // 🔍 DIAGNOSTIC AUTOMATIQUE APRÈS INIT
+    setTimeout(() => {
+      this.runDiagnostic();
+    }, 2000);
+  }
+
+  // 🔍 === DIAGNOSTIC AUTOMATIQUE ===
+  runDiagnostic() {
+    console.log('🔍 === DIAGNOSTIC AUTOMATIQUE ===');
+    
+    // État du jeu
+    console.log('Game instance:', !!this.game);
+    console.log('Scenes:', this.game?.scene?.getScenes()?.map(s => s.scene.key));
+    
+    // État auth
+    console.log('Auth state:', {
+      authenticated: auth.isAuthenticated(),
+      hasToken: !!auth.getTokenInfo(),
+      tokenInfo: auth.getTokenInfo()
+    });
+    
+    // État Colyseus
+    console.log('Colyseus state:', colyseusManager.getDebugInfo());
+    
+    // Registry Phaser
+    if (this.game?.registry) {
+      console.log('Phaser registry keys:', Object.keys(this.game.registry.list));
+    }
+    
+    console.log('✅ DIAGNOSTIC TERMINÉ - Utilisez debugColyseus() pour plus de détails');
   }
 
   checkWebGLSupport() {
@@ -248,10 +321,10 @@ class ChimArenaGame {
     // Nettoyer les données sensibles
     this.clearAuthData();
     
-    // Déconnecter WebSocket si actif
-    if (this.wsConnection) {
-      this.wsConnection.close();
-      this.wsConnection = null;
+    // 🔍 AUSSI NETTOYER COLYSEUS
+    console.log('🌐 Nettoyage Colyseus après perte auth...');
+    if (colyseusManager.isColyseusConnected()) {
+      colyseusManager.disconnect();
     }
     
     // Rediriger vers AuthScene
@@ -351,6 +424,7 @@ class ChimArenaGame {
       this.game.registry.set('gameInstance', this);
       this.game.registry.set('currentUser', this.currentUser);
       this.game.registry.set('settings', this.settings);
+      this.game.registry.set('colyseusManager', colyseusManager); // 🔍 EXPOSER COLYSEUS
       
       console.log('🎮 Jeu Phaser créé avec ClashMenuScene + sécurité intégrée + PORTRAIT');
       this.simulateLoading();
@@ -368,7 +442,7 @@ class ChimArenaGame {
         progress = 100;
         clearInterval(interval);
       }
-LoadingManager.updateProgress(progress, 100);
+      LoadingManager.updateProgress(progress, 100);
     }, 200);
   }
 
@@ -459,10 +533,9 @@ LoadingManager.updateProgress(progress, 100);
       this.securityMonitor = null;
     }
     
-    // Fermer WebSocket
-    if (this.wsConnection) {
-      this.wsConnection.close();
-      this.wsConnection = null;
+    // 🔍 NETTOYER COLYSEUS
+    if (colyseusManager.isColyseusConnected()) {
+      colyseusManager.disconnect();
     }
     
     console.log('🧹 Nettoyage sécurisé terminé');
@@ -507,6 +580,7 @@ LoadingManager.updateProgress(progress, 100);
           securityMonitor: !!this.securityMonitor,
         },
         tokenInfo: auth.getTokenInfo(),
+        colyseusDebug: colyseusManager.getDebugInfo(), // 🔍 AJOUT
       };
     }
     return null;
@@ -634,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.GameConfig = {
     // URLs selon l'environnement
     API_URL: import.meta.env.VITE_API_URL || 'https://chimarena.cloud/api',
-  COLYSEUS_URL: import.meta.env.VITE_COLYSEUS_URL || 'wss://chimarena.cloud/ws',
+    COLYSEUS_URL: import.meta.env.VITE_COLYSEUS_URL || 'wss://chimarena.cloud/ws',
     
     // Pour développement local, décommenter :
     // API_URL: 'http://localhost:3000/api',
@@ -652,6 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   console.log('⚙️ GameConfig initialisé:', window.GameConfig); 
+  
   // Créer l'instance de jeu sécurisée
   window.ChimArenaInstance = new ChimArenaGame();
   
@@ -663,11 +738,134 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('🏆 Menu Clash Royale authentique prêt !');
   console.log('⚡ Vite HMR activé pour développement');
   
+  // 🔍 === FONCTIONS DEBUG SUPPLÉMENTAIRES ===
+  
+  // Debug complet de l'application
+  window.debugApp = () => {
+    console.group('🔍 === DEBUG APPLICATION COMPLÈTE ===');
+    
+    // État général
+    console.log('🎮 ChimArenaInstance:', !!window.ChimArenaInstance);
+    console.log('🎮 Game Phaser:', !!window.ChimArenaInstance?.game);
+    
+    // Scènes
+    if (window.ChimArenaInstance?.game?.scene) {
+      const scenes = window.ChimArenaInstance.game.scene.getScenes();
+      console.log('🎬 Scènes actives:', scenes.map(s => ({
+        key: s.scene.key,
+        active: s.scene.isActive(),
+        visible: s.scene.isVisible()
+      })));
+    }
+    
+    // Auth
+    console.log('🔐 Authentification:', {
+      isAuthenticated: auth.isAuthenticated(),
+      tokenInfo: auth.getTokenInfo(),
+      apiDebug: config.getDebugInfo()
+    });
+    
+    // Colyseus
+    console.log('🌐 Colyseus:', colyseusManager.getDebugInfo());
+    
+    // Registry Phaser
+    if (window.ChimArenaInstance?.game?.registry) {
+      console.log('📊 Registry Phaser:', window.ChimArenaInstance.game.registry.list);
+    }
+    
+    console.groupEnd();
+    
+    return {
+      game: !!window.ChimArenaInstance?.game,
+      scenes: window.ChimArenaInstance?.game?.scene?.getScenes()?.map(s => s.scene.key),
+      auth: auth.isAuthenticated(),
+      colyseus: colyseusManager.isColyseusConnected()
+    };
+  };
+  
+  // Test connexion Colyseus forcée
+  window.testColyseusConnection = async () => {
+    console.log('🧪 TEST CONNEXION COLYSEUS FORCÉE...');
+    
+    try {
+      // Vérifier auth d'abord
+      if (!auth.isAuthenticated()) {
+        console.error('❌ Pas authentifié pour test Colyseus');
+        return false;
+      }
+      
+      // Forcer déconnexion
+      console.log('🔌 Déconnexion forcée...');
+      await colyseusManager.forceDisconnect();
+      
+      // Attendre un peu
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Reconnecter
+      console.log('🔌 Reconnexion...');
+      const success = await colyseusManager.connect();
+      
+      console.log('✅ Test terminé:', success ? 'SUCCÈS' : 'ÉCHEC');
+      return success;
+      
+    } catch (error) {
+      console.error('❌ Erreur test Colyseus:', error);
+      return false;
+    }
+  };
+  
+  // Forcer une scène spécifique
+  window.forceScene = (sceneName) => {
+    if (window.ChimArenaInstance?.game?.scene) {
+      console.log(`🎬 Force scene: ${sceneName}`);
+      window.ChimArenaInstance.game.scene.start(sceneName);
+    } else {
+      console.error('❌ Pas de game/scene disponible');
+    }
+  };
+  
   // Debug en développement
   if (import.meta.env.DEV) {
     console.log('🔧 Mode debug Vite activé');
-    window.getSecurityDebug = () => window.ChimArenaInstance.getSecurityDebugInfo();
+    
+    // Exposer auth et config globalement pour debug
+    window.auth = auth;
+    window.config = config;
+    
+    // Function de debug sécurité
+    window.getSecurityDebug = () => window.ChimArenaInstance?.getSecurityDebugInfo();
+    
+    // Auto-diagnostic au démarrage
+    setTimeout(() => {
+      console.log('🔍 AUTO-DIAGNOSTIC AU DÉMARRAGE:');
+      window.debugApp();
+    }, 3000);
   }
+  
+  console.log(`
+🎯 === FONCTIONS DEBUG DISPONIBLES ===
+
+🔍 GÉNÉRAL:
+▶️ debugApp() - État complet de l'application
+▶️ debugColyseus() - État détaillé Colyseus
+▶️ colyseusHistory() - Historique connexions
+
+🧪 TESTS:
+▶️ testColyseusConnection() - Test connexion forcée
+▶️ forceScene('AuthScene') - Forcer une scène
+
+🛠️ CONTRÔLES:
+▶️ colyseusStop() - Arrêt d'urgence Colyseus
+▶️ colyseusReset() - Reset complet Colyseus
+▶️ colyseusReconnect() - Force reconnexion
+
+🔐 SÉCURITÉ (DEV):
+▶️ getSecurityDebug() - Debug sécurité complet
+▶️ auth.getTokenInfo() - Info token JWT
+▶️ config.getDebugInfo() - Debug API client
+
+ESSAYEZ: debugColyseus() pour voir l'état Colyseus !
+  `);
 });
 
 export default ChimArenaGame;
