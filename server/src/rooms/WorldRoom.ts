@@ -686,4 +686,76 @@ export class WorldRoom extends Room<WorldState> {
       timestamp: Date.now()
     });
   }
+  // === GESTION DES DECKS ===
+
+/**
+ * Obtenir les informations du deck de l'utilisateur
+ */
+private async handleGetDeckInfo(client: Client, player: WorldPlayer) {
+  try {
+    console.log(`🃏 Infos deck demandées pour ${player.username}`);
+    
+    const user = await User.findById(player.userId).select('deck cards currentArenaId');
+    if (!user) {
+      return client.send("deck_info_error", { message: "Utilisateur non trouvé" });
+    }
+
+    if (!user.deck || user.deck.length === 0) {
+      return client.send("deck_info", {
+        hasDeck: false,
+        message: "Aucun deck configuré"
+      });
+    }
+
+    // Valider le deck avec le CardManager
+    const deckValidation = await cardManager.validateDeck(user.deck, user.currentArenaId);
+    
+    client.send("deck_info", {
+      hasDeck: true,
+      deck: user.deck,
+      isValid: deckValidation.isValid,
+      deckStats: deckValidation.stats,
+      errors: deckValidation.errors,
+      warnings: deckValidation.warnings,
+      recommendations: deckValidation.recommendations
+    });
+    
+  } catch (error) {
+    console.error(`❌ Erreur get deck info:`, error);
+    client.send("deck_info_error", { message: "Erreur lors de la récupération du deck" });
+  }
+}
+
+/**
+ * Valider un deck proposé par le client
+ */
+private async handleValidateDeck(client: Client, player: WorldPlayer, message: any) {
+  try {
+    const { cardIds } = message;
+    
+    if (!Array.isArray(cardIds)) {
+      return client.send("deck_validation_error", { message: "Format de deck invalide" });
+    }
+
+    console.log(`🃏 Validation deck pour ${player.username}: ${cardIds.join(', ')}`);
+    
+    const user = await User.findById(player.userId).select('currentArenaId');
+    const userArena = user?.currentArenaId || 0;
+    
+    const deckValidation = await cardManager.validateDeck(cardIds, userArena);
+    
+    client.send("deck_validation_result", {
+      cardIds,
+      isValid: deckValidation.isValid,
+      deckStats: deckValidation.stats,
+      errors: deckValidation.errors,
+      warnings: deckValidation.warnings,
+      recommendations: deckValidation.recommendations
+    });
+    
+  } catch (error) {
+    console.error(`❌ Erreur validation deck:`, error);
+    client.send("deck_validation_error", { message: "Erreur lors de la validation" });
+  }
+}
 }
