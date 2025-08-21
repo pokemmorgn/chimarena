@@ -353,8 +353,14 @@ cardSchema.statics.validateDeck = function(cardIds: string[]) {
 // 🎮 MIDDLEWARE DE VALIDATION
 cardSchema.pre('save', function(next) {
   // Auto-générer l'URL d'image si manquante
-  if (!this.imageUrl) {
-    this.imageUrl = `/assets/cards/${this.cardId}.png`;
+  if (!this.cardImageUrl) {
+    this.cardImageUrl = `/assets/cards/${this.cardId}.png`;
+  }
+  if (!this.gameSprite) {
+    this.gameSprite = `/assets/sprites/${this.cardId}.png`;
+  }
+  if (!this.scriptName) {
+    this.scriptName = this.cardId; // Script par défaut = cardId
   }
   
   // Valider la cohérence des stats
