@@ -439,5 +439,65 @@ router.get('/stats/upgrade-cost/:cardId', cardLimiter, async (req: Request, res:
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
+// 📊 GET /api/cards/analytics/meta - Analyse du méta
+router.get('/analytics/meta', cardLimiter, async (req: Request, res: Response) => {
+  try {
+    console.log(`[CARDS] Analyse méta demandée`);
+    
+    const metaAnalysis = await cardManager.getMetaAnalysis();
+    const globalStats = await cardManager.getGlobalStats();
+    
+    res.json({
+      success: true,
+      meta: metaAnalysis,
+      globalStats,
+      timestamp: Date.now()
+    });
+  } catch (error: any) {
+    console.error(`[CARDS] Erreur analyse méta:`, error.message);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// 🎯 GET /api/cards/recommendations/:arenaId - Recommandations de deck
+router.get('/recommendations/:arenaId', cardLimiter, optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { arenaId } = req.params;
+    const arenaNum = parseInt(arenaId);
+
+    if (isNaN(arenaNum) || arenaNum < 0 || arenaNum > 9) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID d\'arène invalide (0-9)'
+      });
+    }
+
+    console.log(`[CARDS] Recommandations demandées pour arène ${arenaNum}`);
+
+    // Récupérer les cartes de l'utilisateur si connecté
+    let userCards: string[] = [];
+    if (req.user?.id) {
+      try {
+        const user = await User.findById(req.user.id).select('cards');
+        userCards = user?.cards.map(c => c.cardId) || [];
+      } catch (error) {
+        console.warn(`[CARDS] Erreur récupération cartes user ${req.user.id}`);
+      }
+    }
+
+    const recommendations = await cardManager.getDeckRecommendations(arenaNum, userCards.length > 0 ? userCards : undefined);
+
+    res.json({
+      success: true,
+      arenaId: arenaNum,
+      recommendations: recommendations.recommendedDecks,
+      missingCards: recommendations.missingCards,
+      userHasCards: userCards.length > 0
+    });
+  } catch (error: any) {
+    console.error(`[CARDS] Erreur recommandations:`, error.message);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
 
 export default router;
