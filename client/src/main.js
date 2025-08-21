@@ -109,8 +109,37 @@ class ColyseusManagerInline {
 }
 
 const colyseusManager = new ColyseusManagerInline();
+
+// ✅ EXPOSITION FORCÉE AVEC VÉRIFICATIONS
 window.colyseusManager = colyseusManager;
-console.log('✅ ColyseusManager inline exposé globalement');
+window.globalThis.colyseusManager = colyseusManager; // Double sécurité
+
+console.log('🔍 VERIFICATION EXPOSITION:');
+console.log('- colyseusManager créé:', !!colyseusManager);
+console.log('- window.colyseusManager:', !!window.colyseusManager);
+console.log('- Type manager:', typeof colyseusManager);
+console.log('- Méthodes disponibles:', Object.getOwnPropertyNames(Object.getPrototypeOf(colyseusManager)));
+
+// Test immédiat
+if (window.colyseusManager) {
+  console.log('✅ ColyseusManager inline exposé avec succès');
+  console.log('✅ Test getDebugInfo:', window.colyseusManager.getDebugInfo());
+} else {
+  console.error('❌ Échec exposition ColyseusManager');
+}
+
+// Attendre Colyseus
+setTimeout(() => {
+  console.log('🔍 VERIFICATION COLYSEUS APRÈS 1 SECONDE:');
+  console.log('- window.Colyseus disponible:', !!window.Colyseus);
+  console.log('- Type Colyseus:', typeof window.Colyseus);
+  
+  if (window.Colyseus) {
+    console.log('✅ Colyseus chargé avec succès');
+  } else {
+    console.error('❌ Colyseus non chargé');
+  }
+}, 1000);
 // 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
 console.log('🔍 EXPOSITION FONCTIONS DEBUG COLYSEUS...');
 
