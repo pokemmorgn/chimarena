@@ -181,13 +181,24 @@ const cardSchema = new mongoose.Schema<ICard>(
       damageGrowth: { type: Number, min: 0, max: 50, default: 10 }     // % par niveau
     },
     
-    // Métadonnées
-    imageUrl: { type: String, trim: true },
+    // Métadonnées visuelles et audio
+    cardImageUrl: { type: String, trim: true },
+    gameSprite: { type: String, trim: true },
+    spriteConfig: {
+      idle: { type: String, trim: true },
+      walk: { type: String, trim: true },
+      attack: { type: String, trim: true },
+      death: { type: String, trim: true }
+    },
     soundEffects: {
       deploy: { type: String, trim: true },
       attack: { type: String, trim: true },
       death: { type: String, trim: true }
     },
+    
+    // Gameplay et scripts
+    scriptName: { type: String, trim: true },
+    animationDuration: { type: Number, min: 0, default: 1000 },
     
     // Balancing
     isEnabled: { type: Boolean, default: true, index: true },
