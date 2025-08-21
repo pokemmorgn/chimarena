@@ -6,6 +6,7 @@ import type express from "express";
 
 // Import des rooms
 import { WorldRoom } from "./rooms/WorldRoom";
+import { BattleRoom } from "./rooms/BattleRoom";
 
 // Import des middlewares
 import { setupMiddlewares } from "./config/middlewares";
@@ -21,7 +22,7 @@ export default defineConfig({
     
     // Définir les rooms
     gameServer.define("world", WorldRoom);
-    
+    gameServer.define("battle", BattleRoom);
     console.log("✅ Rooms Colyseus enregistrées");
   },
 
