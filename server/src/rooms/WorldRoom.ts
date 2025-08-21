@@ -1,7 +1,6 @@
 // server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE
 
 import { Room, Client } from "@colyseus/core";
-import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
 
