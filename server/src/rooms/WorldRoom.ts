@@ -35,7 +35,7 @@ export class WorldState extends Schema {
 export class WorldRoom extends Room<WorldState> {
   maxClients = 1000;
   
-  private matchmakingService: MatchmakingService;
+  private matchmakingService!: MatchmakingService;
   
   // Cache des utilisateurs
   private userCache = new Map<string, any>();
