@@ -3,6 +3,7 @@
 import { Room, Client } from "@colyseus/core";
 import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
+import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/MatchmakingService";
 
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
 import { Schema, type, MapSchema } from "@colyseus/schema";
