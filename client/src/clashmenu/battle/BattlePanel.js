@@ -637,7 +637,7 @@ export default class BattlePanel extends BasePanel {
         
         // Vérifier la connexion
         if (!this.isColyseusConnected()) {
-            this.showError('Connexion au serveur requise pour jouer');
+            this.showError('Connexion au serveur requise pour jouer AHAHAHAHAHHA');
             return;
         }
         
