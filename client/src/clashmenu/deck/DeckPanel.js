@@ -215,7 +215,10 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
             
             container.add(tabContainer);
         });
-        
+
+         console.log('DEBUG - this.deckElements:', this.deckElements);
+    console.log('DEBUG - typeof this.deckElements:', typeof this.deckElements);
+    console.log('DEBUG - container:', container);
         this.deckElements.subNavigation = container;
     }
     
