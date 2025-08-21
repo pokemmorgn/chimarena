@@ -29,7 +29,7 @@ export default class PanelManager {
         // Navigation
         this.navigation = null;
         this.tabDefinitions = [
-            { id: 'battle', name: 'Bataille', icon: '⚔️', module: null },
+            { id: 'battle', name: 'Bataille !!!!', icon: '⚔️', module: null },
             { id: 'cards', name: 'Cartes', icon: '🃏', module: null },
             { id: 'clan', name: 'Clan', icon: '🏰', module: null },
             { id: 'profile', name: 'Profil', icon: '👤', module: null }
