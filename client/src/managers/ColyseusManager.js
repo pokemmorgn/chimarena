@@ -1,5 +1,5 @@
 // client/src/managers/ColyseusManager.js - VERSION FINALE SANS BOUCLE
-
+import { Client } from "colyseus.js";
 import { WorldState } from "../schemas/WorldState.js";
 
 class ColyseusManager {
@@ -104,11 +104,7 @@ class ColyseusManager {
       // 🔧 CRÉER CLIENT SIMPLE
       console.log('🔧 Création client Colyseus...');
       
-      if (!window.Colyseus) {
-        throw new Error('Colyseus non disponible globalement');
-      }
-      
-      this.client = new window.Colyseus.Client(this.serverUrl);
+      this.client = new Client(this.serverUrl);
       
       // 🔑 RÉCUPÉRER TOKEN FINAL
       const tokenInfo = auth.getTokenInfo();
