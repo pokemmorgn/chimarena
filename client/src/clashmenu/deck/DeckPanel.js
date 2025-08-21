@@ -6,7 +6,7 @@ import ChallengesSubPanel from './ChallengesSubPanel.js';
 
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-        // IMPORTANT: Initialiser les propriétés AVANT super() 
+        // IMPORTANT: Initialiser TOUTES les propriétés AVANT super() 
         // car BasePanel appelle automatiquement createContent() dans son constructeur
         
         // État du deck
@@ -15,6 +15,19 @@ export default class DeckPanel extends BasePanel {
             currentDeck: null, // Sera initialisé après
             selectedCard: null,
             selectedSlot: null
+        };
+        
+        // Sous-panels (initialisés vides)
+        const subPanels = {
+            collection: null,
+            deck: null,
+            challenges: null
+        };
+        
+        // Éléments du header (initialisés vides)
+        const headerElements = {
+            navigation: null,
+            elixirDisplay: null
         };
         
         // Passer l'état initial dans la config pour éviter les problèmes d'ordre
@@ -31,27 +44,16 @@ export default class DeckPanel extends BasePanel {
         
         super(scene, enhancedConfig);
         
-        // Maintenant on peut initialiser les propriétés en toute sécurité
+        // Maintenant on peut assigner les propriétés en toute sécurité
         this.deckState = deckState;
-        this.deckState.currentDeck = this.initializeDefaultDeck();
+        this.subPanels = subPanels;
+        this.headerElements = headerElements;
         
-        // Sous-panels
-        this.subPanels = {
-            collection: null,
-            deck: null,
-            challenges: null
-        };
-        
-        // Container pour les sous-panels
+        // Container pour les sous-panels (sera créé dans createContent)
         this.subPanelsContainer = null;
         
-        // Éléments du header
-        this.headerElements = {
-            navigation: null,
-            elixirDisplay: null
-        };
-        
-        // Configuration des cartes
+        // Finir l'initialisation des données
+        this.deckState.currentDeck = this.initializeDefaultDeck();
         this.cardsDatabase = this.initializeCardsDatabase();
         this.userCollection = this.initializeUserCollection();
         
