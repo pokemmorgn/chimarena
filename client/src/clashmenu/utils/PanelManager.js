@@ -59,7 +59,7 @@ export default class PanelManager {
         
         // TEMPORAIRE : Commencer par un placeholder pour éviter les erreurs
         console.log('🧪 TEMPORAIRE: Chargement placeholder battle pour debug...');
-        await this.showPanel('clan'); // Commencer par placeholder qui marche
+        await this.showPanel('battle'); // Commencer par placeholder qui marche
         
         this.state.initialized = true;
         console.log('✅ PanelManager initialisé');
@@ -201,10 +201,10 @@ export default class PanelManager {
             let PanelClass = null;
             
             // POUR DEBUG : Forcer placeholder pour battle et cards
-            if (panelId === 'battle' || panelId === 'cards') {
-                console.log(`🧪 DEBUG: Force placeholder pour ${panelId} pour éviter erreurs`);
-                return this.createPlaceholderPanel(panelId, panelConfig);
-            }
+            // if (panelId === 'battle' || panelId === 'cards') {
+            //    console.log(`🧪 DEBUG: Force placeholder pour ${panelId} pour éviter erreurs`);
+            //     return this.createPlaceholderPanel(panelId, panelConfig);
+            //  }
             
             // Import direct avec chemins corrects (désactivé temporairement)
             switch (panelId) {
