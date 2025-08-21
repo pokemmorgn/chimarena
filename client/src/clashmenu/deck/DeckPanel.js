@@ -2,42 +2,49 @@
 import BasePanel from '../core/BasePanel.js';
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-         // État du panel deck
-        this.deckState = {
-            currentSubTab: 'deck', // deck, collection, defis
-            currentDeck: null, // ← CHANGER ICI : null au lieu de this.initializeDefaultDeck()
-            selectedCard: null,
-            filterBy: 'all', // all, common, rare, epic, legendary
-            sortBy: 'cost', // cost, name, level, rarity
-            searchTerm: ''
-        };
-        
-        // Sous-panels
-        this.subPanels = {
-            deck: null,
-            collection: null,
-            defis: null
-        };
-        
-        super(scene, {
-            name: 'DeckPanel',
-            title: 'DECK',
-            icon: '🛡️',
-            contentStartY: 120,
-            enableTitle: false, // On va créer un titre custom avec sous-onglets
-            ...config
-        });
-        
-        // ← AJOUTER ICI après super() :
-        // Initialiser le deck après super()
-        this.deckState.currentDeck = this.initializeDefaultDeck();
-        
-        // Configuration des cartes
-        this.cardsDatabase = this.initializeCardsDatabase();
-        this.userCollection = this.initializeUserCollection();
-        
-        this.log('Panel Deck initialisé avec sous-onglets');
-    }
+    super(scene, {
+        name: 'DeckPanel',
+        title: 'DECK',
+        icon: '🛡️',
+        contentStartY: 120,
+        enableTitle: false, // On va créer un titre custom avec sous-onglets
+        ...config
+    });
+    
+    // État du panel deck (APRÈS super)
+    this.deckState = {
+        currentSubTab: 'deck', // deck, collection, defis
+        currentDeck: this.initializeDefaultDeck(),
+        selectedCard: null,
+        filterBy: 'all', // all, common, rare, epic, legendary
+        sortBy: 'cost', // cost, name, level, rarity
+        searchTerm: ''
+    };
+    
+    // Sous-panels
+    this.subPanels = {
+        deck: null,
+        collection: null,
+        defis: null
+    };
+    
+    // Éléments UI spécifiques
+    this.deckElements = {
+        subNavigation: null,
+        deckSlots: [],
+        collectionGrid: null,
+        elixirCost: null,
+        searchBar: null,
+        filters: null
+    };
+    
+    // Configuration des cartes
+    this.cardsDatabase = this.initializeCardsDatabase();
+    this.userCollection = this.initializeUserCollection();
+    
+    this.log('Panel Deck initialisé avec sous-onglets');
+}
+    
     // === IMPLÉMENTATION BASEPANEL ===
     
     /**
