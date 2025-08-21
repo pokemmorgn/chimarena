@@ -3,16 +3,7 @@ import BasePanel from '../core/BasePanel.js';
 
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-        super(scene, {
-            name: 'DeckPanel',
-            title: 'DECK',
-            icon: '🛡️',
-            contentStartY: 120,
-            enableTitle: false, // On va créer un titre custom avec sous-onglets
-            ...config
-        });
-        
-        // État du panel deck
+         // État du panel deck
         this.deckState = {
             currentSubTab: 'deck', // deck, collection, defis
             currentDeck: this.initializeDefaultDeck(),
@@ -28,6 +19,16 @@ export default class DeckPanel extends BasePanel {
             collection: null,
             defis: null
         };
+        
+        super(scene, {
+            name: 'DeckPanel',
+            title: 'DECK',
+            icon: '🛡️',
+            contentStartY: 120,
+            enableTitle: false, // On va créer un titre custom avec sous-onglets
+            ...config
+        });
+        
         
         // Éléments UI spécifiques
         this.deckElements = {
