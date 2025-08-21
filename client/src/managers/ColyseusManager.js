@@ -207,40 +207,6 @@ class ColyseusManager {
       }
     });
     
-    // ✅ AJOUT/SUPPRESSION JOUEURS SÉCURISÉ
-    if (this.worldRoom.state && this.worldRoom.state.players) {
-      try {
-        // Protection contre l'erreur onAdd
-        this.worldRoom.state.players.onAdd = (player, sessionId) => {
-          try {
-            console.log('👤 Joueur ajouté:', sessionId, player.username);
-            this.worldPlayers.set(sessionId, {
-              sessionId,
-              username: player.username || 'Unknown',
-              level: player.level || 1,
-              trophies: player.trophies || 0,
-              status: player.status || 'online'
-            });
-            this.triggerCallback('playersUpdated', this.worldPlayers);
-          } catch (error) {
-            console.error('❌ Erreur onAdd player:', error);
-          }
-        };
-
-        this.worldRoom.state.players.onRemove = (player, sessionId) => {
-          try {
-            console.log('👤 Joueur supprimé:', sessionId);
-            this.worldPlayers.delete(sessionId);
-            this.triggerCallback('playersUpdated', this.worldPlayers);
-          } catch (error) {
-            console.error('❌ Erreur onRemove player:', error);
-          }
-        };
-      } catch (error) {
-        console.error('❌ Impossible de configurer onAdd/onRemove:', error);
-        console.warn('⚠️ Mode fallback: polling manuel');
-      }
-    }
     
     // ✅ MESSAGES SERVEUR
     this.worldRoom.onMessage("player_profile", (data) => {
