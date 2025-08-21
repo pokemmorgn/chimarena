@@ -1,5 +1,7 @@
 // client/src/clashmenu/deck/DeckPanel.js - PANEL DECK AVEC SOUS-ONGLETS
-constructor(scene, config = {}) {
+import BasePanel from '../core/BasePanel.js';
+export default class DeckPanel extends BasePanel {
+ constructor(scene, config = {}) {
     // Initialisation minimale avant super()
     this.deckElements = {};
     this.subPanels = {};
