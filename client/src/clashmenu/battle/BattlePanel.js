@@ -121,34 +121,74 @@ handleMatchmaking() {
         console.log('🎯 Matchmaking lancé !');
         
         try {
-            // Vérifier que la connexion WebSocket existe
-            const networkManager = this.scene.networkManager;
-            if (!networkManager || !networkManager.isConnected()) {
-                this.showSimpleNotification('❌ Connexion requise !');
-                console.error('❌ NetworkManager non connecté');
+            // Utiliser le ColyseusManager global au lieu de networkManager
+            const colyseusManager = window.colyseusManager;
+            
+            if (!colyseusManager) {
+                console.error('❌ ColyseusManager non trouvé');
+                this.showSimpleNotification('❌ Service réseau indisponible');
                 return;
             }
             
-            // Envoyer la demande de matchmaking au serveur
-            networkManager.sendMessage('search_battle', {
-                preferredGameMode: 'ranked',
-                timestamp: Date.now()
-            });
-            
-            console.log('✅ Demande de matchmaking envoyée au serveur');
-            this.showSimpleNotification('🎯 Recherche d\'adversaire...');
-            
-            // Action pour le système local si nécessaire
-            if (this.config.onAction) {
-                this.config.onAction('matchmaking', {
-                    type: 'search_battle',
-                    timestamp: Date.now()
-                });
+            if (!colyseusManager.isColyseusConnected()) {
+                this.showSimpleNotification('🔄 Connexion en cours...');
+                console.log('🔄 Tentative de connexion via ColyseusManager...');
+                
+                // Essayer de se connecter via ColyseusManager
+                colyseusManager.connect()
+                    .then((success) => {
+                        if (success) {
+                            console.log('✅ Connexion réussie, relance du matchmaking...');
+                            this.showSimpleNotification('✅ Connecté ! Recherche...');
+                            // Relancer le matchmaking après connexion
+                            setTimeout(() => this.sendMatchmakingRequest(), 1000);
+                        } else {
+                            console.error('❌ Échec connexion ColyseusManager');
+                            this.showSimpleNotification('❌ Connexion échouée');
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('❌ Erreur connexion ColyseusManager:', error);
+                        this.showSimpleNotification('❌ Connexion échouée');
+                    });
+                return;
             }
+            
+            // Si déjà connecté, envoyer directement
+            this.sendMatchmakingRequest();
             
         } catch (error) {
             console.error('❌ Erreur handleMatchmaking:', error);
             this.showSimpleNotification('❌ Erreur de connexion');
+        }
+    }
+    
+    sendMatchmakingRequest() {
+        try {
+            const colyseusManager = window.colyseusManager;
+            
+            // Utiliser la méthode searchBattle du ColyseusManager
+            const success = colyseusManager.searchBattle();
+            
+            if (success) {
+                console.log('✅ Demande de matchmaking envoyée au serveur');
+                this.showSimpleNotification('🎯 Recherche d\'adversaire...');
+                
+                // Action pour le système local si nécessaire
+                if (this.config.onAction) {
+                    this.config.onAction('matchmaking', {
+                        type: 'search_battle',
+                        timestamp: Date.now()
+                    });
+                }
+            } else {
+                console.error('❌ Échec envoi demande matchmaking');
+                this.showSimpleNotification('❌ Erreur envoi requête');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erreur sendMatchmakingRequest:', error);
+            this.showSimpleNotification('❌ Erreur envoi requête');
         }
     }
     
