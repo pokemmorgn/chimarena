@@ -1,7 +1,10 @@
 // client/src/clashmenu/deck/DeckPanel.js - PANEL DECK AVEC SOUS-ONGLETS
-import BasePanel from '../core/BasePanel.js';
-export default class DeckPanel extends BasePanel {
-    constructor(scene, config = {}) {
+constructor(scene, config = {}) {
+    // Initialisation minimale avant super()
+    this.deckElements = {};
+    this.subPanels = {};
+    this.deckState = { currentSubTab: 'deck' };
+    
     super(scene, {
         name: 'DeckPanel',
         title: 'DECK',
@@ -11,32 +14,12 @@ export default class DeckPanel extends BasePanel {
         ...config
     });
     
-    // État du panel deck (APRÈS super)
-    this.deckState = {
-        currentSubTab: 'deck', // deck, collection, defis
-        currentDeck: this.initializeDefaultDeck(),
-        selectedCard: null,
-        filterBy: 'all', // all, common, rare, epic, legendary
-        sortBy: 'cost', // cost, name, level, rarity
-        searchTerm: ''
-    };
-    
-    // Sous-panels
-    this.subPanels = {
-        deck: null,
-        collection: null,
-        defis: null
-    };
-    
-    // Éléments UI spécifiques
-    this.deckElements = {
-        subNavigation: null,
-        deckSlots: [],
-        collectionGrid: null,
-        elixirCost: null,
-        searchBar: null,
-        filters: null
-    };
+    // Compléter l'initialisation après super()
+    this.deckState.currentDeck = this.initializeDefaultDeck();
+    this.deckState.selectedCard = null;
+    this.deckState.filterBy = 'all';
+    this.deckState.sortBy = 'cost';
+    this.deckState.searchTerm = '';
     
     // Configuration des cartes
     this.cardsDatabase = this.initializeCardsDatabase();
