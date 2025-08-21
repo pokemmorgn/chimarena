@@ -4,7 +4,7 @@ import { Room, Client } from "@colyseus/core";
 import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
 import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/MatchmakingService";
-
+import { cardManager } from '../services/CardManager';
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
 import { Schema, type, MapSchema } from "@colyseus/schema";
 
@@ -279,16 +279,43 @@ export class WorldRoom extends Room<WorldState> {
     return "Apprenti";
   }
 
-// ⚔️ RECHERCHE DE BATAILLE
-  private handleSearchBattle(client: Client, player: WorldPlayer) {
-    console.log(`⚔️ ${player.username} recherche une bataille`);
-    
-    if (player.status !== "idle") {
-      client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
+    // ⚔️ RECHERCHE DE BATAILLE
+      private handleSearchBattle(client: Client, player: WorldPlayer) {
+        console.log(`⚔️ ${player.username} recherche une bataille`);
+        
+        if (player.status !== "idle") {
+          client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
+          return;
+        }
+        
+    // Récupérer et valider le deck de l'utilisateur
+    const user = await User.findById(player.userId).select('deck currentArenaId');
+    if (!user || !user.deck || user.deck.length !== 8) {
+      client.send("search_error", { 
+        message: "Deck invalide ou incomplet. Configurez votre deck avant de jouer.",
+        code: "INVALID_DECK"
+      });
       return;
     }
     
-    // Créer le joueur pour le matchmaking
+    // Valider le deck avec le CardManager
+    console.log(`🎮 Validation deck pour ${player.username}: ${user.deck.join(', ')}`);
+    const deckValidation = await cardManager.validateDeck(user.deck, user.currentArenaId);
+    
+    if (!deckValidation.isValid) {
+      console.log(`❌ Deck invalide pour ${player.username}: ${deckValidation.errors.join(', ')}`);
+      client.send("search_error", { 
+        message: `Deck invalide: ${deckValidation.errors.join(', ')}`,
+        code: "DECK_VALIDATION_FAILED",
+        errors: deckValidation.errors,
+        warnings: deckValidation.warnings
+      });
+      return;
+    }
+    
+    console.log(`✅ Deck valide pour ${player.username} - Coût moyen: ${deckValidation.stats.averageElixirCost}`);
+    
+    // Créer le joueur pour le matchmaking avec le vrai deck
     const matchmakingPlayer: MatchmakingPlayer = {
       sessionId: client.sessionId,
       userId: player.userId,
@@ -297,12 +324,12 @@ export class WorldRoom extends Room<WorldState> {
       trophies: player.trophies,
       arenaId: player.currentArenaId,
       winRate: player.winRate,
-      deck: ["knight", "archers", "fireball", "arrows"], // Deck par défaut pour l'instant
+      deck: user.deck, // ✅ Vrai deck de l'utilisateur
       preferredGameMode: 'ranked',
-      region: 'EU', // Par défaut pour l'instant
-      joinedAt: 0, // Sera défini par le service
-      estimatedWaitTime: 0, // Sera calculé par le service
-      searchAttempts: 0 // Sera géré par le service
+      region: 'EU',
+      joinedAt: 0,
+      estimatedWaitTime: 0,
+      searchAttempts: 0
     };
     
     // Ajouter au service de matchmaking
