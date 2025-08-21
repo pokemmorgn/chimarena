@@ -2,7 +2,8 @@
 
 import Phaser from 'phaser';
 import { auth } from '../api';
-import { default as colyseusManager } from '../managers/ColyseusManager.js';
+import ColyseusManagerModule from '../managers/ColyseusManager.js';
+const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
 
 export default class AuthScene extends Phaser.Scene {
   constructor() {
