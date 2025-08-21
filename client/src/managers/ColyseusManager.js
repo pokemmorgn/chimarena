@@ -55,21 +55,38 @@ class ColyseusManager {
       this.isConnecting = true;
       this.authCheckInProgress = true;
       
-      // 🔐 VÉRIFICATION AUTH SIMPLE - UNE SEULE FOIS
+      // 🔐 VÉRIFICATION AUTH AVEC IMPORT DYNAMIQUE
       console.log('🔐 Vérification authentification unique...');
       
-      if (!window.auth) {
-        throw new Error('Module auth non disponible');
+      // ✅ ESSAYER D'IMPORTER auth DYNAMIQUEMENT
+      let auth = window.auth;
+      if (!auth) {
+        try {
+          console.log('📥 Import dynamique du module auth...');
+          const authModule = await import('../api.js');
+          auth = authModule.auth;
+          
+          // Exposer globalement pour les prochaines fois
+          window.auth = auth;
+          console.log('✅ Module auth importé et exposé');
+        } catch (importError) {
+          console.error('❌ Impossible d\'importer auth:', importError);
+          throw new Error('Module auth non disponible après import');
+        }
+      }
+      
+      if (!auth) {
+        throw new Error('Module auth toujours non disponible');
       }
       
       // ✅ APPEL UNIQUE À isAuthenticated
-      const isAuth = window.auth.isAuthenticated();
+      const isAuth = auth.isAuthenticated();
       console.log('🔐 Auth check résultat:', isAuth);
       
       if (!isAuth) {
         // ✅ UNE SEULE TENTATIVE DE RÉCUPÉRATION TOKEN
         console.log('🔑 Récupération token directe...');
-        const tokenInfo = window.auth.getTokenInfo();
+        const tokenInfo = auth.getTokenInfo();
         
         if (!tokenInfo?.token) {
           throw new Error('Non authentifié - aucun token disponible');
@@ -94,7 +111,7 @@ class ColyseusManager {
       this.client = new window.Colyseus.Client(this.serverUrl);
       
       // 🔑 RÉCUPÉRER TOKEN FINAL
-      const tokenInfo = window.auth.getTokenInfo();
+      const tokenInfo = auth.getTokenInfo();
       if (!tokenInfo?.token) {
         throw new Error('Token manquant au moment de la connexion');
       }
@@ -390,6 +407,21 @@ class ColyseusManager {
 
   // ✅ DEBUG SANS APPELS AUTH RÉPÉTÉS
   getDebugInfo() {
+    // ✅ VÉRIFICATION SAFE DE window.auth
+    let authState = { error: 'auth module unavailable' };
+    
+    try {
+      if (window.auth) {
+        authState = {
+          isAuthenticated: window.auth.isAuthenticated(),
+          hasTokenInfo: !!window.auth.getTokenInfo(),
+          tokenInfo: window.auth.getTokenInfo()
+        };
+      }
+    } catch (error) {
+      authState = { error: `auth check failed: ${error.message}` };
+    }
+
     return {
       isConnected: this.isConnected,
       isConnecting: this.isConnecting,
@@ -404,8 +436,7 @@ class ColyseusManager {
       globalStats: this.globalStats,
       heartbeatActive: !!this.heartbeatInterval,
       lastConnectionAttempt: this.lastConnectionAttempt,
-      // ✅ PAS D'APPEL À window.auth.isAuthenticated() ICI
-      authModuleAvailable: !!window.auth,
+      auth: authState,
       timestamp: Date.now()
     };
   }
