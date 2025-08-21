@@ -94,6 +94,10 @@ export class WorldRoom extends Room<WorldState> {
       this.handleHeartbeat(client, this.state.players.get(client.sessionId)!);
     });
     
+    this.onMessage("get_matchmaking_stats", (client, message) => {
+      this.handleGetMatchmakingStats(client);
+    });
+    
     // Mise à jour périodique des stats
     this.clock.setInterval(() => {
       this.updateGlobalStats();
