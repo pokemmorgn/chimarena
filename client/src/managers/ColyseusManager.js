@@ -461,7 +461,12 @@ class ColyseusManager {
 }
 
 // Export par défaut ET nommé pour compatibilité
+// Export par défaut ET nommé pour compatibilité + exposition globale
 const colyseusManager = new ColyseusManager();
-window.colyseusManager = colyseusManager; // ✅ EXPOSER GLOBALEMENT
+
+// ✅ EXPOSER GLOBALEMENT IMMÉDIATEMENT
+window.colyseusManager = colyseusManager;
+console.log('🌐 ColyseusManager exposé globalement');
+
 export default colyseusManager;
 export { colyseusManager };
