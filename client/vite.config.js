@@ -15,15 +15,12 @@ export default defineConfig(({ mode }) => {
       host: true,
       open: true,
       cors: true,
-      // Proxy dev: évite CORS et mappe API/WS vers les backends locaux
       proxy: !isProduction
         ? {
-            // API -> Node (3000)
             '/api': {
               target: 'http://127.0.0.1:3000',
               changeOrigin: true,
             },
-            // WebSocket Colyseus -> 3000
             '/colyseus': {
               target: 'http://127.0.0.1:3000',
               ws: true,
@@ -32,13 +29,12 @@ export default defineConfig(({ mode }) => {
             },
           }
         : undefined,
-      // HMR Phaser
       hmr: {
         overlay: true,
       },
     },
 
-    // Preview (vite preview)
+    // Preview
     preview: {
       port: 4173,
       host: true,
@@ -59,9 +55,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: isProduction ? true : false,
-      minify: isProduction ? 'terser' : false,
-
+      sourcemap: true,              // ⬅️ toujours garder les sources
+      minify: false,                // ⬅️ désactive la minification
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
@@ -75,8 +70,9 @@ export default defineConfig(({ mode }) => {
 
       terserOptions: {
         compress: {
-          drop_console: isProduction,
-          drop_debugger: isProduction,
+          drop_console: false,      // ⬅️ NE SUPPRIME RIEN
+          drop_debugger: false,     // ⬅️ garde même les debugger;
+          pure_funcs: [],           // ⬅️ aucune fonction supprimée
         },
       },
 
@@ -84,7 +80,6 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 4096,
     },
 
-    // Plugins
     plugins: [
       legacy({
         targets: ['> 1%', 'last 2 versions', 'not dead'],
@@ -101,10 +96,11 @@ export default defineConfig(({ mode }) => {
     define: {
       __DEV__: !isProduction,
       __PROD__: isProduction,
+      __DEBUG__: true,   // ⬅️ flag global que tu peux utiliser dans ton code
     },
 
     css: {
-      devSourcemap: !isProduction,
+      devSourcemap: true,
     },
 
     worker: {
