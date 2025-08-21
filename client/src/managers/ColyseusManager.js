@@ -1,4 +1,4 @@
-// client/src/managers/ColyseusManager.js - DEBUG RECONNEXIONS EN BOUCLE
+// client/src/managers/ColyseusManager.js - FIX ERREUR onAdd
 import { Client } from 'colyseus.js';
 import { auth, tokenManager } from '../api';
 
@@ -13,12 +13,19 @@ class ColyseusManager {
         this.maxReconnectAttempts = 3;
         this.reconnectDelay = 3000;
         
+        // Verrous anti-boucle
+        this.connectionLock = false;
+        this.destroyed = false;
+        this.lastConnectAttempt = 0;
+        this.minConnectInterval = 2000;
+        
         // Timeouts
         this.connectionTimeout = null;
         this.readyTimeout = null;
-        this.reconnectTimeout = null; // ✅ NOUVEAU: Tracker du timeout de reconnexion
+        this.reconnectTimeout = null;
+        this.healthCheckInterval = null;
         
-        // ✅ NOUVEAU: Debug tracking
+        // Debug tracking
         this.connectionHistory = [];
         this.lastDisconnectReason = null;
         this.consecutiveFailures = 0;
@@ -47,20 +54,68 @@ class ColyseusManager {
             onError: null
         };
         
-        // Configuration
         this.serverUrl = this.getServerUrl();
-        console.log('🌐 ColyseusManager initialisé - URL:', this.serverUrl);
+        console.log('🌐 ColyseusManager initialisé (version fix onAdd)');
         
-        // Debug
+        // Health check
+        this.startHealthCheck();
+        
         if (window.GameConfig?.DEBUG) {
             window.debugColyseusManager = this;
-            console.log('🔧 ColyseusManager exposé pour debug');
         }
     }
     
-    /**
-     * ✅ NOUVEAU: Ajouter à l'historique de connexion
-     */
+    startHealthCheck() {
+        this.healthCheckInterval = setInterval(() => {
+            this.performHealthCheck();
+        }, 10000);
+    }
+    
+    performHealthCheck() {
+        if (this.destroyed) return;
+        
+        // Détecter connexion zombie
+        if (this.isConnected && this.worldRoom) {
+            const wsState = this.worldRoom.connection?.readyState;
+            if (wsState !== WebSocket.OPEN) {
+                console.warn('🚨 CONNEXION ZOMBIE DÉTECTÉE');
+                this.addToConnectionHistory('ZOMBIE_DETECTED', { wsState });
+                this.cleanupConnection();
+                return;
+            }
+        }
+        
+        // Détecter état incohérent
+        if (this.isConnecting && !this.connectionTimeout) {
+            console.warn('🚨 ÉTAT INCOHÉRENT: isConnecting=true mais pas de timeout');
+            this.addToConnectionHistory('INCONSISTENT_STATE');
+            this.forceReset();
+            return;
+        }
+        
+        // Détecter reconnexions trop fréquentes
+        const recentAttempts = this.connectionHistory.filter(h => 
+            h.event === 'CONNECT_ATTEMPT' && 
+            Date.now() - new Date(h.timestamp).getTime() < 30000
+        ).length;
+        
+        if (recentAttempts > 5) {
+            console.error('🚨 TROP DE TENTATIVES RÉCENTES - PAUSE FORCÉE');
+            this.addToConnectionHistory('FORCED_PAUSE', { attempts: recentAttempts });
+            this.emergencyStop();
+        }
+    }
+    
+    forceReset() {
+        console.warn('🔄 RESET FORCÉ POUR ÉTAT INCOHÉRENT');
+        this.addToConnectionHistory('FORCE_RESET');
+        
+        this.isConnecting = false;
+        this.connectionLock = false;
+        this.clearAllTimeouts();
+        this.cleanupConnection();
+    }
+    
     addToConnectionHistory(event, details = {}) {
         const entry = {
             timestamp: new Date().toISOString(),
@@ -70,13 +125,13 @@ class ColyseusManager {
                 isConnected: this.isConnected,
                 isConnecting: this.isConnecting,
                 isReady: this.isReady,
-                reconnectAttempts: this.reconnectAttempts
+                reconnectAttempts: this.reconnectAttempts,
+                connectionLock: this.connectionLock
             }
         };
         
         this.connectionHistory.unshift(entry);
         
-        // Garder seulement les 20 dernières entrées
         if (this.connectionHistory.length > 20) {
             this.connectionHistory = this.connectionHistory.slice(0, 20);
         }
@@ -84,9 +139,6 @@ class ColyseusManager {
         console.log(`📊 [${event}]`, details);
     }
     
-    /**
-     * 🔐 OBTENIR LE TOKEN JWT
-     */
     getAuthToken() {
         const token = tokenManager.getToken();
         if (token) {
@@ -97,9 +149,6 @@ class ColyseusManager {
         return null;
     }
     
-    /**
-     * Obtenir l'URL du serveur Colyseus
-     */
     getServerUrl() {
         if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
             return window.GameConfig.COLYSEUS_URL;
@@ -114,55 +163,52 @@ class ColyseusManager {
     }
     
     /**
-     * 🔌 CONNEXION AVEC DEBUG DÉTAILLÉ
+     * ✅ CONNEXION AVEC PROTECTION ANTI-BOUCLE
      */
     async connect() {
-        this.addToConnectionHistory('CONNECT_ATTEMPT', {
-            reason: 'Manuel ou auto-reconnect',
-            authStatus: auth.isAuthenticated(),
-            hasToken: !!this.getAuthToken()
-        });
+        // Vérifications de sécurité
+        if (this.destroyed) {
+            console.warn('⚠️ Manager détruit - connexion refusée');
+            return false;
+        }
         
-        // ✅ PROTECTION RENFORCÉE
+        if (this.connectionLock) {
+            console.warn('⚠️ CONNEXION VERROUILLÉE - REFUS');
+            this.addToConnectionHistory('CONNECT_BLOCKED', { reason: 'connectionLock actif' });
+            return false;
+        }
+        
+        // Protection intervalle minimum
+        const now = Date.now();
+        const timeSinceLastAttempt = now - this.lastConnectAttempt;
+        if (timeSinceLastAttempt < this.minConnectInterval) {
+            console.warn(`⚠️ TENTATIVE TROP RAPIDE (${timeSinceLastAttempt}ms < ${this.minConnectInterval}ms)`);
+            this.addToConnectionHistory('CONNECT_BLOCKED', { 
+                reason: 'Tentative trop rapide',
+                timeSinceLastAttempt 
+            });
+            return false;
+        }
+        
         if (this.isConnecting) {
-            console.warn('⚠️ CONNEXION DÉJÀ EN COURS - ANNULATION');
+            console.warn('⚠️ CONNEXION DÉJÀ EN COURS');
             this.addToConnectionHistory('CONNECT_BLOCKED', { reason: 'isConnecting = true' });
             return false;
         }
         
         if (this.isConnected) {
-            console.warn('⚠️ DÉJÀ CONNECTÉ - VÉRIFICATION');
-            this.addToConnectionHistory('CONNECT_BLOCKED', { reason: 'isConnected = true' });
-            
-            // ✅ NOUVEAU: Vérifier si vraiment connecté
+            // Vérification stricte de l'état réel
             if (this.worldRoom && this.worldRoom.connection && this.worldRoom.connection.readyState === WebSocket.OPEN) {
-                console.log('✅ Connexion vraiment active');
+                console.log('✅ Déjà connecté avec connexion active');
                 return true;
             } else {
-                console.warn('⚠️ Connexion corrompue, nettoyage...');
-                this.addToConnectionHistory('CONNECT_CLEANUP', { reason: 'Connexion corrompue' });
+                console.warn('⚠️ État incohérent: isConnected=true mais connexion fermée');
+                this.addToConnectionHistory('CONNECT_CLEANUP', { reason: 'État incohérent' });
                 this.cleanupConnection();
             }
         }
         
-        // ✅ NOUVEAU: Empêcher les tentatives trop fréquentes
-        const lastAttempt = this.connectionHistory.find(h => h.event === 'CONNECT_ATTEMPT');
-        if (lastAttempt) {
-            const timeSinceLastAttempt = Date.now() - new Date(lastAttempt.timestamp).getTime();
-            if (timeSinceLastAttempt < 1000) { // Moins d'1 seconde
-                console.warn('⚠️ TENTATIVE TROP FRÉQUENTE - ATTENTE');
-                this.addToConnectionHistory('CONNECT_BLOCKED', { 
-                    reason: 'Tentative trop fréquente',
-                    timeSinceLastAttempt 
-                });
-                return false;
-            }
-        }
-        
-        // Nettoyer complètement avant de reconnecter
-        await this.forceDisconnect();
-        
-        // Vérifier authentification
+        // Vérification authentification
         if (!auth.isAuthenticated()) {
             console.error('❌ Pas d\'authentification pour Colyseus');
             this.addToConnectionHistory('CONNECT_FAILED', { reason: 'Pas authentifié' });
@@ -170,31 +216,60 @@ class ColyseusManager {
             return false;
         }
         
+        // Vérification limite de tentatives
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('❌ LIMITE DE TENTATIVES ATTEINTE');
+            this.addToConnectionHistory('CONNECT_BLOCKED', { 
+                reason: 'Limite tentatives',
+                attempts: this.reconnectAttempts 
+            });
+            return false;
+        }
+        
+        // Vérification échecs consécutifs
+        if (this.consecutiveFailures >= 3) {
+            console.error('❌ TROP D\'ÉCHECS CONSÉCUTIFS');
+            this.addToConnectionHistory('CONNECT_BLOCKED', { 
+                reason: 'Trop d\'échecs',
+                failures: this.consecutiveFailures 
+            });
+            return false;
+        }
+        
+        this.addToConnectionHistory('CONNECT_ATTEMPT', {
+            reason: 'Manuel ou auto-reconnect',
+            authStatus: auth.isAuthenticated(),
+            hasToken: !!this.getAuthToken(),
+            attempt: this.reconnectAttempts + 1
+        });
+        
+        // Verrouillage strict
+        this.connectionLock = true;
+        this.lastConnectAttempt = now;
+        
+        // Nettoyer complètement avant connexion
+        await this.forceDisconnect();
+        
         try {
             this.isConnecting = true;
             this.isReady = false;
             
-            this.addToConnectionHistory('CONNECT_START', {
-                serverUrl: this.serverUrl,
-                attempt: this.reconnectAttempts + 1
-            });
-            
-            // Timeout de connexion
+            // Timeout de connexion strict
             this.connectionTimeout = setTimeout(() => {
                 if (this.isConnecting) {
-                    console.error('⏰ TIMEOUT CONNEXION (10s)');
-                    this.addToConnectionHistory('CONNECT_TIMEOUT', { duration: '10s' });
+                    console.error('⏰ TIMEOUT CONNEXION (8s)');
+                    this.addToConnectionHistory('CONNECT_TIMEOUT', { duration: '8s' });
                     this.handleConnectionTimeout();
                 }
-            }, 10000);
+            }, 8000);
             
             console.log('🔌 Connexion à Colyseus...');
             
-            // Créer le client Colyseus
+            // Créer le client
             this.client = new Client(this.serverUrl);
             console.log('✅ Client Colyseus créé');
             
-            // Obtenir le token JWT
+            // Obtenir le token
             const token = this.getAuthToken();
             if (!token) {
                 throw new Error('Token d\'authentification manquant');
@@ -216,17 +291,16 @@ class ColyseusManager {
                 roomId: this.worldRoom.id
             });
             
-            // Nettoyer le timeout de connexion
-            if (this.connectionTimeout) {
-                clearTimeout(this.connectionTimeout);
-                this.connectionTimeout = null;
-            }
+            // Nettoyer le timeout
+            this.clearConnectionTimeout();
             
             // Configurer les handlers
             this.setupRoomHandlers();
             
+            // Mise à jour état avec déverrouillage
             this.isConnected = true;
             this.isConnecting = false;
+            this.connectionLock = false;
             this.reconnectAttempts = 0;
             this.consecutiveFailures = 0;
             
@@ -236,85 +310,74 @@ class ColyseusManager {
         } catch (error) {
             console.error('❌ === ERREUR CONNEXION COLYSEUS ===');
             console.error('❌ Message:', error.message);
+            console.error('❌ Stack:', error.stack);
             
             this.addToConnectionHistory('CONNECT_ERROR', {
                 error: error.message,
                 stack: error.stack?.split('\n').slice(0, 3)
             });
             
-            // Nettoyer les timeouts
-            if (this.connectionTimeout) {
-                clearTimeout(this.connectionTimeout);
-                this.connectionTimeout = null;
-            }
-            
+            // Nettoyage complet en cas d'erreur
+            this.clearConnectionTimeout();
             this.isConnecting = false;
             this.isConnected = false;
             this.isReady = false;
+            this.connectionLock = false;
             this.consecutiveFailures++;
             
             this.triggerCallback('onError', `Connexion échouée: ${error.message}`);
             
-            // ✅ PROTECTION: Plus de reconnexion si trop d'échecs consécutifs
-            if (this.consecutiveFailures >= 5) {
-                console.error('❌ TROP D\'ÉCHECS CONSÉCUTIFS - ARRÊT TOTAL');
+            // Décision de reconnexion plus stricte
+            if (this.consecutiveFailures >= 3) {
+                console.error('❌ TROP D\'ÉCHECS - ARRÊT DÉFINITIF');
                 this.addToConnectionHistory('CONNECT_ABANDONED', { 
                     consecutiveFailures: this.consecutiveFailures 
                 });
-                this.triggerCallback('onError', 'Connexion abandonnée après trop d\'échecs');
+                this.emergencyStop();
                 return false;
             }
             
-            // Programmer reconnexion si pas trop de tentatives
+            // Programmer reconnexion avec délai croissant
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.scheduleReconnect();
-            } else {
-                console.error('❌ TROP DE TENTATIVES DE CONNEXION - ARRÊT');
-                this.addToConnectionHistory('CONNECT_ABANDONED', { 
-                    reason: 'Trop de tentatives',
-                    attempts: this.reconnectAttempts 
-                });
-                this.triggerCallback('onError', 'Impossible de se connecter au serveur');
+                const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 30000);
+                setTimeout(() => {
+                    this.scheduleReconnect();
+                }, delay);
             }
             
             return false;
         }
     }
     
-    /**
-     * ✅ GESTION TIMEOUT AVEC DEBUG
-     */
     handleConnectionTimeout() {
-        console.error('⏰ TIMEOUT DE CONNEXION');
+        console.error('⏰ TIMEOUT DE CONNEXION GÉRÉ');
         this.addToConnectionHistory('TIMEOUT_HANDLED', {
             wasConnecting: this.isConnecting,
             hasRoom: !!this.worldRoom,
             hasClient: !!this.client
         });
         
+        // Nettoyage complet
         this.isConnecting = false;
         this.isConnected = false;
         this.isReady = false;
+        this.connectionLock = false;
         this.consecutiveFailures++;
         
-        if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-        }
-        
-        // Forcer la déconnexion
+        this.clearConnectionTimeout();
         this.forceDisconnect();
         
         this.triggerCallback('onError', 'Timeout de connexion');
         
-        // Programmer reconnexion si autorisé
-        if (this.consecutiveFailures < 3 && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.scheduleReconnect();
+        // Arrêt si trop de timeouts
+        if (this.consecutiveFailures >= 2) {
+            console.error('❌ TROP DE TIMEOUTS - ARRÊT');
+            this.emergencyStop();
         }
     }
     
     /**
-     * ✅ CONFIGURATION DES HANDLERS AVEC DEBUG
+     * ✅ SETUP HANDLERS AVEC FIX onAdd
      */
     setupRoomHandlers() {
         if (!this.worldRoom) {
@@ -325,109 +388,99 @@ class ColyseusManager {
         console.log('🔧 Configuration des handlers WorldRoom...');
         this.addToConnectionHistory('HANDLERS_SETUP_START');
         
-        // Handler pour confirmation serveur prêt
+        // Handler server_ready protégé
         this.worldRoom.onMessage("server_ready", (data) => {
             console.log('✅ SERVEUR PRÊT - Finalisation...');
             this.addToConnectionHistory('SERVER_READY', data);
             
-            // Nettoyer le timeout ready
-            if (this.readyTimeout) {
-                clearTimeout(this.readyTimeout);
-                this.readyTimeout = null;
-            }
-            
+            this.clearReadyTimeout();
             this.isReady = true;
             this.triggerCallback('onConnected');
         });
         
-        // Attendre l'état initial
+        // ✅ ÉTAT INITIAL AVEC PROTECTION onAdd
         this.worldRoom.onStateChange.once((state) => {
-            console.log('📊 PREMIER ÉTAT REÇU:', {
+            console.log('📊 PREMIER ÉTAT REÇU');
+            console.log('📊 État complet:', {
                 totalPlayers: state.totalPlayers,
                 playersOnline: state.playersOnline,
                 playersSearching: state.playersSearching,
-                playersSize: state.players?.size || 0
+                hasPlayers: !!state.players,
+                playersType: typeof state.players,
+                playersSize: state.players?.size,
+                playersKeys: state.players ? Object.keys(state.players) : 'N/A'
             });
             
             this.addToConnectionHistory('FIRST_STATE_RECEIVED', {
                 totalPlayers: state.totalPlayers,
-                playersCount: state.players?.size || 0
+                playersCount: state.players?.size || 0,
+                hasPlayers: !!state.players,
+                playersType: typeof state.players
             });
             
             this.updateGlobalStats(state);
             
-            // Configuration des handlers players
-            if (state.players) {
-                console.log('🔧 Configuration handlers players...');
-                
-                state.players.onAdd((player, sessionId) => {
-                    console.log(`👤 PLAYER AJOUTÉ: ${player.username} (${sessionId})`);
-                    this.worldPlayers.set(sessionId, player);
-                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+            // ✅ FIX CRITIQUE: Vérifier state.players avant setup handlers
+            if (state.players && typeof state.players === 'object') {
+                console.log('🔧 Configuration handlers players - state.players valide');
+                this.setupPlayersHandlers(state);
+            } else {
+                console.warn('⚠️ state.players invalide ou manquant:', {
+                    hasPlayers: !!state.players,
+                    type: typeof state.players,
+                    value: state.players
                 });
-                
-                state.players.onRemove((player, sessionId) => {
-                    console.log(`👤 PLAYER SUPPRIMÉ: ${player.username} (${sessionId})`);
-                    this.worldPlayers.delete(sessionId);
-                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                this.addToConnectionHistory('PLAYERS_HANDLERS_SKIPPED', {
+                    reason: 'state.players invalide',
+                    hasPlayers: !!state.players,
+                    type: typeof state.players
                 });
-                
-                state.players.onChange((player, sessionId) => {
-                    console.log(`👤 PLAYER MODIFIÉ: ${player.username} (${player.status})`);
-                    this.worldPlayers.set(sessionId, player);
-                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-                });
-                
-                console.log('✅ Handlers players configurés');
             }
             
-            // Attendre avant de signaler ready
+            // Envoi client_ready protégé
             setTimeout(() => {
+                if (this.destroyed || !this.worldRoom) {
+                    console.warn('⚠️ Connexion fermée avant client_ready');
+                    return;
+                }
+                
                 console.log('📡 ENVOI SIGNAL CLIENT_READY...');
                 this.addToConnectionHistory('CLIENT_READY_SENT');
                 
-                // Timeout pour le signal ready
+                // Timeout ready plus court
                 this.readyTimeout = setTimeout(() => {
-                    if (!this.isReady) {
-                        console.error('⏰ TIMEOUT SIGNAL READY (5s)');
+                    if (!this.isReady && !this.destroyed) {
+                        console.error('⏰ TIMEOUT SIGNAL READY (3s)');
                         this.addToConnectionHistory('READY_TIMEOUT');
-                        this.triggerCallback('onError', 'Timeout signal ready');
+                        this.handleReadyTimeout();
                     }
-                }, 5000);
+                }, 3000);
                 
-                if (this.worldRoom) {
+                try {
                     this.worldRoom.send("client_ready", { 
                         timestamp: Date.now(),
                         clientVersion: "1.0.0"
                     });
-                } else {
-                    console.error('❌ WorldRoom perdue avant envoi client_ready');
-                    this.addToConnectionHistory('READY_FAILED', { reason: 'WorldRoom perdue' });
+                } catch (error) {
+                    console.error('❌ Erreur envoi client_ready:', error);
+                    this.addToConnectionHistory('CLIENT_READY_ERROR', { error: error.message });
+                    this.handleReadyTimeout();
                 }
-            }, 500);
+            }, 200);
         });
         
-        // Changements d'état suivants
+        // États suivants
         this.worldRoom.onStateChange((state) => {
-            this.updateGlobalStats(state);
-            this.updatePlayersMap(state.players);
+            if (!this.destroyed) {
+                this.updateGlobalStats(state);
+                this.updatePlayersMap(state.players);
+            }
         });
         
-        // Messages du serveur (simplifiés pour debug)
-        const messageTypes = ["player_profile", "arena_info", "search_started", "search_cancelled", "match_found", "battle_result", "leaderboard", "error", "search_error"];
+        // Messages serveur
+        this.setupMessageHandlers();
         
-        messageTypes.forEach(messageType => {
-            this.worldRoom.onMessage(messageType, (data) => {
-                console.log(`📨 MESSAGE REÇU: ${messageType}`);
-                this.handleServerMessage(messageType, data);
-            });
-        });
-        
-        this.worldRoom.onMessage("heartbeat_ack", (data) => {
-            // Heartbeat silencieux
-        });
-        
-        // ✅ DÉCONNEXION AVEC DEBUG DÉTAILLÉ
+        // Déconnexion avec logique anti-boucle
         this.worldRoom.onLeave((code) => {
             console.log(`🔌 DÉCONNECTÉ (code: ${code})`);
             
@@ -442,18 +495,23 @@ class ColyseusManager {
             this.cleanupConnection();
             this.triggerCallback('onDisconnected', code);
             
-            // ✅ DÉCISION DE RECONNEXION AVEC LOGIC CLAIRE
+            // Décision de reconnexion stricte
             const shouldReconnect = this.shouldAttemptReconnect(code);
             console.log(`🤔 Reconnexion ? ${shouldReconnect}`, {
                 code,
                 voluntary: code === 1000,
                 attempts: this.reconnectAttempts,
                 maxAttempts: this.maxReconnectAttempts,
-                consecutiveFailures: this.consecutiveFailures
+                consecutiveFailures: this.consecutiveFailures,
+                destroyed: this.destroyed,
+                authenticated: auth.isAuthenticated()
             });
             
             if (shouldReconnect) {
-                this.scheduleReconnect();
+                // Délai avant reconnexion
+                setTimeout(() => {
+                    this.scheduleReconnect();
+                }, 1000);
             } else {
                 this.addToConnectionHistory('RECONNECT_SKIPPED', {
                     reason: 'shouldAttemptReconnect = false',
@@ -466,47 +524,123 @@ class ColyseusManager {
             console.error(`🔧 ERREUR WORLDROOM: ${code} - ${message}`);
             this.addToConnectionHistory('ROOM_ERROR', { code, message });
             this.triggerCallback('onError', `Erreur room: ${message}`);
+            
+            // Erreur room peut déclencher nettoyage
+            if (code >= 4000) { // Erreurs personnalisées serveur
+                this.consecutiveFailures++;
+                if (this.consecutiveFailures >= 2) {
+                    this.emergencyStop();
+                }
+            }
         });
         
         console.log('✅ Handlers configurés');
         this.addToConnectionHistory('HANDLERS_SETUP_COMPLETE');
     }
     
-    /**
-     * ✅ NOUVEAU: Décider si on doit tenter une reconnexion
-     */
-    shouldAttemptReconnect(code) {
-        // Jamais reconnecter si déconnexion volontaire
-        if (code === 1000) {
-            return false;
-        }
+    handleReadyTimeout() {
+        console.error('⏰ TIMEOUT READY - FORCE RECONNEXION');
+        this.addToConnectionHistory('READY_TIMEOUT_HANDLED');
         
-        // Jamais reconnecter si trop de tentatives
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            return false;
-        }
+        this.isReady = false;
+        this.consecutiveFailures++;
         
-        // Jamais reconnecter si trop d'échecs consécutifs
-        if (this.consecutiveFailures >= 3) {
-            return false;
-        }
-        
-        // Jamais reconnecter si pas authentifié
-        if (!auth.isAuthenticated()) {
-            return false;
-        }
-        
-        // Jamais reconnecter si déjà en cours de reconnexion
-        if (this.reconnectTimeout) {
-            return false;
-        }
-        
-        return true;
+        // Forcer une nouvelle connexion
+        this.forceDisconnect().then(() => {
+            if (this.consecutiveFailures < 3) {
+                setTimeout(() => {
+                    this.connect();
+                }, 2000);
+            } else {
+                this.emergencyStop();
+            }
+        });
     }
     
     /**
-     * ✅ TRAITEMENT DES MESSAGES SERVEUR
+     * ✅ SETUP HANDLERS PLAYERS AVEC PROTECTION TOTALE
      */
+    setupPlayersHandlers(state) {
+        // ✅ VÉRIFICATIONS MULTIPLES AVANT onAdd
+        if (!state || !state.players) {
+            console.warn('⚠️ setupPlayersHandlers: state ou state.players manquant');
+            return;
+        }
+        
+        if (typeof state.players !== 'object') {
+            console.warn('⚠️ setupPlayersHandlers: state.players n\'est pas un objet');
+            return;
+        }
+        
+        // ✅ VÉRIFIER QUE LES MÉTHODES onAdd/onRemove/onChange EXISTENT
+        if (typeof state.players.onAdd !== 'function') {
+            console.warn('⚠️ setupPlayersHandlers: state.players.onAdd n\'est pas une fonction');
+            console.log('🔍 state.players type:', typeof state.players);
+            console.log('🔍 state.players keys:', Object.keys(state.players));
+            console.log('🔍 state.players.onAdd type:', typeof state.players.onAdd);
+            return;
+        }
+        
+        console.log('🔧 Configuration handlers players - Toutes vérifications OK');
+        
+        try {
+            state.players.onAdd((player, sessionId) => {
+                if (!this.destroyed) {
+                    console.log(`👤 PLAYER AJOUTÉ: ${player.username} (${sessionId})`);
+                    this.worldPlayers.set(sessionId, player);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                }
+            });
+            
+            state.players.onRemove((player, sessionId) => {
+                if (!this.destroyed) {
+                    console.log(`👤 PLAYER SUPPRIMÉ: ${player.username} (${sessionId})`);
+                    this.worldPlayers.delete(sessionId);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                }
+            });
+            
+            state.players.onChange((player, sessionId) => {
+                if (!this.destroyed) {
+                    console.log(`👤 PLAYER MODIFIÉ: ${player.username} (${player.status})`);
+                    this.worldPlayers.set(sessionId, player);
+                    this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+                }
+            });
+            
+            console.log('✅ Handlers players configurés avec succès');
+            this.addToConnectionHistory('PLAYERS_HANDLERS_SUCCESS');
+            
+        } catch (error) {
+            console.error('❌ Erreur configuration handlers players:', error);
+            this.addToConnectionHistory('PLAYERS_HANDLERS_ERROR', {
+                error: error.message,
+                stack: error.stack?.split('\n').slice(0, 3)
+            });
+        }
+    }
+    
+    setupMessageHandlers() {
+        const messageTypes = [
+            "player_profile", "arena_info", "search_started", 
+            "search_cancelled", "match_found", "battle_result", 
+            "leaderboard", "error", "search_error"
+        ];
+        
+        messageTypes.forEach(messageType => {
+            this.worldRoom.onMessage(messageType, (data) => {
+                if (!this.destroyed) {
+                    console.log(`📨 MESSAGE REÇU: ${messageType}`);
+                    this.handleServerMessage(messageType, data);
+                }
+            });
+        });
+        
+        this.worldRoom.onMessage("heartbeat_ack", (data) => {
+            // Heartbeat silencieux
+        });
+    }
+    
     handleServerMessage(type, data) {
         switch (type) {
             case "player_profile":
@@ -547,55 +681,55 @@ class ColyseusManager {
         }
     }
     
-    /**
-     * 🔍 Description des codes de déconnexion
-     */
-    getLeaveCodeDescription(code) {
-        const codes = {
-            1000: 'Fermeture normale',
-            1001: 'Endpoint parti',
-            1002: 'Erreur de protocole',
-            1003: 'Type de données non supporté',
-            1005: 'Aucun code de statut reçu',
-            1006: 'Connexion fermée anormalement',
-            1007: 'Données invalides',
-            1008: 'Violation de politique',
-            1009: 'Message trop grand',
-            1010: 'Extension manquante',
-            1011: 'Erreur interne du serveur',
-            4000: 'Erreur personnalisée serveur',
-            4001: 'Nouvelle connexion détectée'
-        };
-        return codes[code] || `Code inconnu: ${code}`;
+    shouldAttemptReconnect(code) {
+        if (this.destroyed) return false;
+        if (code === 1000) return false;
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) return false;
+        if (this.consecutiveFailures >= 3) return false;
+        if (!auth.isAuthenticated()) return false;
+        if (this.reconnectTimeout) return false;
+        if (this.connectionLock) return false;
+        return true;
     }
     
-    /**
-     * ✅ NETTOYAGE COMPLET
-     */
-    cleanupConnection() {
-        this.isConnected = false;
-        this.isReady = false;
-        this.worldRoom = null;
-        
-        // Nettoyer les timeouts
+    clearAllTimeouts() {
+        this.clearConnectionTimeout();
+        this.clearReadyTimeout();
+        this.clearReconnectTimeout();
+    }
+    
+    clearConnectionTimeout() {
         if (this.connectionTimeout) {
             clearTimeout(this.connectionTimeout);
             this.connectionTimeout = null;
         }
-        
+    }
+    
+    clearReadyTimeout() {
         if (this.readyTimeout) {
             clearTimeout(this.readyTimeout);
             this.readyTimeout = null;
         }
-        
+    }
+    
+    clearReconnectTimeout() {
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+    }
+    
+    cleanupConnection() {
+        this.isConnected = false;
+        this.isReady = false;
+        this.worldRoom = null;
+        this.clearAllTimeouts();
         this.addToConnectionHistory('CONNECTION_CLEANED');
     }
     
-    /**
-     * 🔄 RECONNEXION AVEC DEBUG
-     */
     scheduleReconnect() {
-        // ✅ PROTECTION: Pas de double reconnexion
+        if (this.destroyed) return;
+        
         if (this.reconnectTimeout) {
             console.warn('⚠️ RECONNEXION DÉJÀ PROGRAMMÉE');
             this.addToConnectionHistory('RECONNECT_SKIPPED', { reason: 'Déjà programmée' });
@@ -603,7 +737,10 @@ class ColyseusManager {
         }
         
         this.reconnectAttempts++;
-        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+        
+        // Délai progressif plus long
+        const baseDelay = Math.max(this.reconnectDelay, 2000);
+        const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
         
         console.log(`🔄 RECONNEXION PROGRAMMÉE: tentative ${this.reconnectAttempts}/${this.maxReconnectAttempts} dans ${Math.round(delay / 1000)}s`);
         
@@ -615,22 +752,29 @@ class ColyseusManager {
         });
         
         this.reconnectTimeout = setTimeout(() => {
-            this.reconnectTimeout = null; // ✅ IMPORTANT: Reset du timeout
+            this.reconnectTimeout = null;
+            
+            if (this.destroyed) {
+                console.log('🔄 RECONNEXION ANNULÉE: Manager détruit');
+                return;
+            }
             
             this.addToConnectionHistory('RECONNECT_EXECUTING');
             
-            if (!this.isConnected && !this.isConnecting && auth.isAuthenticated()) {
+            if (!this.isConnected && !this.isConnecting && !this.connectionLock && auth.isAuthenticated()) {
                 console.log('🔄 EXÉCUTION RECONNEXION...');
                 this.connect();
             } else {
                 console.log('🔄 RECONNEXION ANNULÉE:', {
                     isConnected: this.isConnected,
                     isConnecting: this.isConnecting,
+                    connectionLock: this.connectionLock,
                     isAuthenticated: auth.isAuthenticated()
                 });
                 this.addToConnectionHistory('RECONNECT_CANCELLED', {
                     isConnected: this.isConnected,
                     isConnecting: this.isConnecting,
+                    connectionLock: this.connectionLock,
                     isAuthenticated: auth.isAuthenticated()
                 });
             }
@@ -638,29 +782,17 @@ class ColyseusManager {
     }
     
     /**
-     * ✅ DÉCONNEXION FORCÉE
+     * ✅ DÉCONNEXION FORCÉE AMÉLIORÉE
      */
     async forceDisconnect() {
         console.log('🧹 DÉCONNEXION FORCÉE');
         this.addToConnectionHistory('FORCE_DISCONNECT_START');
         
-        // ✅ NOUVEAU: Annuler la reconnexion programmée
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = null;
-            console.log('🛑 Reconnexion programmée annulée');
-        }
+        // Annuler reconnexion programmée
+        this.clearReconnectTimeout();
         
-        // Nettoyer les timeouts
-        if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-        }
-        
-        if (this.readyTimeout) {
-            clearTimeout(this.readyTimeout);
-            this.readyTimeout = null;
-        }
+        // Nettoyer timeouts
+        this.clearAllTimeouts();
         
         // Fermer la room
         if (this.worldRoom) {
@@ -686,6 +818,7 @@ class ColyseusManager {
         this.isConnected = false;
         this.isConnecting = false;
         this.isReady = false;
+        this.connectionLock = false;
         
         // Nettoyer les données
         this.playerProfile = null;
@@ -846,8 +979,27 @@ class ColyseusManager {
         return this.isConnected && this.isReady;
     }
     
+    getLeaveCodeDescription(code) {
+        const codes = {
+            1000: 'Fermeture normale',
+            1001: 'Endpoint parti',
+            1002: 'Erreur de protocole',
+            1003: 'Type de données non supporté',
+            1005: 'Aucun code de statut reçu',
+            1006: 'Connexion fermée anormalement',
+            1007: 'Données invalides',
+            1008: 'Violation de politique',
+            1009: 'Message trop grand',
+            1010: 'Extension manquante',
+            1011: 'Erreur interne du serveur',
+            4000: 'Erreur personnalisée serveur',
+            4001: 'Nouvelle connexion détectée'
+        };
+        return codes[code] || `Code inconnu: ${code}`;
+    }
+    
     /**
-     * ✅ NOUVEAU: Debug détaillé
+     * ✅ DEBUG DÉTAILLÉ
      */
     getDebugInfo() {
         return {
@@ -872,6 +1024,10 @@ class ColyseusManager {
             hasReadyTimeout: !!this.readyTimeout,
             hasReconnectTimeout: !!this.reconnectTimeout,
             
+            // Verrous
+            connectionLock: this.connectionLock,
+            destroyed: this.destroyed,
+            
             // Données
             serverUrl: this.serverUrl,
             playersCount: this.worldPlayers.size,
@@ -887,9 +1043,6 @@ class ColyseusManager {
         };
     }
     
-    /**
-     * ✅ NOUVEAU: Texte état WebSocket
-     */
     getWebSocketStateText() {
         if (!this.worldRoom?.connection) return 'Pas de connexion';
         
@@ -902,9 +1055,6 @@ class ColyseusManager {
         }
     }
     
-    /**
-     * ✅ NOUVEAU: Afficher l'historique de connexion
-     */
     printConnectionHistory() {
         console.group('📊 HISTORIQUE CONNEXION');
         this.connectionHistory.forEach((entry, index) => {
@@ -914,7 +1064,7 @@ class ColyseusManager {
     }
     
     /**
-     * ✅ NOUVEAU: Forcer un arrêt complet
+     * ✅ ARRÊT D'URGENCE
      */
     emergencyStop() {
         console.warn('🚨 ARRÊT D\'URGENCE COLYSEUS');
@@ -937,7 +1087,7 @@ class ColyseusManager {
     }
     
     /**
-     * ✅ NOUVEAU: Reset complet pour redémarrer
+     * ✅ RESET COMPLET
      */
     fullReset() {
         console.log('🔄 RESET COMPLET COLYSEUS');
@@ -964,8 +1114,16 @@ class ColyseusManager {
         console.log('🧹 DESTRUCTION COLYSEUSMANAGER');
         this.addToConnectionHistory('MANAGER_DESTROYED');
         
+        this.destroyed = true;
+        
         this.stopHeartbeat();
         this.emergencyStop();
+        
+        // Nettoyer health check
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
+        }
         
         Object.keys(this.callbacks).forEach(key => {
             this.callbacks[key] = null;
@@ -978,10 +1136,11 @@ class ColyseusManager {
 // Instance singleton
 const colyseusManager = new ColyseusManager();
 
-// ✅ NOUVEAU: Exposer les fonctions de debug globalement
+// ✅ EXPOSITION GLOBALE DES FONCTIONS DEBUG
 if (typeof window !== 'undefined') {
     window.debugColyseus = () => {
         console.log('🔍 DEBUG COLYSEUS:', colyseusManager.getDebugInfo());
+        return colyseusManager.getDebugInfo();
     };
     
     window.colyseusHistory = () => {
@@ -1001,16 +1160,20 @@ if (typeof window !== 'undefined') {
         colyseusManager.connect();
     };
     
+    // Accès direct
+    window.colyseusManager = colyseusManager;
+    
     console.log(`
-🎯 === FONCTIONS DEBUG COLYSEUS ===
+🎯 === FONCTIONS DEBUG COLYSEUS EXPOSÉES ===
 
 ▶️ debugColyseus() - État actuel détaillé
 ▶️ colyseusHistory() - Historique connexions  
 ▶️ colyseusStop() - Arrêt d'urgence
 ▶️ colyseusReset() - Reset complet
 ▶️ colyseusReconnect() - Force reconnexion
+▶️ window.colyseusManager - Accès direct
 
-Utilisez ces fonctions pour diagnostiquer les problèmes !
+✅ FIX onAdd: Protection complète contre erreur "Cannot set properties of undefined"
     `);
 }
 
