@@ -36,10 +36,10 @@ contentStartY: 200,
     /**
      * Créer le contenu du panel deck
      */
-   createContent() {
+  createContent() {
     this.log('Création contenu deck avec sous-onglets...');
     
-    // SOLUTION: Initialiser ici si pas déjà fait
+    // SOLUTION: Initialiser ici si pas déjà fait (problème d'ordre d'exécution)
     if (!this.deckElements) {
         this.deckElements = {};
     }
@@ -47,7 +47,22 @@ contentStartY: 200,
         this.subPanels = {};
     }
     if (!this.deckState) {
-        this.deckState = { currentSubTab: 'deck' };
+        this.deckState = { 
+            currentSubTab: 'deck',
+            currentDeck: this.initializeDefaultDeck(), // ← FIX pour updateElixirCost()
+            selectedCard: null,
+            filterBy: 'all',
+            sortBy: 'cost',
+            searchTerm: ''
+        };
+    }
+    
+    // Initialiser les autres propriétés nécessaires
+    if (!this.cardsDatabase) {
+        this.cardsDatabase = this.initializeCardsDatabase();
+    }
+    if (!this.userCollection) {
+        this.userCollection = this.initializeUserCollection();
     }
     
     // 1. Header custom avec sous-navigation
