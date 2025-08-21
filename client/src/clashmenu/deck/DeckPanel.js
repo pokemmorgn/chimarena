@@ -276,7 +276,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
         const elixirContainer = this.scene.add.container(this.width - 80, 50);
         
         // Fond
-        const elixirBg = this.scene.add.createGraphics();
+const elixirBg = this.scene.add.graphics();
         elixirBg.fillStyle(0x9370DB, 0.9);
         elixirBg.fillRoundedRect(-40, -15, 80, 30, 15);
         elixirBg.lineStyle(2, 0x8A2BE2);
@@ -368,7 +368,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
         const slotContainer = this.scene.add.container(x, y);
         
         // Fond du slot
-        const slotBg = this.scene.add.createGraphics();
+        const slotBg = this.scene.add.graphics();
         slotBg.fillStyle(0x1C3A3A, 0.8);
         slotBg.fillRoundedRect(-size/2, -size/2, size, size, 8);
         slotBg.lineStyle(2, 0x4682B4, 0.5);
@@ -490,7 +490,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
         const filtersY = 20;
         
         // Barre de recherche
-        const searchBg = this.scene.add.createGraphics();
+        const searchBg = this.scene.add.graphics();
         searchBg.fillStyle(0x2F2F2F, 0.9);
         searchBg.fillRoundedRect(20, filtersY, this.width - 40, 30, 15);
         searchBg.lineStyle(1, 0x4682B4);
@@ -546,7 +546,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
     createFilterButton(x, y, width, height, text, color, isActive, callback) {
         const buttonContainer = this.scene.add.container(x, y);
         
-        const bg = this.scene.add.createGraphics();
+        const bg = this.scene.add.graphics();
         const alpha = isActive ? 1 : 0.6;
         const borderColor = isActive ? 0xFFFFFF : color;
         
@@ -763,7 +763,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
             const y = startY + index * spacing;
             
             // Fond du défi
-            const defiBg = this.scene.add.createGraphics();
+            const defiBg = this.scene.add.graphics();
             defiBg.fillStyle(0x1C3A3A, 0.8);
             defiBg.fillRoundedRect(20, y - 20, this.width - 40, 40, 8);
             defiBg.lineStyle(1, 0x4682B4);
@@ -1167,7 +1167,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
         const cardContainer = this.scene.add.container(0, 0);
         
         // Fond avec couleur de rareté
-        const cardBg = this.scene.add.createGraphics();
+        const cardBg = this.scene.add.graphics();
         const rarityColor = this.getRarityColor(card.rarity);
         cardBg.fillStyle(rarityColor, 0.9);
         cardBg.fillRoundedRect(-size/2, -size/2, size, size, 6);
@@ -1185,7 +1185,7 @@ fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFF
         cardIcon.setOrigin(0.5);
         
         // Coût en élixir
-        const costBg = this.scene.add.createGraphics();
+        const costBg = this.scene.add.graphics();
         costBg.fillStyle(0x9370DB, 1);
         costBg.fillCircle(-size/2 + 8, -size/2 + 8, 8);
         cardContainer.add(costBg);
