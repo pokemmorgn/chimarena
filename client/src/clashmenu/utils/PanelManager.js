@@ -277,16 +277,19 @@ export default class PanelManager {
             console.log(`🔍 DEBUG: Panel container type:`, panelContainer.constructor.name);
             console.log(`🔍 DEBUG: Panel container valid:`, !!panelContainer);
             
-            // Ajouter au container avec vérifications
-            try {
-                this.container.add(panelContainer);
-                console.log(`✅ Panel ${panelId} ajouté au container`);
-            } catch (addError) {
-                console.error(`❌ Erreur ajout container:`, addError);
-                throw new Error(`Impossible d'ajouter le panel au container: ${addError.message}`);
-            }
-            
-            return panelInstance;
+        // Nettoyer d'abord tout panel d'erreur existant pour ce panelId
+this.cleanupErrorPanel(panelId);
+
+// Ajouter au container avec vérifications
+try {
+    this.container.add(panelContainer);
+    console.log(`✅ Panel ${panelId} ajouté au container`);
+} catch (addError) {
+    console.error(`❌ Erreur ajout container:`, addError);
+    throw new Error(`Impossible d'ajouter le panel au container: ${addError.message}`);
+}
+
+return panelInstance;
             
         } catch (error) {
             console.error(`❌ Erreur chargement panel ${panelId}:`, error);
@@ -1066,6 +1069,38 @@ export default class PanelManager {
         
         console.log('📊 Données utilisateur mises à jour dans tous les panels');
     }
+
+    /**
+ * Nettoyer les panels d'erreur existants
+ */
+cleanupErrorPanel(panelId) {
+    const existingPanel = this.panels.get(panelId);
+    if (existingPanel) {
+        console.log(`🧹 Nettoyage panel existant: ${panelId}`);
+        
+        // Détruire le container s'il existe
+        if (existingPanel.container) {
+            try {
+                existingPanel.container.destroy();
+            } catch (e) {
+                console.warn('⚠️ Erreur destruction container:', e);
+            }
+        }
+        
+        // Appeler destroy si disponible
+        if (existingPanel.destroy) {
+            try {
+                existingPanel.destroy();
+            } catch (e) {
+                console.warn('⚠️ Erreur destroy panel:', e);
+            }
+        }
+        
+        // Supprimer de la map
+        this.panels.delete(panelId);
+        console.log(`✅ Panel ${panelId} nettoyé`);
+    }
+}
     
     updatePanelData(panelId, data) {
         try {
