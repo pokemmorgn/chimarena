@@ -6,23 +6,34 @@ import ChallengesSubPanel from './ChallengesSubPanel.js';
 
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-        super(scene, {
+        // IMPORTANT: Initialiser les propriétés AVANT super() 
+        // car BasePanel appelle automatiquement createContent() dans son constructeur
+        
+        // État du deck
+        const deckState = {
+            currentSubTab: 'deck',
+            currentDeck: null, // Sera initialisé après
+            selectedCard: null,
+            selectedSlot: null
+        };
+        
+        // Passer l'état initial dans la config pour éviter les problèmes d'ordre
+        const enhancedConfig = {
             name: 'DeckPanel',
             title: 'DECK',
             icon: '🛡️',
             contentStartY: 200,
             enableTitle: false, // On va créer un titre custom avec sous-onglets
             enableBackground: false,
+            initialDeckState: deckState,
             ...config
-        });
-        
-        // État du deck
-        this.deckState = {
-            currentSubTab: 'deck',
-            currentDeck: this.initializeDefaultDeck(),
-            selectedCard: null,
-            selectedSlot: null
         };
+        
+        super(scene, enhancedConfig);
+        
+        // Maintenant on peut initialiser les propriétés en toute sécurité
+        this.deckState = deckState;
+        this.deckState.currentDeck = this.initializeDefaultDeck();
         
         // Sous-panels
         this.subPanels = {
@@ -190,7 +201,7 @@ export default class DeckPanel extends BasePanel {
             
             // Fond de l'onglet
             const tabBg = this.scene.add.graphics();
-            this.drawSubTabBackground(tabBg, tabWidth, tab.id === this.deckState.currentSubTab);
+            this.drawSubTabBackground(tabBg, tabWidth, tab.id === (this.deckState?.currentSubTab || 'deck'));
             tabContainer.add(tabBg);
             
             // Icône
@@ -209,7 +220,7 @@ export default class DeckPanel extends BasePanel {
                 {
                     fontSize: this.isMobile ? '10px' : '12px',
                     fontWeight: 'bold',
-                    fill: tab.id === this.deckState.currentSubTab ? '#2F4F4F' : '#FFFFFF'
+                    fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFFF'
                 },
                 tabContainer
             );
