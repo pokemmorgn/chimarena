@@ -97,7 +97,14 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage("get_matchmaking_stats", (client, message) => {
       this.handleGetMatchmakingStats(client);
     });
+
+    this.onMessage("get_deck_info", (client, message) => {
+    this.handleGetDeckInfo(client, this.state.players.get(client.sessionId)!);
+    });
     
+    this.onMessage("validate_deck", (client, message) => {
+      this.handleValidateDeck(client, this.state.players.get(client.sessionId)!, message);
+    });
     // Mise à jour périodique des stats
     this.clock.setInterval(() => {
       this.updateGlobalStats();
