@@ -1,5 +1,5 @@
 // client/src/managers/ColyseusManager.js - VERSION SIMPLIFIÉE COMPATIBLE
-import { WorldState, WorldPlayer } from "../schema/WorldState.js";
+import { WorldState } from "../schemas/WorldState.js";
 
 class ColyseusManager {
   constructor() {
