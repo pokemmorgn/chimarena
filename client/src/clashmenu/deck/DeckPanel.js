@@ -186,7 +186,7 @@ export default class DeckPanel extends BasePanel {
             
             // Fond de l'onglet
             const tabBg = this.createGraphics();
-            this.drawSubTabBackground(tabBg, tabWidth, tab.id === this.deckState.currentSubTab);
+            this.drawSubTabBackground(tabBg, tabWidth, tab.id === (this.deckState?.currentSubTab || 'deck'));
             tabContainer.add(tabBg);
             
             // Icône
@@ -205,7 +205,7 @@ export default class DeckPanel extends BasePanel {
                 {
                     fontSize: this.isMobile ? '10px' : '12px',
                     fontWeight: 'bold',
-                    fill: tab.id === this.deckState.currentSubTab ? '#2F4F4F' : '#FFFFFF'
+fill: tab.id === (this.deckState?.currentSubTab || 'deck') ? '#2F4F4F' : '#FFFFFF'
                 },
                 tabContainer
             );
