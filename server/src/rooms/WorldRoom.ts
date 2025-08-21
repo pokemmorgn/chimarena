@@ -1,6 +1,6 @@
 // server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE
 
-import { Room, Client } from "@colyseus/core";
+import { Room, Client, matchMaker } from "@colyseus/core";
 import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
 import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/MatchmakingService";
@@ -640,7 +640,7 @@ private async handleMatchFound(match: MatchResult): Promise<void> {
 
   try {
     // Créer une BattleRoom
-    const battleRoom = await this.matchMaker.createRoom("battle", {
+    const battleRoom = await matchMaker.createRoom("battle", {
       matchId: match.battleRoomId,
       arena: match.arena,
       matchQuality: match.matchQuality
