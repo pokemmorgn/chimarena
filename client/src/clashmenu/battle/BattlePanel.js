@@ -10,6 +10,8 @@ export default class BattlePanel {
         this.width = scene.scale.width;
         this.height = scene.scale.height;
         this.isMobile = scene.isMobile || false;
+         // Écouter les événements de matchmaking
+        this.setupMatchmakingListeners();
         
         console.log('🏗️ BattlePanel constructor démarré');
         console.log('🔍 Scene valide:', !!scene);
@@ -115,6 +117,43 @@ export default class BattlePanel {
         } catch (error) {
             console.error('❌ Erreur création contenu:', error);
         }
+    }
+setupMatchmakingListeners() {
+        console.log('🎧 Setup des listeners matchmaking...');
+        
+        const colyseusManager = window.colyseusManager;
+        if (!colyseusManager) {
+            console.warn('⚠️ ColyseusManager non disponible pour les listeners');
+            return;
+        }
+        
+        // Écouter les événements de match trouvé
+        colyseusManager.on('matchFound', (matchData) => {
+            console.log('🎯 Match trouvé dans BattlePanel:', matchData);
+            this.onMatchFound(matchData);
+        });
+        
+        // Écouter les événements de recherche annulée
+        colyseusManager.on('searchCancelled', (data) => {
+            console.log('❌ Recherche annulée dans BattlePanel');
+            this.showSimpleNotification('❌ Recherche annulée');
+        });
+        
+        // Écouter les erreurs de recherche
+        colyseusManager.on('searchError', (data) => {
+            console.log('❌ Erreur de recherche dans BattlePanel:', data);
+            this.showSimpleNotification(`❌ ${data.message}`);
+        });
+    }
+    
+    onMatchFound(matchData) {
+        console.log('🎉 MATCH TROUVÉ !', matchData);
+        
+        // Afficher une notification de match trouvé
+        this.showSimpleNotification(`🎉 Adversaire trouvé: ${matchData.opponent?.username || 'Inconnu'}`);
+        
+        // Ici tu peux ajouter la logique pour démarrer le combat
+        // Par exemple, changer de scène ou afficher l'interface de combat
     }
     
 handleMatchmaking() {
