@@ -640,7 +640,7 @@ private async handleMatchFound(match: MatchResult): Promise<void> {
 
   try {
     // Créer une BattleRoom
-    const battleRoom = await this.room.matchMaker.createRoom("battle", {
+    const battleRoom = await this.matchMaker.createRoom("battle", {
       matchId: match.battleRoomId,
       arena: match.arena,
       matchQuality: match.matchQuality
