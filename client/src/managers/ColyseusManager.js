@@ -206,7 +206,10 @@ class ColyseusManager {
       console.log('📨 RECHERCHE ANNULÉE');
       this.triggerCallback('searchCancelled', data);
     });
-    
+   this.worldRoom.onMessage("search_error", (data) => {
+      console.log('📨 ERREUR RECHERCHE:', data.message);
+      this.triggerCallback('searchError', data);
+    });
     this.worldRoom.onMessage("error", (data) => {
       console.error('📨 ERREUR SERVEUR:', data.message);
       this.triggerCallback('error', data.message);
