@@ -1,7 +1,7 @@
 // server/src/app.config.ts
 import defineConfig from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
-import { Server as ColyseusServer } from "colyseus";
+import { Server as ColyseusServer } from "@colyseus/core";
 import type express from "express";
 
 // Import des rooms
