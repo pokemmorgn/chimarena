@@ -269,7 +269,7 @@ export class WorldRoom extends Room<WorldState> {
     return "Apprenti";
   }
 
-  // ⚔️ RECHERCHE DE BATAILLE
+// ⚔️ RECHERCHE DE BATAILLE
   private handleSearchBattle(client: Client, player: WorldPlayer) {
     console.log(`⚔️ ${player.username} recherche une bataille`);
     
@@ -278,20 +278,37 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
     
-    player.status = "searching";
-    this.updateGlobalStats();
+    // Créer le joueur pour le matchmaking
+    const matchmakingPlayer: MatchmakingPlayer = {
+      sessionId: client.sessionId,
+      userId: player.userId,
+      username: player.username,
+      level: player.level,
+      trophies: player.trophies,
+      arenaId: player.currentArenaId,
+      winRate: player.winRate,
+      deck: ["knight", "archers", "fireball", "arrows"], // Deck par défaut pour l'instant
+      preferredGameMode: 'ranked',
+      region: 'EU', // Par défaut pour l'instant
+      joinedAt: 0, // Sera défini par le service
+      estimatedWaitTime: 0, // Sera calculé par le service
+      searchAttempts: 0 // Sera géré par le service
+    };
     
-    client.send("search_started", { 
-      message: "Recherche d'adversaire en cours...",
-      estimatedTime: 30 
-    });
+    // Ajouter au service de matchmaking
+    const added = this.matchmakingService.addPlayer(matchmakingPlayer);
     
-    // Simulation match trouvé
-    this.clock.setTimeout(() => {
-      if (player.status === "searching") {
-        this.simulateMatchFound(client, player);
-      }
-    }, this.randomBetween(3000, 8000));
+    if (added) {
+      player.status = "searching";
+      this.updateGlobalStats();
+      
+      client.send("search_started", { 
+        message: "Recherche d'adversaire en cours...",
+        estimatedTime: matchmakingPlayer.estimatedWaitTime / 1000 
+      });
+    } else {
+      client.send("search_error", { message: "Impossible de rejoindre la file de matchmaking" });
+    }
   }
 
   // 🎯 SIMULATION MATCH TROUVÉ
