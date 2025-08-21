@@ -580,6 +580,14 @@ export default class DeckPanel extends BasePanel {
     updateElixirCost() {
         if (!this.headerElements.elixirCost) return;
         
+        // PROTECTION: Vérifier que deckState et currentDeck existent
+        if (!this.deckState || !this.deckState.currentDeck) {
+            // Affichage par défaut si pas encore initialisé
+            this.headerElements.elixirCost.setText('⚡ 0.0');
+            this.headerElements.elixirCost.setFill('#FFFFFF');
+            return;
+        }
+        
         const totalCost = this.deckState.currentDeck
             .filter(card => card !== null)
             .reduce((sum, card) => sum + (card.cost || 0), 0);
@@ -724,7 +732,7 @@ export default class DeckPanel extends BasePanel {
         });
     }
     
-    // === INITIALISATION DES DONNÉES ===
+    // === INITIALISATION DES DONNÉES (MÉTHODES STATIQUES) ===
     
     initializeDefaultDeck() {
         return new Array(8).fill(null);
@@ -759,8 +767,11 @@ export default class DeckPanel extends BasePanel {
     }
     
     initializeUserCollection() {
+        // S'assurer que cardsDatabase existe
+        const cardsDb = this.cardsDatabase || this.initializeCardsDatabase();
+        
         // Simuler la collection de l'utilisateur
-        return this.cardsDatabase.map(card => ({
+        return cardsDb.map(card => ({
             id: card.id,
             level: card.rarity === 'legendary' ? 1 : 
                    card.rarity === 'epic' ? Math.floor(Math.random() * 3) + 1 :
