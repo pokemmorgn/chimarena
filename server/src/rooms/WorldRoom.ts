@@ -632,48 +632,86 @@ export class WorldRoom extends Room<WorldState> {
   /**
    * Gérer un match trouvé par le service de matchmaking
    */
-  private handleMatchFound(match: MatchResult): void {
+private async handleMatchFound(match: MatchResult): Promise<void> {
   console.log(`🎯 Match trouvé: ${match.player1.username} vs ${match.player2.username}`);
   console.log(`   🃏 Deck ${match.player1.username}: ${match.player1.deck.join(', ')}`);
   console.log(`   🃏 Deck ${match.player2.username}: ${match.player2.deck.join(', ')}`);
   console.log(`   ⚖️ Qualité du match: ${match.matchQuality}%, Équilibre: ${match.estimatedBalance}%`);
-    
+
+  try {
+    // Créer une BattleRoom
+    const battleRoom = await this.presence.create("battle", {
+      matchId: match.battleRoomId,
+      arena: match.arena,
+      matchQuality: match.matchQuality
+    });
+
+    console.log(`⚔️ BattleRoom créée: ${battleRoom.roomId}`);
+
     // Trouver les clients correspondants
     const client1 = Array.from(this.clients).find(client => client.sessionId === match.player1.sessionId);
     const client2 = Array.from(this.clients).find(client => client.sessionId === match.player2.sessionId);
-    
+
+    // Envoyer les infos de connexion aux joueurs
     if (client1) {
-      client1.send("match_found", {
-        battleRoomId: match.battleRoomId,
+      const player1 = this.state.players.get(client1.sessionId);
+      if (player1) player1.status = "in_battle";
+      
+      client1.send("battle_ready", {
+        battleRoomId: battleRoom.roomId,
         opponent: {
           username: match.player2.username,
           level: match.player2.level,
           trophies: match.player2.trophies,
           arenaId: match.player2.arenaId
         },
+        playerData: {
+          userId: match.player1.userId,
+          username: match.player1.username,
+          level: match.player1.level,
+          trophies: match.player1.trophies,
+          deck: match.player1.deck
+        },
         arena: match.arena,
-        matchQuality: match.matchQuality,
-        estimatedBalance: match.estimatedBalance,
-        countdown: 3
+        matchQuality: match.matchQuality
       });
     }
-    
+
     if (client2) {
-      client2.send("match_found", {
-        battleRoomId: match.battleRoomId,
+      const player2 = this.state.players.get(client2.sessionId);
+      if (player2) player2.status = "in_battle";
+      
+      client2.send("battle_ready", {
+        battleRoomId: battleRoom.roomId,
         opponent: {
           username: match.player1.username,
           level: match.player1.level,
           trophies: match.player1.trophies,
           arenaId: match.player1.arenaId
         },
+        playerData: {
+          userId: match.player2.userId,
+          username: match.player2.username,
+          level: match.player2.level,
+          trophies: match.player2.trophies,
+          deck: match.player2.deck
+        },
         arena: match.arena,
-        matchQuality: match.matchQuality,
-        estimatedBalance: 100 - match.estimatedBalance, // Inverser pour le joueur 2
-        countdown: 3
+        matchQuality: match.matchQuality
       });
     }
+
+  } catch (error) {
+    console.error('❌ Erreur création BattleRoom:', error);
+    
+    // En cas d'erreur, notifier les joueurs
+    const client1 = Array.from(this.clients).find(client => client.sessionId === match.player1.sessionId);
+    const client2 = Array.from(this.clients).find(client => client.sessionId === match.player2.sessionId);
+    
+    if (client1) client1.send("battle_error", { message: "Erreur création du combat" });
+    if (client2) client2.send("battle_error", { message: "Erreur création du combat" });
   }
+}
   
   /**
    * Envoyer les statistiques du matchmaking au client
