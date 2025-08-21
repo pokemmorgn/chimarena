@@ -117,19 +117,39 @@ export default class BattlePanel {
         }
     }
     
-    handleMatchmaking() {
+handleMatchmaking() {
         console.log('🎯 Matchmaking lancé !');
         
-        // Action simple pour test
-        if (this.config.onAction) {
-            this.config.onAction('matchmaking', {
-                type: 'test_matchmaking',
+        try {
+            // Vérifier que la connexion WebSocket existe
+            const networkManager = this.scene.networkManager;
+            if (!networkManager || !networkManager.isConnected()) {
+                this.showSimpleNotification('❌ Connexion requise !');
+                console.error('❌ NetworkManager non connecté');
+                return;
+            }
+            
+            // Envoyer la demande de matchmaking au serveur
+            networkManager.sendMessage('search_battle', {
+                preferredGameMode: 'ranked',
                 timestamp: Date.now()
             });
+            
+            console.log('✅ Demande de matchmaking envoyée au serveur');
+            this.showSimpleNotification('🎯 Recherche d\'adversaire...');
+            
+            // Action pour le système local si nécessaire
+            if (this.config.onAction) {
+                this.config.onAction('matchmaking', {
+                    type: 'search_battle',
+                    timestamp: Date.now()
+                });
+            }
+            
+        } catch (error) {
+            console.error('❌ Erreur handleMatchmaking:', error);
+            this.showSimpleNotification('❌ Erreur de connexion');
         }
-        
-        // Afficher notification
-        this.showSimpleNotification('🎯 Matchmaking lancé !');
     }
     
     showSimpleNotification(message) {
