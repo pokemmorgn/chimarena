@@ -424,69 +424,27 @@
             }, 500);
         });
 
-        // ✅ CORRECTION: Gestion des erreurs globales SÉLECTIVE
+        // ❌ GESTIONNAIRE D'ERREURS DÉSACTIVÉ POUR DEBUG
+        /*
         window.addEventListener('error', function(e) {
-            // ✅ NOUVEAU: Log TOUJOURS dans la console
             console.error('🔥 Erreur JavaScript capturée:', e.error);
-            
-            // ✅ NOUVEAU: Filtrer les erreurs à notifier
-            if (e.error && e.error.message) {
-                const errorMessage = e.error.message;
-                
-                // ❌ NE PAS notifier les erreurs Colyseus/WebSocket
-                if (
-                    errorMessage.includes('"refId" not found') ||
-                    errorMessage.includes('SchemaSerializer') ||
-                    errorMessage.includes('onMessage() not registered') ||
-                    errorMessage.includes('decode') ||
-                    errorMessage.includes('WebSocket') ||
-                    errorMessage.includes('colyseus')
-                ) {
-                    console.warn('⚠️ Erreur de synchronisation ignorée pour notification:', errorMessage);
-                    return; // Pas de notification
-                }
-                
-                // ❌ NE PAS notifier les erreurs de ressources
-                if (
-                    errorMessage.includes('Loading CSS chunk') ||
-                    errorMessage.includes('Loading chunk') ||
-                    errorMessage.includes('Failed to fetch') ||
-                    errorMessage.includes('ERR_NETWORK')
-                ) {
-                    console.warn('⚠️ Erreur de ressource ignorée pour notification:', errorMessage);
-                    return; // Pas de notification
-                }
-            }
-            
-            // ✅ NOTIFIER seulement les vraies erreurs critiques
-            if (window.GameConfig.DEBUG) {
-                // En mode debug, être plus permissif
-                console.log('🔧 Mode DEBUG: Notification d\'erreur désactivée');
-            } else {
-                // En production, notifier les erreurs importantes
-                window.NotificationManager.error('Une erreur est survenue');
-            }
+            window.NotificationManager.error('Une erreur est survenue');
+        });
+        */
+
+        // ✅ LOGS SEULEMENT - AUCUNE NOTIFICATION
+        window.addEventListener('error', function(e) {
+            // SEULEMENT log dans la console, AUCUNE notification
+            console.error('🔥 Erreur JavaScript:', e.error);
+            console.error('🔥 Message:', e.error?.message);
+            console.error('🔥 Stack:', e.error?.stack);
+            // PAS DE NOTIFICATION DU TOUT
         });
 
-        // ✅ NOUVEAU: Gestion spécifique des erreurs de promesses rejetées
         window.addEventListener('unhandledrejection', function(e) {
+            // SEULEMENT log dans la console, AUCUNE notification  
             console.error('🔥 Promesse rejetée:', e.reason);
-            
-            // Ne pas notifier les erreurs de réseau/Colyseus
-            if (e.reason && e.reason.message && (
-                e.reason.message.includes('fetch') ||
-                e.reason.message.includes('WebSocket') ||
-                e.reason.message.includes('colyseus') ||
-                e.reason.message.includes('ERR_NETWORK')
-            )) {
-                console.warn('⚠️ Erreur de réseau ignorée:', e.reason.message);
-                return;
-            }
-            
-            // Notifier seulement en production
-            if (!window.GameConfig.DEBUG) {
-                window.NotificationManager.error('Erreur de connexion');
-            }
+            // PAS DE NOTIFICATION DU TOUT
         });
 
         // Gestion de la déconnexion réseau
