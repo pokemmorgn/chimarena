@@ -401,15 +401,26 @@ export class WorldRoom extends Room<WorldState> {
     console.log(`🏆 Combat terminé pour ${player.username}: ${isWin ? 'Victoire' : 'Défaite'} (${trophyChange} trophées)`);
   }
 
-  // ❌ ANNULER LA RECHERCHE
-  private handleCancelSearch(client: Client, player: WorldPlayer) {
-    if (player.status === "searching") {
-      player.status = "idle";
-      this.updateGlobalStats();
-      client.send("search_cancelled", { message: "Recherche annulée" });
-      console.log(`❌ ${player.username} a annulé sa recherche`);
-    }
-  }
+    // ❌ ANNULER LA RECHERCHE
+      private handleCancelSearch(client: Client, player: WorldPlayer) {
+        if (player.status === "searching") {
+          // Retirer du service de matchmaking
+          const removed = this.matchmakingService.removePlayer(client.sessionId);
+          
+          if (removed) {
+            player.status = "idle";
+            this.updateGlobalStats();
+            client.send("search_cancelled", { message: "Recherche annulée" });
+            console.log(`❌ ${player.username} a annulé sa recherche`);
+          } else {
+            console.warn(`⚠️ Impossible de retirer ${player.username} du matchmaking`);
+            // Forcer le changement de statut quand même
+            player.status = "idle";
+            this.updateGlobalStats();
+            client.send("search_cancelled", { message: "Recherche annulée" });
+          }
+        }
+      }
 
   // 🏆 CLASSEMENT
   private handleGetLeaderboard(client: Client, message: any) {
