@@ -5,7 +5,7 @@ export default class BattlePanel extends BasePanel {
     constructor(scene, config = {}) {
         super(scene, {
             name: 'BattlePanel',
-            title: 'BATAILLE',
+            title: 'BATAILLE !!!',
             icon: '⚔️',
             contentStartY: 120, // Plus haut pour inclure l'arène
             ...config
