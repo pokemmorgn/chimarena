@@ -9,6 +9,8 @@ constructor(scene, config = {}) {
         icon: '🛡️',
 contentStartY: 200,
      enableTitle: false, // On va créer un titre custom avec sous-onglets
+             enableBackground: false, // ← AJOUTEZ CETTE LIGNE
+
         ...config
     });
     
