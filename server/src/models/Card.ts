@@ -45,13 +45,24 @@ export interface ICard extends Document {
     damageGrowth?: number;          // Croissance dégâts par niveau (%)
   };
   
-  // Métadonnées
-  imageUrl?: string;                // URL de l'image
+  // Métadonnées visuelles et audio
+  cardImageUrl?: string;            // Image de la carte (UI)
+  gameSprite?: string;              // Sprite principal (terrain)
+  spriteConfig?: {                  // Config sprites détaillée
+    idle?: string;
+    walk?: string;
+    attack?: string;
+    death?: string;
+  };
   soundEffects?: {
     deploy?: string;
     attack?: string;
     death?: string;
   };
+  
+  // Gameplay et scripts
+  scriptName?: string;              // Script de comportement (ex: "knight")
+  animationDuration?: number;       // Durée animation déploiement (ms)
   
   // Balancing et meta
   isEnabled: boolean;               // Carte activée dans le jeu
