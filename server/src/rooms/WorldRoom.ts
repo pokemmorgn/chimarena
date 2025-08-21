@@ -585,6 +585,12 @@ export class WorldRoom extends Room<WorldState> {
   // 🗑️ NETTOYAGE À LA FERMETURE
   onDispose() {
     console.log('🗑️ WorldRoom fermée');
+    
+    // Arrêter le service de matchmaking
+    if (this.matchmakingService) {
+      this.matchmakingService.stop();
+    }
+    
     this.userCache.clear();
   }
   // === GESTION DU MATCHMAKING ===
