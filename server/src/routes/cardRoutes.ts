@@ -236,61 +236,15 @@ router.get('/search', cardLimiter, async (req: Request, res: Response) => {
 
     console.log(`[CARDS] Recherche: "${q}", Tags: ${tags}, Coût: ${minCost}-${maxCost}`);
 
-    const filter: any = { isEnabled: true };
-    const searchCriteria: string[] = [];
+// Utiliser le CardManager pour la recherche
+const searchCriteria = await cardManager.searchCards({
+  text: q as string,
+  minCost: minCost ? parseInt(minCost as string) : undefined,
+  maxCost: maxCost ? parseInt(maxCost as string) : undefined,
+  tags: tags ? (tags as string).split(',').map(t => t.trim().toLowerCase()) : undefined
+});
 
-    // Recherche textuelle dans nom et description
-    if (q && typeof q === 'string' && q.trim().length > 0) {
-      filter.$or = [
-        { name: { $regex: q.trim(), $options: 'i' } },
-        { description: { $regex: q.trim(), $options: 'i' } },
-        { cardId: { $regex: q.trim(), $options: 'i' } }
-      ];
-      searchCriteria.push(`texte:"${q}"`);
-    }
-
-    // Filtrage par tags
-    if (tags && typeof tags === 'string') {
-      const tagArray = tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-      if (tagArray.length > 0) {
-        filter.tags = { $in: tagArray };
-        searchCriteria.push(`tags:[${tagArray.join(',')}]`);
-      }
-    }
-
-    // Coût élixir
-    if (minCost || maxCost) {
-      filter.elixirCost = {};
-      if (minCost) {
-        const min = parseInt(minCost as string);
-        if (!isNaN(min) && min >= 1) {
-          filter.elixirCost.$gte = min;
-          searchCriteria.push(`minCoût:${min}`);
-        }
-      }
-      if (maxCost) {
-        const max = parseInt(maxCost as string);
-        if (!isNaN(max) && max <= 10) {
-          filter.elixirCost.$lte = max;
-          searchCriteria.push(`maxCoût:${max}`);
-        }
-      }
-    }
-
-    // Filtres sur les stats
-    if (hasHealth === 'true') {
-      filter['baseStats.health'] = { $exists: true, $gt: 0 };
-      searchCriteria.push('avecPV');
-    }
-    if (hasDamage === 'true') {
-      filter['baseStats.damage'] = { $exists: true, $gt: 0 };
-      searchCriteria.push('avecDégâts');
-    }
-
-    const cards = await Card.find(filter)
-      .sort({ elixirCost: 1, name: 1 })
-      .limit(50) // Limiter les résultats de recherche
-      .select('-gameStats -__v');
+const cards = searchCriteria.slice(0, 50); // Limiter à 50 résultats
 
     console.log(`[CARDS] Recherche "${searchCriteria.join(', ')}" : ${cards.length} résultats`);
 
