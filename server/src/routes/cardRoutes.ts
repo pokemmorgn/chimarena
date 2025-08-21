@@ -194,7 +194,9 @@ router.get('/arena/:arenaId', cardLimiter, async (req: Request, res: Response) =
         type: card.type,
         rarity: card.rarity,
         elixirCost: card.elixirCost,
-        imageUrl: card.imageUrl
+        cardImageUrl: card.cardImageUrl,
+        gameSprite: card.gameSprite,
+        scriptName: card.scriptName
       });
     });
 
@@ -212,7 +214,9 @@ router.get('/arena/:arenaId', cardLimiter, async (req: Request, res: Response) =
         rarity: card.rarity,
         elixirCost: card.elixirCost,
         unlockedAtArena: card.unlockedAtArena,
-        imageUrl: card.imageUrl
+        cardImageUrl: card.cardImageUrl,
+        gameSprite: card.gameSprite,
+        scriptName: card.scriptName
       }))
     });
 
