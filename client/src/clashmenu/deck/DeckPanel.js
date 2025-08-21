@@ -6,53 +6,45 @@ import ChallengesSubPanel from './ChallengesSubPanel.js';
 
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-        // IMPORTANT: Initialiser TOUTES les propriétés AVANT super() 
-        // car BasePanel appelle automatiquement createContent() dans son constructeur
+        // SOLUTION: Assigner les propriétés DIRECTEMENT avant super()
         
-        // État du deck
-        const deckState = {
-            currentSubTab: 'deck',
-            currentDeck: null, // Sera initialisé après
-            selectedCard: null,
-            selectedSlot: null
+        // Créer une instance temporaire pour éviter les problèmes d'ordre
+        const tempInstance = {
+            deckState: {
+                currentSubTab: 'deck',
+                currentDeck: null,
+                selectedCard: null,
+                selectedSlot: null
+            },
+            subPanels: {
+                collection: null,
+                deck: null,
+                challenges: null
+            },
+            headerElements: {
+                navigation: null,
+                elixirDisplay: null
+            },
+            subPanelsContainer: null
         };
         
-        // Sous-panels (initialisés vides)
-        const subPanels = {
-            collection: null,
-            deck: null,
-            challenges: null
-        };
-        
-        // Éléments du header (initialisés vides)
-        const headerElements = {
-            navigation: null,
-            elixirDisplay: null
-        };
-        
-        // Passer l'état initial dans la config pour éviter les problèmes d'ordre
+        // Passer la config
         const enhancedConfig = {
             name: 'DeckPanel',
             title: 'DECK',
             icon: '🛡️',
             contentStartY: 200,
-            enableTitle: false, // On va créer un titre custom avec sous-onglets
+            enableTitle: false,
             enableBackground: false,
-            initialDeckState: deckState,
             ...config
         };
         
+        // Assigner AVANT super() - c'est la clé !
+        Object.assign(this, tempInstance);
+        
         super(scene, enhancedConfig);
         
-        // Maintenant on peut assigner les propriétés en toute sécurité
-        this.deckState = deckState;
-        this.subPanels = subPanels;
-        this.headerElements = headerElements;
-        
-        // Container pour les sous-panels (sera créé dans createContent)
-        this.subPanelsContainer = null;
-        
-        // Finir l'initialisation des données
+        // Finir l'initialisation des données APRÈS super()
         this.deckState.currentDeck = this.initializeDefaultDeck();
         this.cardsDatabase = this.initializeCardsDatabase();
         this.userCollection = this.initializeUserCollection();
@@ -64,6 +56,22 @@ export default class DeckPanel extends BasePanel {
     
     createContent() {
         this.log('Création contenu deck refactorisé...');
+        
+        // SOLUTION ROBUSTE: Vérifier et initialiser si nécessaire
+        if (!this.headerElements) {
+            this.headerElements = {
+                navigation: null,
+                elixirDisplay: null
+            };
+        }
+        
+        if (!this.subPanels) {
+            this.subPanels = {
+                collection: null,
+                deck: null,
+                challenges: null
+            };
+        }
         
         // 1. Header custom avec sous-navigation
         this.createDeckHeader();
