@@ -10,6 +10,25 @@ import * as ColyseusManagerModule from './managers/ColyseusManager.js';
 const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
 window.GameConfig.DEBUG = import.meta.env.DEV;
 
+// === COLYSEUS MANAGER INLINE ===
+class ColyseusManager {
+  constructor() {
+    this.isConnected = false;
+    console.log('🌐 ColyseusManager créé inline');
+  }
+  
+  getDebugInfo() {
+    return { isConnected: this.isConnected, inline: true };
+  }
+  
+  fullReset() {
+    console.log('🔄 Reset inline');
+  }
+}
+
+window.colyseusManager = new ColyseusManager();
+console.log('🌐 ColyseusManager inline exposé');
+
 // 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
 console.log('🔍 EXPOSITION FONCTIONS DEBUG COLYSEUS...');
 
