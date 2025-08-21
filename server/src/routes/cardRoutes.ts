@@ -120,18 +120,19 @@ router.get('/:cardId', cardLimiter, async (req: Request, res: Response) => {
 
     console.log(`[CARDS] Carte demandée: ${cardId}, Niveau: ${level}`);
 
-    const card = await Card.findOne({ cardId, isEnabled: true }).select('-gameStats -__v');
-    if (!card) {
+    const levelNum = Math.max(1, parseInt(level as string) || 1);
+    const cardWithStats = await cardManager.getCardWithStats(cardId, levelNum);
+    
+    if (!cardWithStats) {
       console.log(`[CARDS] Carte non trouvée: ${cardId}`);
       return res.status(404).json({
         success: false,
         message: 'Carte non trouvée'
       });
     }
-
-    // Calculer les stats au niveau demandé
-    const levelNum = Math.max(1, Math.min(parseInt(level as string) || 1, card.maxLevel));
-    const statsAtLevel = card.getStatsAtLevel(levelNum);
+    
+    const { card, stats: statsAtLevel } = cardWithStats;
+    const validLevel = Math.min(levelNum, card.maxLevel);
 
     console.log(`[CARDS] Carte ${cardId} retournée (niveau ${levelNum})`);
 
@@ -147,7 +148,7 @@ router.get('/:cardId', cardLimiter, async (req: Request, res: Response) => {
         unlockedAtArena: card.unlockedAtArena,
         maxLevel: card.maxLevel,
         baseStats: card.baseStats,
-        currentLevel: levelNum,
+        currentLevel: validLevel,
         statsAtLevel,
         imageUrl: card.imageUrl,
         tags: card.tags,
@@ -176,12 +177,7 @@ router.get('/arena/:arenaId', cardLimiter, async (req: Request, res: Response) =
 
     console.log(`[CARDS] Cartes demandées pour arène ${arenaNum}`);
 
-    const cards = await Card.find({
-      unlockedAtArena: { $lte: arenaNum },
-      isEnabled: true
-    })
-    .sort({ unlockedAtArena: 1, elixirCost: 1 })
-    .select('-gameStats -__v');
+    const cards = await cardManager.getCardsForArena(arenaNum);
 
     // Grouper par arène de déblocage
     const cardsByArena: { [arena: number]: any[] } = {};
