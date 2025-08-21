@@ -47,7 +47,21 @@ export class WorldRoom extends Room<WorldState> {
     console.log('🌍 WorldRoom créée avec options:', options);
     this.setState(new WorldState());
 
+// Initialiser le service de matchmaking
     this.matchmakingService = new MatchmakingService();
+    
+    // Événements du matchmaking
+    this.matchmakingService.on('matchFound', (match: MatchResult) => {
+      this.handleMatchFound(match);
+    });
+    
+    this.matchmakingService.on('playerJoined', (player: MatchmakingPlayer) => {
+      console.log(`🎯 ${player.username} rejoint la file de matchmaking`);
+    });
+    
+    this.matchmakingService.on('playerLeft', (data: { player: MatchmakingPlayer; waitTime: number }) => {
+      console.log(`🎯 ${data.player.username} quitte la file (attente: ${Math.round(data.waitTime/1000)}s)`);
+    });
     
     // Vérifier la configuration JWT
     if (!this.JWT_ACCESS_SECRET) {
