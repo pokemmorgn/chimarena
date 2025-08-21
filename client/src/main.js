@@ -5,7 +5,7 @@ import WelcomeScene from './scenes/WelcomeScene';
 import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 import { LoadingManager } from './utils/LoadingManager.js';
-import BattlePanel from './battle/BattlePanel.js';
+import BattlePanel from './clashmenu/battle/BattlePanel.js';
 
 // 🔍 IMPORT COLYSEUS TÔT POUR DEBUG
 import * as ColyseusManagerModule from './managers/ColyseusManager.js';
