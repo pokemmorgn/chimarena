@@ -1,4 +1,4 @@
-// client/src/managers/ColyseusManager.js - VERSION AVEC SYSTÈME DE STATUT SIMPLE
+// client/src/managers/ColyseusManager.js - CORRECTION RECONNEXIONS MULTIPLES
 import { Client } from 'colyseus.js';
 import { auth, tokenManager } from '../api';
 
@@ -8,10 +8,14 @@ class ColyseusManager {
         this.worldRoom = null;
         this.isConnected = false;
         this.isConnecting = false;
-        this.isReady = false; // ✅ NOUVEAU: Flag ready client
+        this.isReady = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 2000;
+        this.maxReconnectAttempts = 3; // ✅ RÉDUIT de 5 à 3
+        this.reconnectDelay = 3000; // ✅ AUGMENTÉ de 2s à 3s
+        
+        // ✅ NOUVEAU: Timeout de connexion
+        this.connectionTimeout = null;
+        this.readyTimeout = null;
         
         // Données synchronisées
         this.playerProfile = null;
@@ -41,7 +45,7 @@ class ColyseusManager {
         this.serverUrl = this.getServerUrl();
         console.log('🌐 ColyseusManager initialisé - URL:', this.serverUrl);
         
-        // Debug: exposer globalement en dev
+        // Debug
         if (window.GameConfig?.DEBUG) {
             window.debugColyseusManager = this;
             console.log('🔧 ColyseusManager exposé pour debug');
@@ -52,11 +56,9 @@ class ColyseusManager {
      * 🔐 OBTENIR LE TOKEN JWT
      */
     getAuthToken() {
-        console.log('🔑 Récupération token...');
         const token = tokenManager.getToken();
         if (token) {
-            console.log("🔑 Token récupéré depuis tokenManager (longueur:", token.length, ")");
-            console.log("🔑 Token preview:", token.substring(0, 20) + "..." + token.substring(token.length - 20));
+            console.log("🔑 Token récupéré (longueur:", token.length, ")");
             return token;
         }
         console.error("❌ Aucun token disponible !");
@@ -67,10 +69,7 @@ class ColyseusManager {
      * Obtenir l'URL du serveur Colyseus
      */
     getServerUrl() {
-        console.log('🔧 Calcul URL serveur...');
-        
         if (typeof window !== 'undefined' && window.GameConfig?.COLYSEUS_URL) {
-            console.log('🔧 URL depuis GameConfig:', window.GameConfig.COLYSEUS_URL);
             return window.GameConfig.COLYSEUS_URL;
         }
 
@@ -83,22 +82,24 @@ class ColyseusManager {
     }
     
     /**
-     * 🔌 CONNEXION À LA WORLDROOM AVEC SYSTÈME DE STATUT
+     * 🔌 CONNEXION AVEC PROTECTION CONTRE LES MULTIPLES TENTATIVES
      */
     async connect() {
         console.log('🔌 === DÉBUT CONNEXION COLYSEUS ===');
         
-        if (this.isConnecting || this.isConnected) {
-            console.warn('⚠️ Connexion Colyseus déjà en cours ou établie');
+        // ✅ PROTECTION: Empêcher les connexions multiples
+        if (this.isConnecting) {
+            console.warn('⚠️ Connexion déjà en cours, annulation');
             return false;
         }
         
-        // Nettoyer toute connexion existante
-        if (this.client || this.worldRoom) {
-            console.log('🧹 Nettoyage connexion existante...');
-            await this.disconnect();
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        if (this.isConnected) {
+            console.warn('⚠️ Déjà connecté');
+            return true;
         }
+        
+        // ✅ NOUVEAU: Nettoyer complètement avant de reconnecter
+        await this.forceDisconnect();
         
         // Vérifier authentification
         if (!auth.isAuthenticated()) {
@@ -109,7 +110,15 @@ class ColyseusManager {
         
         try {
             this.isConnecting = true;
-            this.isReady = false; // ✅ Reset ready
+            this.isReady = false;
+            
+            // ✅ NOUVEAU: Timeout de connexion pour éviter les blocages
+            this.connectionTimeout = setTimeout(() => {
+                if (this.isConnecting) {
+                    console.error('⏰ TIMEOUT CONNEXION (10s)');
+                    this.handleConnectionTimeout();
+                }
+            }, 10000);
             
             console.log('🔌 Connexion à Colyseus...');
             
@@ -134,32 +143,73 @@ class ColyseusManager {
                 roomId: this.worldRoom.id
             });
             
-            // ✅ NOUVEAU: Configurer les handlers AVANT de signaler ready
+            // ✅ Nettoyer le timeout de connexion
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
+            
+            // Configurer les handlers
             this.setupRoomHandlers();
             
             this.isConnected = true;
             this.isConnecting = false;
             this.reconnectAttempts = 0;
             
-            console.log('✅ === CONNEXION COLYSEUS RÉUSSIE - EN ATTENTE READY ===');
+            console.log('✅ === CONNEXION COLYSEUS RÉUSSIE ===');
             return true;
             
         } catch (error) {
             console.error('❌ === ERREUR CONNEXION COLYSEUS ===');
             console.error('❌ Message:', error.message);
             
+            // Nettoyer les timeouts
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
+            
             this.isConnecting = false;
             this.isConnected = false;
             this.isReady = false;
             
             this.triggerCallback('onError', `Connexion échouée: ${error.message}`);
-            this.scheduleReconnect();
+            
+            // ✅ PROTECTION: Pas de reconnexion immédiate si trop d'erreurs
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.scheduleReconnect();
+            } else {
+                console.error('❌ TROP DE TENTATIVES DE CONNEXION - ARRÊT');
+                this.triggerCallback('onError', 'Impossible de se connecter au serveur');
+            }
+            
             return false;
         }
     }
     
     /**
-     * ✅ CONFIGURATION DES HANDLERS AVEC SYSTÈME DE STATUT
+     * ✅ NOUVEAU: Gérer le timeout de connexion
+     */
+    handleConnectionTimeout() {
+        console.error('⏰ TIMEOUT DE CONNEXION');
+        this.isConnecting = false;
+        this.isConnected = false;
+        this.isReady = false;
+        
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
+        
+        // Forcer la déconnexion
+        this.forceDisconnect();
+        
+        this.triggerCallback('onError', 'Timeout de connexion');
+        this.scheduleReconnect();
+    }
+    
+    /**
+     * ✅ CONFIGURATION DES HANDLERS AVEC TIMEOUTS
      */
     setupRoomHandlers() {
         if (!this.worldRoom) {
@@ -169,14 +219,21 @@ class ColyseusManager {
         
         console.log('🔧 Configuration des handlers WorldRoom...');
         
-        // ✅ NOUVEAU: Handler pour confirmation serveur prêt
+        // Handler pour confirmation serveur prêt
         this.worldRoom.onMessage("server_ready", (data) => {
             console.log('✅ SERVEUR PRÊT - Finalisation...');
+            
+            // Nettoyer le timeout ready
+            if (this.readyTimeout) {
+                clearTimeout(this.readyTimeout);
+                this.readyTimeout = null;
+            }
+            
             this.isReady = true;
-            this.triggerCallback('onConnected'); // ✅ Maintenant on peut dire qu'on est connecté
+            this.triggerCallback('onConnected');
         });
         
-        // ✅ ATTENDRE L'ÉTAT INITIAL AVANT DE SIGNALER READY
+        // ✅ ATTENDRE L'ÉTAT INITIAL
         this.worldRoom.onStateChange.once((state) => {
             console.log('📊 PREMIER ÉTAT REÇU:', {
                 totalPlayers: state.totalPlayers,
@@ -192,32 +249,19 @@ class ColyseusManager {
                 console.log('🔧 Configuration handlers players...');
                 
                 state.players.onAdd((player, sessionId) => {
-                    console.log(`👤 PLAYER AJOUTÉ:`, {
-                        sessionId: sessionId,
-                        username: player.username,
-                        level: player.level,
-                        trophies: player.trophies,
-                        status: player.status
-                    });
+                    console.log(`👤 PLAYER AJOUTÉ: ${player.username} (${sessionId})`);
                     this.worldPlayers.set(sessionId, player);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
                 
                 state.players.onRemove((player, sessionId) => {
-                    console.log(`👤 PLAYER SUPPRIMÉ:`, {
-                        sessionId: sessionId,
-                        username: player.username
-                    });
+                    console.log(`👤 PLAYER SUPPRIMÉ: ${player.username} (${sessionId})`);
                     this.worldPlayers.delete(sessionId);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
                 
                 state.players.onChange((player, sessionId) => {
-                    console.log(`👤 PLAYER MODIFIÉ:`, {
-                        sessionId: sessionId,
-                        username: player.username,
-                        status: player.status
-                    });
+                    console.log(`👤 PLAYER MODIFIÉ: ${player.username} (${player.status})`);
                     this.worldPlayers.set(sessionId, player);
                     this.triggerCallback('onPlayersUpdated', this.worldPlayers);
                 });
@@ -225,12 +269,23 @@ class ColyseusManager {
                 console.log('✅ Handlers players configurés');
             }
             
-            // ✅ MAINTENANT signaler au serveur que le client est prêt
-            console.log('📡 ENVOI SIGNAL CLIENT_READY...');
-            this.worldRoom.send("client_ready", { 
-                timestamp: Date.now(),
-                clientVersion: "1.0.0"
-            });
+            // ✅ ATTENDRE UN PEU avant de signaler ready
+            setTimeout(() => {
+                console.log('📡 ENVOI SIGNAL CLIENT_READY...');
+                
+                // ✅ NOUVEAU: Timeout pour le signal ready
+                this.readyTimeout = setTimeout(() => {
+                    if (!this.isReady) {
+                        console.error('⏰ TIMEOUT SIGNAL READY (5s)');
+                        this.triggerCallback('onError', 'Timeout signal ready');
+                    }
+                }, 5000);
+                
+                this.worldRoom.send("client_ready", { 
+                    timestamp: Date.now(),
+                    clientVersion: "1.0.0"
+                });
+            }, 500); // ✅ AUGMENTÉ de 100ms à 500ms
         });
         
         // Changements d'état suivants
@@ -239,19 +294,15 @@ class ColyseusManager {
             this.updatePlayersMap(state.players);
         });
         
-        // ✅ MESSAGES - Tous peuvent être traités directement maintenant
+        // Messages du serveur
         this.worldRoom.onMessage("player_profile", (data) => {
-            console.log('📨 PROFIL REÇU:', {
-                username: data.profile.username,
-                level: data.profile.level,
-                trophies: data.profile.trophies
-            });
+            console.log('📨 PROFIL REÇU:', data.profile.username);
             this.playerProfile = data.profile;
             this.triggerCallback('onProfileUpdated', this.playerProfile);
         });
         
         this.worldRoom.onMessage("arena_info", (data) => {
-            console.log('📨 INFO ARÈNE REÇUE:', data);
+            console.log('📨 INFO ARÈNE REÇUE');
             if (this.playerProfile) {
                 this.playerProfile.arenaInfo = data;
                 this.triggerCallback('onProfileUpdated', this.playerProfile);
@@ -259,22 +310,22 @@ class ColyseusManager {
         });
         
         this.worldRoom.onMessage("search_started", (data) => {
-            console.log('📨 RECHERCHE COMMENCÉE:', data);
+            console.log('📨 RECHERCHE COMMENCÉE');
             this.triggerCallback('onSearchStarted', data);
         });
         
         this.worldRoom.onMessage("search_cancelled", (data) => {
-            console.log('📨 RECHERCHE ANNULÉE:', data);
+            console.log('📨 RECHERCHE ANNULÉE');
             this.triggerCallback('onSearchCancelled', data);
         });
         
         this.worldRoom.onMessage("match_found", (data) => {
-            console.log('📨 MATCH TROUVÉ:', data);
+            console.log('📨 MATCH TROUVÉ');
             this.triggerCallback('onMatchFound', data);
         });
         
         this.worldRoom.onMessage("battle_result", (data) => {
-            console.log('📨 RÉSULTAT BATAILLE:', data);
+            console.log('📨 RÉSULTAT BATAILLE');
             if (this.playerProfile) {
                 this.playerProfile.trophies = data.newTrophies;
                 if (data.newArena) {
@@ -285,10 +336,7 @@ class ColyseusManager {
         });
         
         this.worldRoom.onMessage("leaderboard", (data) => {
-            console.log('📨 LEADERBOARD REÇU:', {
-                playersCount: data.players.length,
-                total: data.total
-            });
+            console.log('📨 LEADERBOARD REÇU');
             this.triggerCallback('onLeaderboard', data);
         });
         
@@ -306,100 +354,49 @@ class ColyseusManager {
             // Heartbeat silencieux
         });
         
-        // Déconnexion
+        // ✅ DÉCONNEXION AVEC NETTOYAGE
         this.worldRoom.onLeave((code) => {
-            console.log(`🔌 DÉCONNECTÉ DE LA WORLDROOM:`, {
-                code: code,
-                codeDescription: this.getLeaveCodeDescription(code)
-            });
+            console.log(`🔌 DÉCONNECTÉ (code: ${code})`);
             
-            this.isConnected = false;
-            this.isReady = false; // ✅ Reset ready
-            this.worldRoom = null;
-            
+            this.cleanupConnection();
             this.triggerCallback('onDisconnected', code);
             
-            if (code !== 1000) {
+            // Reconnexion seulement si pas volontaire et pas trop d'erreurs
+            if (code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.scheduleReconnect();
             }
         });
         
         this.worldRoom.onError((code, message) => {
-            console.error(`🔧 ERREUR WORLDROOM:`, { code, message });
+            console.error(`🔧 ERREUR WORLDROOM: ${code} - ${message}`);
             this.triggerCallback('onError', `Erreur room: ${message}`);
         });
         
-        console.log('✅ Handlers configurés - En attente du premier état...');
+        console.log('✅ Handlers configurés');
     }
     
     /**
-     * 🔍 Description des codes de déconnexion
+     * ✅ NOUVEAU: Nettoyage complet de la connexion
      */
-    getLeaveCodeDescription(code) {
-        const codes = {
-            1000: 'Fermeture normale',
-            1001: 'Endpoint parti',
-            1002: 'Erreur de protocole',
-            1003: 'Type de données non supporté',
-            1005: 'Aucun code de statut reçu',
-            1006: 'Connexion fermée anormalement',
-            1007: 'Données invalides',
-            1008: 'Violation de politique',
-            1009: 'Message trop grand',
-            1010: 'Extension manquante',
-            1011: 'Erreur interne du serveur',
-            4000: 'Erreur personnalisée serveur'
-        };
-        return codes[code] || `Code inconnu: ${code}`;
-    }
-    
-    /**
-     * 📊 METTRE À JOUR LES STATS GLOBALES
-     */
-    updateGlobalStats(state) {
-        const oldStats = { ...this.globalStats };
+    cleanupConnection() {
+        this.isConnected = false;
+        this.isReady = false;
+        this.worldRoom = null;
         
-        this.globalStats = {
-            totalPlayers: state.totalPlayers || 0,
-            playersOnline: state.playersOnline || 0,
-            playersSearching: state.playersSearching || 0
-        };
-        
-        if (JSON.stringify(oldStats) !== JSON.stringify(this.globalStats)) {
-            console.log('📊 STATS GLOBALES MISES À JOUR:', {
-                old: oldStats,
-                new: this.globalStats
-            });
+        // Nettoyer les timeouts
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
         }
         
-        this.triggerCallback('onGlobalStatsUpdated', this.globalStats);
+        if (this.readyTimeout) {
+            clearTimeout(this.readyTimeout);
+            this.readyTimeout = null;
+        }
     }
     
     /**
-     * 👥 METTRE À JOUR LA MAP DES JOUEURS
-     */
-    updatePlayersMap(playersMap) {
-        const oldSize = this.worldPlayers.size;
-        this.worldPlayers.clear();
-        
-        if (playersMap) {
-            playersMap.forEach((player, sessionId) => {
-                this.worldPlayers.set(sessionId, player);
-            });
-        }
-        
-        if (oldSize !== this.worldPlayers.size) {
-            console.log('👥 MAP JOUEURS MISE À JOUR:', {
-                oldSize: oldSize,
-                newSize: this.worldPlayers.size
-            });
-        }
-        
-        this.triggerCallback('onPlayersUpdated', this.worldPlayers);
-    }
-    
-    /**
-     * 🔄 RECONNEXION AUTOMATIQUE
+     * 🔄 RECONNEXION AVEC BACKOFF EXPONENTIEL
      */
     scheduleReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -411,26 +408,36 @@ class ColyseusManager {
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
         
-        console.log(`🔄 PROGRAMMATION RECONNEXION: tentative ${this.reconnectAttempts} dans ${Math.round(delay / 1000)}s`);
+        console.log(`🔄 RECONNEXION PROGRAMMÉE: tentative ${this.reconnectAttempts}/${this.maxReconnectAttempts} dans ${Math.round(delay / 1000)}s`);
         
         setTimeout(() => {
-            if (!this.isConnected && auth.isAuthenticated()) {
+            if (!this.isConnected && !this.isConnecting && auth.isAuthenticated()) {
                 console.log('🔄 TENTATIVE DE RECONNEXION...');
                 this.connect();
+            } else {
+                console.log('🔄 RECONNEXION ANNULÉE (déjà connecté ou pas authentifié)');
             }
         }, delay);
     }
     
     /**
-     * 🔌 DÉCONNEXION VOLONTAIRE
+     * ✅ NOUVEAU: Déconnexion forcée (nettoyage complet)
      */
-    async disconnect() {
-        console.log('🔌 DÉCONNEXION VOLONTAIRE DE COLYSEUS');
+    async forceDisconnect() {
+        console.log('🧹 DÉCONNEXION FORCÉE');
         
-        this.isConnected = false;
-        this.isReady = false; // ✅ Reset ready
-        this.reconnectAttempts = this.maxReconnectAttempts; // Empêcher reconnexion auto
+        // Nettoyer les timeouts
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
         
+        if (this.readyTimeout) {
+            clearTimeout(this.readyTimeout);
+            this.readyTimeout = null;
+        }
+        
+        // Fermer la room
         if (this.worldRoom) {
             try {
                 await this.worldRoom.leave();
@@ -441,35 +448,48 @@ class ColyseusManager {
             this.worldRoom = null;
         }
         
+        // Fermer le client
         if (this.client) {
-            this.client = null;
+            try {
+                this.client = null;
+            } catch (error) {
+                console.warn('⚠️ Erreur fermeture client:', error);
+            }
         }
+        
+        // Reset des états
+        this.isConnected = false;
+        this.isConnecting = false;
+        this.isReady = false;
         
         // Nettoyer les données
         this.playerProfile = null;
         this.worldPlayers.clear();
         
-        console.log('✅ Déconnexion terminée');
+        console.log('✅ Déconnexion forcée terminée');
+    }
+    
+    /**
+     * 🔌 DÉCONNEXION VOLONTAIRE
+     */
+    async disconnect() {
+        console.log('🔌 DÉCONNEXION VOLONTAIRE');
+        
+        this.reconnectAttempts = this.maxReconnectAttempts; // Empêcher reconnexion auto
+        await this.forceDisconnect();
         this.triggerCallback('onDisconnected', 1000);
     }
     
     /**
-     * 📨 ENVOYER UN MESSAGE - AVEC VÉRIFICATION READY
+     * 📨 ENVOYER UN MESSAGE - AVEC VÉRIFICATIONS
      */
     sendMessage(type, data = {}) {
-        console.log(`📨 ENVOI MESSAGE:`, {
-            type: type,
-            data: data,
-            isConnected: this.isConnected,
-            isReady: this.isReady
-        });
-        
         if (!this.isConnected || !this.worldRoom) {
             console.warn(`⚠️ Impossible d'envoyer ${type}, pas connecté`);
             return false;
         }
         
-        // ✅ NOUVEAU: Vérifier si ready pour certains messages
+        // Vérifier si ready pour certains messages
         const requiresReady = ['search_battle', 'cancel_search', 'get_arena_info', 'get_leaderboard', 'update_status'];
         if (requiresReady.includes(type) && !this.isReady) {
             console.warn(`⚠️ Impossible d'envoyer ${type}, client pas encore prêt`);
@@ -487,30 +507,64 @@ class ColyseusManager {
     }
     
     /**
+     * 📊 MISE À JOUR DES STATS GLOBALES
+     */
+    updateGlobalStats(state) {
+        const oldStats = { ...this.globalStats };
+        
+        this.globalStats = {
+            totalPlayers: state.totalPlayers || 0,
+            playersOnline: state.playersOnline || 0,
+            playersSearching: state.playersSearching || 0
+        };
+        
+        if (JSON.stringify(oldStats) !== JSON.stringify(this.globalStats)) {
+            console.log('📊 STATS MISES À JOUR:', this.globalStats);
+        }
+        
+        this.triggerCallback('onGlobalStatsUpdated', this.globalStats);
+    }
+    
+    /**
+     * 👥 MISE À JOUR DE LA MAP DES JOUEURS
+     */
+    updatePlayersMap(playersMap) {
+        const oldSize = this.worldPlayers.size;
+        this.worldPlayers.clear();
+        
+        if (playersMap) {
+            playersMap.forEach((player, sessionId) => {
+                this.worldPlayers.set(sessionId, player);
+            });
+        }
+        
+        if (oldSize !== this.worldPlayers.size) {
+            console.log('👥 JOUEURS MIS À JOUR:', this.worldPlayers.size);
+        }
+        
+        this.triggerCallback('onPlayersUpdated', this.worldPlayers);
+    }
+    
+    /**
      * ⚔️ ACTIONS DE MATCHMAKING
      */
     searchBattle() {
-        console.log('⚔️ DEMANDE RECHERCHE BATAILLE');
         return this.sendMessage("search_battle");
     }
     
     cancelSearch() {
-        console.log('❌ DEMANDE ANNULATION RECHERCHE');
         return this.sendMessage("cancel_search");
     }
     
     requestArenaInfo() {
-        console.log('🏟️ DEMANDE INFO ARÈNE');
         return this.sendMessage("get_arena_info");
     }
     
     requestLeaderboard(limit = 50) {
-        console.log('🏆 DEMANDE LEADERBOARD (limit:', limit, ')');
         return this.sendMessage("get_leaderboard", { limit });
     }
     
     updateStatus(status) {
-        console.log('📊 MISE À JOUR STATUT:', status);
         return this.sendMessage("update_status", { status });
     }
     
@@ -522,20 +576,15 @@ class ColyseusManager {
             clearInterval(this.heartbeatInterval);
         }
         
-        console.log('💓 DÉMARRAGE HEARTBEAT (30s)');
         this.heartbeatInterval = setInterval(() => {
-            if (this.isConnected) {
-                // Heartbeat ne nécessite pas ready
-                if (this.worldRoom) {
-                    this.worldRoom.send("heartbeat", { timestamp: Date.now() });
-                }
+            if (this.isConnected && this.worldRoom) {
+                this.worldRoom.send("heartbeat", { timestamp: Date.now() });
             }
         }, 30000);
     }
     
     stopHeartbeat() {
         if (this.heartbeatInterval) {
-            console.log('💓 ARRÊT HEARTBEAT');
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
@@ -548,9 +597,6 @@ class ColyseusManager {
         const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
         if (this.callbacks.hasOwnProperty(callbackName)) {
             this.callbacks[callbackName] = callback;
-            console.log(`🔧 Callback configuré: ${callbackName}`);
-        } else {
-            console.warn(`⚠️ Événement non reconnu: ${event}`);
         }
     }
     
@@ -558,7 +604,6 @@ class ColyseusManager {
         const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
         if (this.callbacks.hasOwnProperty(callbackName)) {
             this.callbacks[callbackName] = null;
-            console.log(`🔧 Callback supprimé: ${callbackName}`);
         }
     }
     
@@ -566,7 +611,6 @@ class ColyseusManager {
         const callback = this.callbacks[callbackName];
         if (callback && typeof callback === 'function') {
             try {
-                console.log(`🔔 DÉCLENCHEMENT CALLBACK: ${callbackName}`, data ? 'avec données' : 'sans données');
                 callback(data);
             } catch (error) {
                 console.error(`❌ Erreur callback ${callbackName}:`, error);
@@ -590,7 +634,7 @@ class ColyseusManager {
     }
     
     isColyseusConnected() {
-        return this.isConnected && this.isReady; // ✅ Connecté ET prêt
+        return this.isConnected && this.isReady;
     }
     
     /**
@@ -599,27 +643,29 @@ class ColyseusManager {
     getDebugInfo() {
         return {
             isConnected: this.isConnected,
-            isReady: this.isReady, // ✅ NOUVEAU
+            isReady: this.isReady,
             isConnecting: this.isConnecting,
             hasClient: !!this.client,
             hasRoom: !!this.worldRoom,
             sessionId: this.worldRoom?.sessionId,
             reconnectAttempts: this.reconnectAttempts,
+            maxReconnectAttempts: this.maxReconnectAttempts,
             serverUrl: this.serverUrl,
             playersCount: this.worldPlayers.size,
             globalStats: this.globalStats,
-            playerProfile: !!this.playerProfile,
-            callbacksConfigured: Object.keys(this.callbacks).filter(k => this.callbacks[k] !== null)
+            hasConnectionTimeout: !!this.connectionTimeout,
+            hasReadyTimeout: !!this.readyTimeout
         };
     }
     
     /**
-     * 🧹 NETTOYAGE
+     * 🧹 NETTOYAGE COMPLET
      */
     destroy() {
         console.log('🧹 DESTRUCTION COLYSEUSMANAGER');
+        
         this.stopHeartbeat();
-        this.disconnect();
+        this.forceDisconnect();
         
         Object.keys(this.callbacks).forEach(key => {
             this.callbacks[key] = null;
