@@ -7,37 +7,49 @@
   "engines": {
     "node": ">= 20.9.0"
   },
-"scripts": {
-  "start": "tsx watch src/index.ts",
-  "loadtest": "tsx loadtest/example.ts --room my_room --numClients 2",
-  "build": "npm run clean && tsc && cp -r src/assets build/assets",
-  "clean": "rimraf build",
-  "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
-},
-  "author": "",
-  "license": "UNLICENSED",
-  "bugs": {
-    "url": "https://github.com/colyseus/create-colyseus/issues"
+  "scripts": {
+    "start": "tsx watch src/index.ts",
+    "loadtest": "tsx loadtest/example.ts --room my_room --numClients 2",
+    "build": "npm run clean && tsc && cp -r src/assets build/assets",
+    "clean": "rimraf build",
+    "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
   },
-  "homepage": "https://github.com/colyseus/create-colyseus#readme",
   "devDependencies": {
     "@colyseus/loadtest": "^0.16.0",
     "@colyseus/testing": "^0.16.0",
-    "@types/express": "^4.17.1",
+    "@types/express": "^4.17.21",
     "@types/mocha": "^10.0.1",
+    "@types/cors": "^2.8.17",
+    "@types/compression": "^1.7.2",
+    "@types/morgan": "^1.9.4",
+    "@types/cookie-parser": "^1.4.3",
+    "@types/bcrypt": "^5.0.0",
+    "@types/validator": "^13.7.10",
+    "@types/node-fetch": "^3.0.3",
     "mocha": "^10.2.0",
     "rimraf": "^5.0.0",
     "tsx": "^4.10.2",
     "typescript": "^5.0.4"
   },
   "dependencies": {
-    "@colyseus/monitor": "^0.16.0",
-    "@colyseus/playground": "^0.16.0",
-    "@colyseus/tools": "^0.16.0",
-    "colyseus": "^0.16.0",
-    "dotenv": "^16.5.0",
     "express": "^4.18.2",
-    "mongodb": "^6.17.0",
-    "mongoose": "^8.15.2"
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "mongoose": "^8.0.3",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "@colyseus/core": "^0.16.19",
+    "@colyseus/schema": "^3.0.54",
+    "@colyseus/ws-transport": "^0.16.0",
+    "@colyseus/tools": "^0.16.0",
+    "dotenv": "^16.3.1",
+    "express-rate-limit": "^7.1.5",
+    "validator": "^13.11.0",
+    "compression": "^1.7.4",
+    "morgan": "^1.10.0",
+    "cookie-parser": "^1.4.6",
+    "ethers": "^6.8.0",
+    "crypto": "^1.0.1",
+    "node-fetch": "^3.3.2"
   }
 }
