@@ -1,3 +1,5 @@
+// client/src/managers/ColyseusManager.js - CORRECTION ERREUR onAdd
+
 class ColyseusManager {
   constructor() {
     this.client = null;
@@ -5,73 +7,115 @@ class ColyseusManager {
     this.isConnected = false;
     this.isConnecting = false;
     
-    // ✅ COMME POKEMMO: Configuration simple
+    // Configuration
     this.serverUrl = window.GameConfig?.COLYSEUS_URL || 'wss://chimarena.cloud/ws';
     
-    // ✅ Données simples
+    // Données simples
     this.playerProfile = null;
     this.worldPlayers = new Map();
     
-    // ✅ Callbacks simples comme PokeMMO
+    // Callbacks
     this.callbacks = new Map();
     
-    console.log('🌐 ColyseusManager initialisé (style PokeMMO)');
+    // 🔍 Import dynamique sécurisé de Colyseus
+    this.Colyseus = null;
+    this.initColyseus();
+    
+    console.log('🌐 ColyseusManager initialisé');
   }
 
-  // ✅ MÉTHODE PRINCIPALE SIMPLIFIÉE (inspirée PokeMMO connect)
+  // 🔧 INITIALISATION SÉCURISÉE DE COLYSEUS
+  async initColyseus() {
+    try {
+      // Vérifier si Colyseus est disponible globalement
+      if (window.Colyseus) {
+        this.Colyseus = window.Colyseus;
+        console.log('✅ Colyseus trouvé globalement');
+        return;
+      }
+      
+      // Essayer import dynamique
+      const colyseusModule = await import('colyseus.js');
+      this.Colyseus = colyseusModule.default || colyseusModule;
+      console.log('✅ Colyseus importé dynamiquement');
+      
+    } catch (error) {
+      console.error('❌ Impossible de charger Colyseus:', error);
+      this.Colyseus = null;
+    }
+  }
+
+  // ✅ MÉTHODE CONNEXION CORRIGÉE
   async connect() {
-    console.log('🌐 === CONNEXION COLYSEUS (STYLE POKEMMO) ===');
+    console.log('🌐 === CONNEXION COLYSEUS DEBUT ===');
     
-    if (this.isConnecting || this.isConnected) {
-      console.warn('⚠️ Déjà connecté ou en cours');
+    if (this.isConnecting) {
+      console.warn('⚠️ Connexion déjà en cours');
       return this.isConnected;
     }
     
-    // ✅ VÉRIFIER AUTH COMME POKEMMO
-    if (!auth.isAuthenticated()) {
+    if (this.isConnected && this.worldRoom) {
+      console.log('✅ Déjà connecté');
+      return true;
+    }
+    
+    // 🔐 VÉRIFIER AUTH
+    if (!window.auth || !window.auth.isAuthenticated()) {
       console.error('❌ Non authentifié pour Colyseus');
       return false;
+    }
+    
+    // 🔧 VÉRIFIER COLYSEUS DISPONIBLE
+    if (!this.Colyseus) {
+      console.error('❌ Colyseus non disponible');
+      await this.initColyseus();
+      if (!this.Colyseus) {
+        this.triggerCallback('error', 'Colyseus non disponible');
+        return false;
+      }
     }
     
     try {
       this.isConnecting = true;
       
-      // ✅ NETTOYER AVANT RECONNEXION
+      // 🧹 NETTOYER AVANT RECONNEXION
       if (this.worldRoom) {
         console.log('🧹 Nettoyage connexion existante');
         await this.forceDisconnect();
       }
       
-      // ✅ CRÉER CLIENT COMME POKEMMO
+      // 🔧 CRÉER CLIENT
       console.log('🔧 Création client Colyseus...');
-      this.client = new Colyseus.Client(this.serverUrl);
+      this.client = new this.Colyseus.Client(this.serverUrl);
       
-      // ✅ RÉCUPÉRER TOKEN (votre système sécurisé)
-      const token = auth.getTokenInfo()?.token || tokenManager.getToken();
-      if (!token) {
+      // 🔑 RÉCUPÉRER TOKEN
+      const tokenInfo = window.auth.getTokenInfo();
+      if (!tokenInfo || !tokenInfo.token) {
         throw new Error('Token JWT manquant');
       }
       
-      console.log('🔌 Connexion WorldRoom...');
+      const joinOptions = { 
+        token: tokenInfo.token,
+        username: tokenInfo.username || 'Player',
+        clientVersion: window.GameConfig?.VERSION || '1.0.0'
+      };
       
-      // ✅ CONNEXION DIRECTE COMME POKEMMO AuthRoom
-      this.worldRoom = await this.client.joinOrCreate('world', { 
-        token: token,
-        username: auth.getTokenInfo()?.username
-      });
+      console.log('🔌 Connexion WorldRoom avec options:', joinOptions);
+      
+      // 🌐 CONNEXION AVEC GESTION D'ERREUR SPÉCIFIQUE
+      this.worldRoom = await this.client.joinOrCreate('world', joinOptions);
       
       console.log('✅ CONNECTÉ WorldRoom:', {
         sessionId: this.worldRoom.sessionId,
         roomId: this.worldRoom.id
       });
       
-      // ✅ SETUP HANDLERS SIMPLES COMME POKEMMO
-      this.setupSimpleHandlers();
+      // ✅ SETUP HANDLERS SÉCURISÉS
+      this.setupSecureHandlers();
       
       this.isConnected = true;
       this.isConnecting = false;
       
-      // ✅ TRIGGER CALLBACK CONNEXION
       this.triggerCallback('connected');
       
       console.log('✅ === CONNEXION COLYSEUS RÉUSSIE ===');
@@ -79,51 +123,111 @@ class ColyseusManager {
       
     } catch (error) {
       console.error('❌ === CONNEXION COLYSEUS ÉCHOUÉE ===');
-      console.error('Erreur:', error.message);
+      console.error('Erreur détaillée:', error);
+      console.error('Stack:', error.stack);
       
       this.isConnecting = false;
       this.isConnected = false;
       
       await this.forceDisconnect();
       
-      this.triggerCallback('error', `Connexion échouée: ${error.message}`);
+      // 🔍 ANALYSE DE L'ERREUR SPÉCIFIQUE
+      let errorMessage = error.message;
+      if (error.message.includes('onAdd')) {
+        errorMessage = 'Erreur de synchronisation état serveur (onAdd)';
+        console.error('💡 SOLUTION: Vérifiez que le serveur renvoie un état valide avec des Collections');
+      } else if (error.code === 4000) {
+        errorMessage = 'Salle refusée par le serveur';
+      } else if (error.code === 1006) {
+        errorMessage = 'Connexion WebSocket fermée de manière inattendue';
+      }
+      
+      this.triggerCallback('error', errorMessage);
       return false;
     }
   }
 
-  // ✅ HANDLERS SIMPLES COMME POKEMMO setupMessageHandlers()
-  setupSimpleHandlers() {
+  // ✅ HANDLERS SÉCURISÉS AVEC GESTION ERREUR onAdd
+  setupSecureHandlers() {
     if (!this.worldRoom) return;
     
-    console.log('🔧 Setup handlers Colyseus simples...');
+    console.log('🔧 Setup handlers Colyseus sécurisés...');
     
-    // ✅ ÉTAT INITIAL COMME POKEMMO onStateChange.once
+    // ✅ ÉTAT INITIAL AVEC PROTECTION
     this.worldRoom.onStateChange.once((state) => {
-      console.log('📊 PREMIER ÉTAT REÇU:', {
-        totalPlayers: state.totalPlayers,
-        playersOnline: state.playersOnline,
-        playersCount: state.players?.size || 0
-      });
+      console.log('📊 PREMIER ÉTAT REÇU');
+      console.log('État complet:', state);
       
-      this.updatePlayersFromState(state);
-      this.triggerCallback('globalStatsUpdated', {
-        totalPlayers: state.totalPlayers,
-        playersOnline: state.playersOnline,
-        playersSearching: state.playersSearching
-      });
+      // 🔍 VÉRIFIER STRUCTURE ÉTAT
+      if (state) {
+        console.log('Propriétés état:', Object.keys(state));
+        console.log('Type players:', typeof state.players);
+        console.log('Players est Map?', state.players instanceof Map);
+        console.log('Players est Schema?', state.players?.constructor?.name);
+      }
+      
+      try {
+        this.updatePlayersFromStateSafe(state);
+        this.triggerCallback('globalStatsUpdated', {
+          totalPlayers: state.totalPlayers || 0,
+          playersOnline: state.playersOnline || 0,
+          playersSearching: state.playersSearching || 0
+        });
+      } catch (error) {
+        console.error('❌ Erreur traitement état initial:', error);
+      }
     });
     
-    // ✅ CHANGEMENTS D'ÉTAT COMME POKEMMO onStateChange
+    // ✅ CHANGEMENTS D'ÉTAT AVEC PROTECTION
     this.worldRoom.onStateChange((state) => {
-      this.updatePlayersFromState(state);
-      this.triggerCallback('globalStatsUpdated', {
-        totalPlayers: state.totalPlayers,
-        playersOnline: state.playersOnline,
-        playersSearching: state.playersSearching
-      });
+      try {
+        this.updatePlayersFromStateSafe(state);
+        this.triggerCallback('globalStatsUpdated', {
+          totalPlayers: state.totalPlayers || 0,
+          playersOnline: state.playersOnline || 0,
+          playersSearching: state.playersSearching || 0
+        });
+      } catch (error) {
+        console.error('❌ Erreur traitement changement état:', error);
+      }
     });
     
-    // ✅ MESSAGES COMME POKEMMO onMessage handlers
+    // ✅ AJOUT/SUPPRESSION JOUEURS SÉCURISÉ
+    if (this.worldRoom.state && this.worldRoom.state.players) {
+      try {
+        // Protection contre l'erreur onAdd
+        this.worldRoom.state.players.onAdd = (player, sessionId) => {
+          try {
+            console.log('👤 Joueur ajouté:', sessionId, player.username);
+            this.worldPlayers.set(sessionId, {
+              sessionId,
+              username: player.username || 'Unknown',
+              level: player.level || 1,
+              trophies: player.trophies || 0,
+              status: player.status || 'online'
+            });
+            this.triggerCallback('playersUpdated', this.worldPlayers);
+          } catch (error) {
+            console.error('❌ Erreur onAdd player:', error);
+          }
+        };
+
+        this.worldRoom.state.players.onRemove = (player, sessionId) => {
+          try {
+            console.log('👤 Joueur supprimé:', sessionId);
+            this.worldPlayers.delete(sessionId);
+            this.triggerCallback('playersUpdated', this.worldPlayers);
+          } catch (error) {
+            console.error('❌ Erreur onRemove player:', error);
+          }
+        };
+      } catch (error) {
+        console.error('❌ Impossible de configurer onAdd/onRemove:', error);
+        console.warn('⚠️ Mode fallback: polling manuel');
+      }
+    }
+    
+    // ✅ MESSAGES SERVEUR
     this.worldRoom.onMessage("player_profile", (data) => {
       console.log('📨 PROFIL REÇU:', data.profile?.username);
       this.playerProfile = data.profile;
@@ -150,7 +254,7 @@ class ColyseusManager {
       this.triggerCallback('error', data.message);
     });
     
-    // ✅ CONNEXION/DÉCONNEXION COMME POKEMMO
+    // ✅ ÉVÉNEMENTS CONNEXION
     this.worldRoom.onLeave((code) => {
       console.log(`🔌 DÉCONNECTÉ (code: ${code})`);
       this.isConnected = false;
@@ -163,34 +267,61 @@ class ColyseusManager {
       this.triggerCallback('error', `Erreur room: ${message}`);
     });
     
-    console.log('✅ Handlers Colyseus configurés');
+    console.log('✅ Handlers Colyseus configurés avec protection onAdd');
   }
 
-  // ✅ MISE À JOUR JOUEURS SIMPLIFIÉE
-  updatePlayersFromState(state) {
-    if (!state.players) return;
+  // ✅ MISE À JOUR JOUEURS SÉCURISÉE
+  updatePlayersFromStateSafe(state) {
+    if (!state) {
+      console.warn('⚠️ État null, skip update players');
+      return;
+    }
     
-    // ✅ Nettoyer et remplir la Map
-    this.worldPlayers.clear();
-    
-    state.players.forEach((player, sessionId) => {
-      this.worldPlayers.set(sessionId, {
-        sessionId,
-        username: player.username,
-        level: player.level,
-        trophies: player.trophies,
-        status: player.status,
-        wins: player.wins,
-        losses: player.losses,
-        winRate: player.winRate
-      });
-    });
-    
-    console.log(`👥 ${this.worldPlayers.size} joueurs mis à jour`);
-    this.triggerCallback('playersUpdated', this.worldPlayers);
+    try {
+      // Nettoyer d'abord
+      this.worldPlayers.clear();
+      
+      // Vérifier si players existe et est itérable
+      if (state.players) {
+        if (typeof state.players.forEach === 'function') {
+          // Schema Map
+          state.players.forEach((player, sessionId) => {
+            this.worldPlayers.set(sessionId, {
+              sessionId,
+              username: player.username || 'Unknown',
+              level: player.level || 1,
+              trophies: player.trophies || 0,
+              status: player.status || 'online',
+              wins: player.wins || 0,
+              losses: player.losses || 0,
+              winRate: player.winRate || 0
+            });
+          });
+        } else if (state.players.constructor && state.players.constructor.name === 'MapSchema') {
+          // MapSchema spécifique
+          for (const [sessionId, player] of state.players) {
+            this.worldPlayers.set(sessionId, {
+              sessionId,
+              username: player.username || 'Unknown',
+              level: player.level || 1,
+              trophies: player.trophies || 0,
+              status: player.status || 'online'
+            });
+          }
+        } else {
+          console.warn('⚠️ Type players non reconnu:', state.players.constructor?.name);
+        }
+      }
+      
+      console.log(`👥 ${this.worldPlayers.size} joueurs mis à jour (safe)`);
+      this.triggerCallback('playersUpdated', this.worldPlayers);
+      
+    } catch (error) {
+      console.error('❌ Erreur updatePlayersFromStateSafe:', error);
+    }
   }
 
-  // ✅ DÉCONNEXION FORCÉE COMME POKEMMO
+  // ✅ DÉCONNEXION FORCÉE
   async forceDisconnect() {
     console.log('🔌 DÉCONNEXION FORCÉE COLYSEUS');
     
@@ -215,7 +346,7 @@ class ColyseusManager {
     this.worldPlayers.clear();
   }
 
-  // ✅ MÉTHODES PUBLIQUES COMME POKEMMO
+  // ✅ MÉTHODES PUBLIQUES
   async disconnect() {
     await this.forceDisconnect();
     this.triggerCallback('disconnected');
@@ -227,6 +358,7 @@ class ColyseusManager {
       this.worldRoom.send("search_battle");
       return true;
     }
+    console.warn('⚠️ Pas connecté pour recherche bataille');
     return false;
   }
 
@@ -248,7 +380,17 @@ class ColyseusManager {
     return false;
   }
 
-  // ✅ SYSTÈME DE CALLBACKS COMME POKEMMO
+  // Nouvelle méthode pour demander les infos d'arène
+  requestArenaInfo() {
+    if (this.worldRoom && this.isConnected) {
+      console.log('🏟️ Demande infos arène...');
+      this.worldRoom.send("get_arena_info");
+      return true;
+    }
+    return false;
+  }
+
+  // ✅ SYSTÈME DE CALLBACKS
   on(event, callback) {
     this.callbacks.set(event, callback);
   }
@@ -268,22 +410,30 @@ class ColyseusManager {
     }
   }
 
-  // ✅ MÉTHODES DEBUG COMME POKEMMO
+  // ✅ DEBUG
   getDebugInfo() {
     return {
       isConnected: this.isConnected,
       isConnecting: this.isConnecting,
       hasRoom: !!this.worldRoom,
       hasClient: !!this.client,
+      hasColyseus: !!this.Colyseus,
       sessionId: this.worldRoom?.sessionId,
       roomId: this.worldRoom?.id,
       playersCount: this.worldPlayers.size,
       hasProfile: !!this.playerProfile,
       serverUrl: this.serverUrl,
+      roomState: this.worldRoom?.state ? {
+        hasPlayers: !!this.worldRoom.state.players,
+        playersType: this.worldRoom.state.players?.constructor?.name,
+        playersSize: this.worldRoom.state.players?.size,
+        totalPlayers: this.worldRoom.state.totalPlayers,
+        playersOnline: this.worldRoom.state.playersOnline
+      } : null,
       auth: {
-        isAuthenticated: auth.isAuthenticated(),
-        hasToken: !!auth.getTokenInfo()?.token,
-        username: auth.getTokenInfo()?.username
+        isAuthenticated: window.auth?.isAuthenticated?.() || false,
+        hasToken: !!window.auth?.getTokenInfo?.()?.token,
+        username: window.auth?.getTokenInfo?.()?.username
       }
     };
   }
@@ -294,6 +444,9 @@ class ColyseusManager {
 
   printConnectionHistory() {
     console.log('📊 État Colyseus:', this.getDebugInfo());
+    if (this.worldRoom?.state) {
+      console.log('📊 État Room:', this.worldRoom.state);
+    }
   }
 
   emergencyStop() {
@@ -309,13 +462,13 @@ class ColyseusManager {
     }, 1000);
   }
 
-  // ✅ HEARTBEAT SIMPLE (optionnel)
+  // ✅ HEARTBEAT
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       if (this.worldRoom && this.isConnected) {
         this.worldRoom.send("heartbeat", { timestamp: Date.now() });
       }
-    }, 30000); // 30 secondes
+    }, 30000);
   }
 
   stopHeartbeat() {
@@ -325,3 +478,8 @@ class ColyseusManager {
     }
   }
 }
+
+// Export par défaut ET nommé pour compatibilité
+const colyseusManager = new ColyseusManager();
+export default colyseusManager;
+export { colyseusManager };
