@@ -6,48 +6,57 @@ import ChallengesSubPanel from './ChallengesSubPanel.js';
 
 export default class DeckPanel extends BasePanel {
     constructor(scene, config = {}) {
-        // SOLUTION: Assigner les propriétés DIRECTEMENT avant super()
-        
-        // Créer une instance temporaire pour éviter les problèmes d'ordre
-        const tempInstance = {
-            deckState: {
-                currentSubTab: 'deck',
-                currentDeck: null,
-                selectedCard: null,
-                selectedSlot: null
-            },
-            subPanels: {
-                collection: null,
-                deck: null,
-                challenges: null
-            },
-            headerElements: {
-                navigation: null,
-                elixirDisplay: null
-            },
-            subPanelsContainer: null
-        };
-        
-        // Passer la config
-        const enhancedConfig = {
+        // SOLUTION CORRECTE: Appeler super() en PREMIER, puis initialiser
+        super(scene, {
             name: 'DeckPanel',
             title: 'DECK',
             icon: '🛡️',
             contentStartY: 200,
             enableTitle: false,
             enableBackground: false,
+            // Flag spécial pour éviter l'auto-création de contenu
+            skipAutoInit: true,
             ...config
+        });
+        
+        // MAINTENANT on peut initialiser les propriétés
+        this.deckState = {
+            currentSubTab: 'deck',
+            currentDeck: this.initializeDefaultDeck(),
+            selectedCard: null,
+            selectedSlot: null
         };
         
-        // Assigner AVANT super() - c'est la clé !
-        Object.assign(this, tempInstance);
+        this.subPanels = {
+            collection: null,
+            deck: null,
+            challenges: null
+        };
         
-        super(scene, enhancedConfig);
+        this.headerElements = {
+            navigation: null,
+            elixirDisplay: null
+        };
         
-        // Finir l'initialisation des données APRÈS super()
-        this.deckState.currentDeck = this.initializeDefaultDeck();
+        this.subPanelsContainer = null;
+        
+        // Configuration des cartes
         this.cardsDatabase = this.initializeCardsDatabase();
         this.userCollection = this.initializeUserCollection();
+        
+        // FORCER l'initialisation maintenant que tout est prêt
+        // Note: On assume que BasePanel a un flag skipAutoInit
+        // Sinon on peut simplement appeler createContent() directement
+        try {
+            if (!this.isInitialized) {
+                this.createContent();
+                this.isInitialized = true;
+            }
+        } catch (error) {
+            console.error('❌ Erreur initialisation DeckPanel:', error);
+            // Fallback: créer un contenu minimal
+            this.createFallbackContent();
+        }
         
         this.log('Panel Deck refactorisé initialisé');
     }
