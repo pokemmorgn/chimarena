@@ -1,4 +1,4 @@
-// client/src/clashmenu/utils/PanelManager.js - GESTIONNAIRE CENTRAL DES PANELS
+// client/src/clashmenu/utils/PanelManager.js - GESTIONNAIRE CENTRAL CORRIGÉ
 export default class PanelManager {
     constructor(scene, config = {}) {
         this.scene = scene;
@@ -29,7 +29,7 @@ export default class PanelManager {
         // Navigation
         this.navigation = null;
         this.tabDefinitions = [
-            { id: 'battle', name: 'Bataille !!!!', icon: '⚔️', module: null },
+            { id: 'battle', name: 'Bataille', icon: '⚔️', module: null },
             { id: 'cards', name: 'Cartes', icon: '🃏', module: null },
             { id: 'clan', name: 'Clan', icon: '🏰', module: null },
             { id: 'profile', name: 'Profil', icon: '👤', module: null }
@@ -74,7 +74,7 @@ export default class PanelManager {
         this.panelConfigs.set('battle', {
             title: 'BATAILLE',
             icon: '⚔️',
-            module: 'battle/BattlePanel',
+            module: 'BattlePanel',
             className: 'BattlePanel',
             contentStartY: 120,
             enableColyseus: true
@@ -83,7 +83,7 @@ export default class PanelManager {
         this.panelConfigs.set('cards', {
             title: 'CARTES',
             icon: '🃏',
-            module: 'deck/DeckPanel',
+            module: 'DeckPanel',
             className: 'DeckPanel',
             contentStartY: 120,
             hasSubTabs: true,
@@ -94,7 +94,7 @@ export default class PanelManager {
         this.panelConfigs.set('clan', {
             title: 'CLAN',
             icon: '🏰',
-            module: 'clan/ClanPanel',
+            module: 'ClanPanel',
             className: 'ClanPanel',
             contentStartY: 180
         });
@@ -102,7 +102,7 @@ export default class PanelManager {
         this.panelConfigs.set('profile', {
             title: 'PROFIL',
             icon: '👤',
-            module: 'profile/ProfilePanel',
+            module: 'ProfilePanel',
             className: 'ProfilePanel',
             contentStartY: 180
         });
@@ -208,40 +208,55 @@ export default class PanelManager {
     }
     
     /**
-     * Charger le module d'un panel
+     * Charger le module d'un panel - CORRIGÉ
      */
     async loadPanelModule(panelId, panelConfig) {
         try {
-            let modulePath;
-            let PanelClass;
+            let PanelClass = null;
             
-            // Chemins spécifiques selon le panel
+            // MÉTHODE 1: Import direct avec chemins corrects
             switch (panelId) {
                 case 'battle':
-                    modulePath = '../battle/BattlePanel.js';
+                    try {
+                        console.log('🔄 Import BattlePanel...');
+                        const battleModule = await import('../battle/BattlePanel.js');
+                        PanelClass = battleModule.default;
+                        console.log('✅ BattlePanel importé:', !!PanelClass);
+                    } catch (importError) {
+                        console.warn('⚠️ Import BattlePanel échoué:', importError.message);
+                        throw new Error(`Import BattlePanel failed: ${importError.message}`);
+                    }
                     break;
+                    
                 case 'cards':
-                    modulePath = '../deck/DeckPanel.js'; // Panel cartes = DeckPanel
+                    try {
+                        console.log('🔄 Import DeckPanel...');
+                        const deckModule = await import('../deck/DeckPanel.js');
+                        PanelClass = deckModule.default;
+                        console.log('✅ DeckPanel importé:', !!PanelClass);
+                    } catch (importError) {
+                        console.warn('⚠️ Import DeckPanel échoué:', importError.message);
+                        throw new Error(`Import DeckPanel failed: ${importError.message}`);
+                    }
                     break;
+                    
                 case 'clan':
-                    // Pour l'instant, créer un panel placeholder
-                    return this.createPlaceholderPanel(panelId, panelConfig);
                 case 'profile':
                     // Pour l'instant, créer un panel placeholder
+                    console.log(`🔄 Création placeholder pour ${panelId}...`);
                     return this.createPlaceholderPanel(panelId, panelConfig);
+                    
                 default:
                     throw new Error(`Panel ${panelId} non supporté`);
             }
             
-            // Import dynamique du module
-            const module = await import(modulePath);
-            PanelClass = module.default || module[panelConfig.className];
-            
+            // Vérifier que la classe a été importée
             if (!PanelClass) {
-                throw new Error(`Classe ${panelConfig.className} non trouvée`);
+                throw new Error(`Classe ${panelConfig.className} non trouvée dans le module`);
             }
             
             // Créer l'instance du panel
+            console.log(`🏗️ Création instance ${panelConfig.className}...`);
             const panelInstance = new PanelClass(this.scene, {
                 name: panelId,
                 title: panelConfig.title,
@@ -256,12 +271,17 @@ export default class PanelManager {
             });
             
             // Ajouter au container
-            this.container.add(panelInstance.getContainer());
+            if (panelInstance.getContainer) {
+                this.container.add(panelInstance.getContainer());
+                console.log(`✅ Panel ${panelId} ajouté au container`);
+            } else {
+                console.warn(`⚠️ Panel ${panelId} n'a pas de getContainer()`);
+            }
             
             return panelInstance;
             
         } catch (error) {
-            console.error(`❌ Erreur chargement module ${panelConfig.module}:`, error);
+            console.error(`❌ Erreur chargement panel ${panelId}:`, error);
             
             // Fallback: créer un panel d'erreur
             return this.createErrorPanel(panelId, panelConfig, error.message);
@@ -272,158 +292,262 @@ export default class PanelManager {
      * Créer un panel placeholder pour les panels pas encore implémentés
      */
     createPlaceholderPanel(panelId, panelConfig) {
-        // Import de BasePanel pour créer un placeholder
-        return new (class PlaceholderPanel extends BasePanel {
+        console.log(`🏗️ Création placeholder pour ${panelId}...`);
+        
+        // Créer un panel simple sans import
+        const placeholderPanel = {
+            config: {
+                name: panelId,
+                title: panelConfig.title,
+                icon: panelConfig.icon
+            },
+            container: null,
+            isVisible: false,
+            
+            // Méthodes requises
+            getContainer() {
+                if (!this.container) {
+                    this.container = this.scene.add.container(0, 0);
+                    this.createContent();
+                }
+                return this.container;
+            },
+            
             createContent() {
-                this.createText(
-                    this.width / 2, 100,
-                    `${panelConfig.icon} ${panelConfig.title}`,
-                    {
-                        fontSize: '24px',
-                        fontWeight: 'bold',
-                        fill: '#FFD700',
-                        align: 'center'
-                    }
-                ).setOrigin(0.5);
+                const { width, height } = this.scene.scale;
                 
-                this.createText(
-                    this.width / 2, 150,
-                    'Panel en développement\nBientôt disponible !',
-                    {
-                        fontSize: '16px',
-                        fill: '#B0C4DE',
-                        align: 'center'
-                    }
-                ).setOrigin(0.5);
+                // Fond
+                const bg = this.scene.add.graphics();
+                bg.fillStyle(0x2F4F4F, 0.9);
+                bg.fillRoundedRect(15, 130, width - 30, height - 200, 12);
+                bg.lineStyle(2, 0x4682B4);
+                bg.strokeRoundedRect(15, 130, width - 30, height - 200, 12);
+                this.container.add(bg);
                 
-                this.createButton(
-                    this.width / 2, 220,
-                    140, 40,
-                    '🔄 Actualiser',
-                    '#4682B4',
-                    () => {
-                        this.scene.panelManager?.reloadPanel(panelId);
-                    }
-                );
-            }
-        })(this.scene, {
-            name: panelId,
-            title: panelConfig.title,
-            icon: panelConfig.icon,
-            userData: this.config.userData,
-            contentStartY: panelConfig.contentStartY
-        });
+                // Titre
+                const title = this.scene.add.text(width / 2, 200, 
+                    `${panelConfig.icon} ${panelConfig.title}`, {
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    fill: '#FFD700',
+                    align: 'center'
+                }).setOrigin(0.5);
+                this.container.add(title);
+                
+                // Message
+                const message = this.scene.add.text(width / 2, 250, 
+                    'Panel en développement\nBientôt disponible !', {
+                    fontSize: '16px',
+                    fill: '#B0C4DE',
+                    align: 'center'
+                }).setOrigin(0.5);
+                this.container.add(message);
+                
+                // Bouton actualiser
+                const button = this.scene.add.graphics();
+                button.fillStyle(0x4682B4);
+                button.fillRoundedRect(width/2 - 70, 300, 140, 40, 8);
+                this.container.add(button);
+                
+                const buttonText = this.scene.add.text(width / 2, 320, 
+                    '🔄 Actualiser', {
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    fill: '#FFFFFF'
+                }).setOrigin(0.5);
+                this.container.add(buttonText);
+                
+                // Zone interactive
+                const hitArea = this.scene.add.zone(width/2, 320, 140, 40).setInteractive();
+                hitArea.on('pointerdown', () => {
+                    console.log(`🔄 Actualisation panel ${panelId} demandée`);
+                    this.scene.panelManager?.reloadPanel(panelId);
+                });
+                this.container.add(hitArea);
+            },
+            
+            show(animate = true) {
+                this.container.setVisible(true);
+                this.isVisible = true;
+                
+                if (animate) {
+                    this.container.setAlpha(0);
+                    this.scene.tweens.add({
+                        targets: this.container,
+                        alpha: 1,
+                        duration: 300
+                    });
+                }
+            },
+            
+            hide(animate = true) {
+                this.isVisible = false;
+                
+                if (animate) {
+                    this.scene.tweens.add({
+                        targets: this.container,
+                        alpha: 0,
+                        duration: 200,
+                        onComplete: () => {
+                            this.container.setVisible(false);
+                        }
+                    });
+                } else {
+                    this.container.setVisible(false);
+                }
+            },
+            
+            isShown() {
+                return this.isVisible;
+            },
+            
+            updateData(newData) {
+                // Pas d'action pour placeholder
+            },
+            
+            destroy() {
+                if (this.container) {
+                    this.container.destroy();
+                    this.container = null;
+                }
+            },
+            
+            // Référence à la scène pour les méthodes
+            scene: this.scene
+        };
+        
+        console.log(`✅ Placeholder ${panelId} créé`);
+        return placeholderPanel;
     }
     
     /**
      * Créer un panel d'erreur en cas d'échec de chargement
      */
     createErrorPanel(panelId, panelConfig, errorMessage) {
-        // Import de BasePanel pour créer un panel d'erreur basique
-        const BasePanel = this.getBasePanel();
+        console.log(`🏗️ Création panel d'erreur pour ${panelId}...`);
         
-        return new (class ErrorPanel extends BasePanel {
-            createContent() {
-                this.createText(
-                    this.width / 2, 100,
-                    `❌ Erreur de chargement\n${panelConfig.title}`,
-                    {
-                        fontSize: '16px',
-                        fill: '#DC143C',
-                        align: 'center'
-                    }
-                ).setOrigin(0.5);
-                
-                this.createText(
-                    this.width / 2, 150,
-                    errorMessage,
-                    {
-                        fontSize: '12px',
-                        fill: '#B0C4DE',
-                        align: 'center',
-                        wordWrap: { width: this.width - 40 }
-                    }
-                ).setOrigin(0.5);
-                
-                this.createButton(
-                    this.width / 2, 220,
-                    140, 40,
-                    '🔄 Réessayer',
-                    '#4682B4',
-                    () => {
-                        this.scene.panelManager?.reloadPanel(panelId);
-                    }
-                );
-            }
-        })(this.scene, {
-            name: panelId,
-            title: panelConfig.title,
-            icon: panelConfig.icon,
-            userData: this.config.userData,
-            contentStartY: panelConfig.contentStartY
-        });
-    }
-    
-    /**
-     * Obtenir BasePanel pour les panels d'erreur/placeholder
-     */
-    getBasePanel() {
-        // Référence vers BasePanel (sera disponible via import)
-        if (typeof BasePanel !== 'undefined') {
-            return BasePanel;
-        }
-        
-        // Fallback simple si BasePanel pas disponible
-        return class SimpleBasePanel {
-            constructor(scene, config) {
-                this.scene = scene;
-                this.config = config;
-                this.container = scene.add.container(0, 0);
-                this.width = scene.scale.width;
-                this.height = scene.scale.height;
-                this.init();
-            }
-            
-            init() {
-                this.createContent();
-            }
-            
-            createContent() {
-                // À override
-            }
-            
-            createText(x, y, text, style) {
-                return this.scene.add.text(x, y, text, style);
-            }
-            
-            createButton(x, y, width, height, text, color, callback) {
-                const button = this.scene.add.rectangle(x, y, width, height, parseInt(color.replace('#', '0x')));
-                const buttonText = this.scene.add.text(x, y, text, {
-                    fontSize: '14px',
-                    fill: '#FFFFFF'
-                }).setOrigin(0.5);
-                
-                button.setInteractive().on('pointerdown', callback);
-                this.container.add([button, buttonText]);
-                return button;
-            }
+        const errorPanel = {
+            config: {
+                name: panelId,
+                title: panelConfig.title,
+                icon: panelConfig.icon
+            },
+            container: null,
+            isVisible: false,
             
             getContainer() {
+                if (!this.container) {
+                    this.container = this.scene.add.container(0, 0);
+                    this.createContent();
+                }
                 return this.container;
-            }
+            },
             
-            show() {
+            createContent() {
+                const { width, height } = this.scene.scale;
+                
+                // Fond rouge pour erreur
+                const bg = this.scene.add.graphics();
+                bg.fillStyle(0x8B0000, 0.9);
+                bg.fillRoundedRect(15, 130, width - 30, height - 200, 12);
+                bg.lineStyle(2, 0xDC143C);
+                bg.strokeRoundedRect(15, 130, width - 30, height - 200, 12);
+                this.container.add(bg);
+                
+                // Titre erreur
+                const title = this.scene.add.text(width / 2, 180, 
+                    `❌ Erreur de chargement\n${panelConfig.title}`, {
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    fill: '#FFD700',
+                    align: 'center'
+                }).setOrigin(0.5);
+                this.container.add(title);
+                
+                // Message d'erreur
+                const message = this.scene.add.text(width / 2, 250, 
+                    errorMessage, {
+                    fontSize: '12px',
+                    fill: '#FFB6C1',
+                    align: 'center',
+                    wordWrap: { width: width - 60 }
+                }).setOrigin(0.5);
+                this.container.add(message);
+                
+                // Bouton réessayer
+                const button = this.scene.add.graphics();
+                button.fillStyle(0xDC143C);
+                button.fillRoundedRect(width/2 - 70, 320, 140, 40, 8);
+                this.container.add(button);
+                
+                const buttonText = this.scene.add.text(width / 2, 340, 
+                    '🔄 Réessayer', {
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    fill: '#FFFFFF'
+                }).setOrigin(0.5);
+                this.container.add(buttonText);
+                
+                // Zone interactive
+                const hitArea = this.scene.add.zone(width/2, 340, 140, 40).setInteractive();
+                hitArea.on('pointerdown', () => {
+                    console.log(`🔄 Rechargement panel ${panelId} demandé après erreur`);
+                    this.scene.panelManager?.reloadPanel(panelId);
+                });
+                this.container.add(hitArea);
+            },
+            
+            show(animate = true) {
                 this.container.setVisible(true);
-            }
+                this.isVisible = true;
+                
+                if (animate) {
+                    this.container.setAlpha(0);
+                    this.scene.tweens.add({
+                        targets: this.container,
+                        alpha: 1,
+                        duration: 300
+                    });
+                }
+            },
             
-            hide() {
-                this.container.setVisible(false);
-            }
+            hide(animate = true) {
+                this.isVisible = false;
+                
+                if (animate) {
+                    this.scene.tweens.add({
+                        targets: this.container,
+                        alpha: 0,
+                        duration: 200,
+                        onComplete: () => {
+                            this.container.setVisible(false);
+                        }
+                    });
+                } else {
+                    this.container.setVisible(false);
+                }
+            },
+            
+            isShown() {
+                return this.isVisible;
+            },
+            
+            updateData(newData) {
+                // Pas d'action pour erreur
+            },
             
             destroy() {
-                this.container.destroy();
-            }
+                if (this.container) {
+                    this.container.destroy();
+                    this.container = null;
+                }
+            },
+            
+            scene: this.scene
         };
+        
+        console.log(`✅ Panel d'erreur ${panelId} créé`);
+        return errorPanel;
     }
 
     // === ANIMATIONS DE TRANSITION ===
@@ -436,10 +560,15 @@ export default class PanelManager {
         
         if (animate && this.config.enableTransitions) {
             return new Promise(resolve => {
-                panel.playHideAnimation(resolve);
+                if (panel.hide) {
+                    panel.hide(true);
+                }
+                setTimeout(resolve, 200);
             });
         } else {
-            panel.hide(false);
+            if (panel.hide) {
+                panel.hide(false);
+            }
         }
     }
     
@@ -451,12 +580,15 @@ export default class PanelManager {
         
         if (animate && this.config.enableTransitions) {
             return new Promise(resolve => {
-                panel.show(true);
-                // Attendre la fin de l'animation
-                this.scene.time.delayedCall(300, resolve);
+                if (panel.show) {
+                    panel.show(true);
+                }
+                setTimeout(resolve, 300);
             });
         } else {
-            panel.show(false);
+            if (panel.show) {
+                panel.show(false);
+            }
         }
     }
 
@@ -716,74 +848,9 @@ export default class PanelManager {
                 this.updatePanelData(panelId, data);
                 break;
                 
-            // === ACTIONS SPÉCIFIQUES DECK ===
-            case 'switch_subtab':
-                // Action interne au DeckPanel, on la laisse passer
-                break;
-                
-            case 'save_deck':
-                this.handleSaveDeck(panelId, data);
-                break;
-                
-            case 'deck_updated':
-                this.handleDeckUpdated(panelId, data);
-                break;
-                
-            // === ACTIONS SPÉCIFIQUES BATAILLE ===
-            case 'battle':
-            case 'cancel_search':
-            case 'training':
-            case 'tournament':
-            case 'leaderboard':
-                // Transmettre directement à la scène pour Colyseus
-                this.config.onAction(action, { ...data, fromPanel: panelId });
-                break;
-                
             default:
                 // Transmettre l'action à la scène parent
                 this.config.onAction(action, { ...data, fromPanel: panelId });
-        }
-    }
-    
-    /**
-     * Gérer la sauvegarde d'un deck
-     */
-    handleSaveDeck(panelId, data) {
-        console.log(`💾 Sauvegarde deck depuis panel ${panelId}`, data);
-        
-        // Mettre à jour les données utilisateur
-        const userData = this.config.userData;
-        if (userData) {
-            // Sauvegarder le deck dans les données utilisateur
-            if (!userData.decks) {
-                userData.decks = {};
-            }
-            
-            userData.decks.current = data.deck;
-            userData.lastDeckUpdate = Date.now();
-            
-            // Notifier la scène parent
-            this.config.onAction('user_data_updated', { 
-                userData: userData,
-                source: 'deck_save'
-            });
-            
-            console.log('✅ Deck sauvegardé dans les données utilisateur');
-        }
-    }
-    
-    /**
-     * Gérer la mise à jour d'un deck
-     */
-    handleDeckUpdated(panelId, data) {
-        console.log(`🔄 Deck mis à jour depuis panel ${panelId}`, data);
-        
-        // Mettre à jour le coût élixir dans le header si nécessaire
-        if (data.elixirCost !== undefined) {
-            this.config.onAction('deck_cost_changed', {
-                newCost: data.elixirCost,
-                fromPanel: panelId
-            });
         }
     }
 
@@ -798,7 +865,9 @@ export default class PanelManager {
         // Supprimer le panel existant
         const existingPanel = this.panels.get(panelId);
         if (existingPanel) {
-            existingPanel.destroy();
+            if (existingPanel.destroy) {
+                existingPanel.destroy();
+            }
             this.panels.delete(panelId);
         }
         
@@ -865,6 +934,9 @@ export default class PanelManager {
             this.scene.showMessage(message, 'error');
         } else if (window.NotificationManager) {
             window.NotificationManager.show(message, 'error');
+        } else {
+            // Fallback: alert simple
+            console.error(`ERREUR: ${message}`);
         }
     }
 
