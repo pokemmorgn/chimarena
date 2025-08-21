@@ -213,6 +213,12 @@ export class WorldRoom extends Room<WorldState> {
     const player = this.state.players.get(client.sessionId);
     console.log(`🚪 Joueur ${player?.username || client.sessionId} quitte la WorldRoom`);
     
+    // Retirer du matchmaking si en recherche
+    if (player?.status === "searching") {
+      this.matchmakingService.removePlayer(client.sessionId);
+      console.log(`🎯 ${player.username} retiré du matchmaking lors de la déconnexion`);
+    }
+    
     // Supprimer du cache
     this.userCache.delete(client.sessionId);
     
