@@ -270,9 +270,51 @@
                 color-scheme: dark;
             }
         }
+
+        /* 🔍 CONSOLE DEBUG OVERLAY POUR MOBILE */
+        #debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 9998;
+            display: none;
+            border-top: 2px solid #00ff00;
+        }
+
+        #debug-console.visible {
+            display: block;
+        }
+
+        #debug-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 255, 0, 0.8);
+            color: black;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 9999;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <!-- 🔍 DEBUG TOGGLE BUTTON -->
+    <button id="debug-toggle">🔍 DEBUG</button>
+    
+    <!-- 🔍 DEBUG CONSOLE OVERLAY -->
+    <div id="debug-console"></div>
+
     <!-- Préchargement invisible des fonts -->
     <div class="font-preload">.</div>
 
@@ -291,15 +333,89 @@
     </div>
 
     <script>
+        // 🔍 === SYSTÈME DE LOGS DEBUG RENFORCÉ ===
+        
+        // Sauvegarde des fonctions console originales
+        const originalConsole = {
+            log: console.log.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console),
+            info: console.info.bind(console),
+            debug: console.debug.bind(console)
+        };
+
+        // Buffer des logs pour affichage
+        const logBuffer = [];
+        const maxLogBuffer = 100;
+
+        // 🔍 FONCTION D'OVERRIDE CONSOLE POUR DEBUG
+        function setupDebugConsole() {
+            const debugConsole = document.getElementById('debug-console');
+            const debugToggle = document.getElementById('debug-toggle');
+            
+            let debugVisible = false;
+            
+            // Toggle debug console
+            debugToggle.addEventListener('click', () => {
+                debugVisible = !debugVisible;
+                debugConsole.classList.toggle('visible', debugVisible);
+                debugToggle.textContent = debugVisible ? '❌ DEBUG' : '🔍 DEBUG';
+                
+                if (debugVisible) {
+                    // Afficher les logs existants
+                    debugConsole.innerHTML = logBuffer.join('<br>');
+                    debugConsole.scrollTop = debugConsole.scrollHeight;
+                }
+            });
+            
+            // Override des fonctions console
+            function createLogFunction(level, color) {
+                return function(...args) {
+                    // Appeler la fonction originale
+                    originalConsole[level](...args);
+                    
+                    // Ajouter au buffer avec timestamp
+                    const timestamp = new Date().toLocaleTimeString();
+                    const message = args.map(arg => 
+                        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                    ).join(' ');
+                    
+                    const logEntry = `<span style="color: ${color}">[${timestamp}] ${level.toUpperCase()}: ${message}</span>`;
+                    logBuffer.push(logEntry);
+                    
+                    // Limiter le buffer
+                    if (logBuffer.length > maxLogBuffer) {
+                        logBuffer.shift();
+                    }
+                    
+                    // Mettre à jour l'affichage si visible
+                    if (debugVisible) {
+                        debugConsole.innerHTML = logBuffer.join('<br>');
+                        debugConsole.scrollTop = debugConsole.scrollHeight;
+                    }
+                };
+            }
+            
+            // Override toutes les fonctions console
+            console.log = createLogFunction('log', '#00ff00');
+            console.warn = createLogFunction('warn', '#ffff00');
+            console.error = createLogFunction('error', '#ff0000');
+            console.info = createLogFunction('info', '#00ffff');
+            console.debug = createLogFunction('debug', '#ff00ff');
+            
+            console.log('🔍 DEBUG CONSOLE ACTIVÉ - TOUS LES LOGS CAPTURÉS');
+        }
+
         // Configuration globale du jeu PORTRAIT
         window.GameConfig = {
             SERVER_URL: 'https://chimarena.cloud',
             API_URL: 'https://chimarena.cloud/api',
             COLYSEUS_URL: 'wss://chimarena.cloud/ws',
             VERSION: '0.1.0',
-            DEBUG: true, // ✅ ACTIVÉ pour voir les logs
+            DEBUG: true, // ✅ FORCE DEBUG TRUE
             PORTRAIT_MODE: true,
-            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+            VERBOSE_LOGS: true // ✅ NOUVEAU FLAG
         };
 
         // Gestionnaire de chargement
@@ -324,6 +440,8 @@
                     progressText.textContent = percentage + '%';
                 }
                 
+                console.log(`📊 Progression: ${percentage}% (${loaded}/${total})`);
+                
                 if (percentage >= 100) {
                     setTimeout(() => {
                         this.hideLoadingScreen();
@@ -339,10 +457,11 @@
                         loadingScreen.style.display = 'none';
                     }, 500);
                 }
+                console.log('✅ Écran de chargement masqué');
             },
             
             showError: function(message) {
-                console.error('Erreur de chargement:', message);
+                console.error('❌ Erreur de chargement:', message);
                 document.getElementById('loading-screen').innerHTML = `
                     <div class="logo">ChimArena</div>
                     <div style="color: #ff6b6b; font-size: 1.2rem; margin-bottom: 1rem;">
@@ -368,9 +487,12 @@
             }
         };
 
-        // Gestionnaire de notifications OPTIMISÉ PORTRAIT
+        // Gestionnaire de notifications OPTIMISÉ PORTRAIT (SIMPLIFIÉ POUR DEBUG)
         window.NotificationManager = {
             show: function(message, type = 'info', duration = 3000) {
+                // ✅ AUSSI LOGGER EN CONSOLE
+                console.log(`🔔 NOTIFICATION [${type}]: ${message}`);
+                
                 const notification = document.createElement('div');
                 notification.className = type + '-message';
                 notification.textContent = message;
@@ -424,41 +546,118 @@
             }, 500);
         });
 
-        // ❌ GESTIONNAIRE D'ERREURS DÉSACTIVÉ POUR DEBUG
-        /*
+        // 🔍 === GESTIONNAIRE D'ERREURS DEBUG MAXIMAL ===
         window.addEventListener('error', function(e) {
-            console.error('🔥 Erreur JavaScript capturée:', e.error);
-            window.NotificationManager.error('Une erreur est survenue');
-        });
-        */
-
-        // ✅ LOGS SEULEMENT - AUCUNE NOTIFICATION
-        window.addEventListener('error', function(e) {
-            // SEULEMENT log dans la console, AUCUNE notification
-            console.error('🔥 Erreur JavaScript:', e.error);
-            console.error('🔥 Message:', e.error?.message);
-            console.error('🔥 Stack:', e.error?.stack);
-            // PAS DE NOTIFICATION DU TOUT
+            console.error('🔥 === ERREUR JAVASCRIPT GLOBALE ===');
+            console.error('🔥 Fichier:', e.filename || 'Inconnu');
+            console.error('🔥 Ligne:', e.lineno || 'Inconnue');
+            console.error('🔥 Colonne:', e.colno || 'Inconnue');
+            console.error('🔥 Message:', e.message || 'Aucun message');
+            console.error('🔥 Error object:', e.error);
+            
+            if (e.error && e.error.stack) {
+                console.error('🔥 Stack trace complète:', e.error.stack);
+            }
+            
+            // ✅ AFFICHER AUSSI EN NOTIFICATION SI CRITIQUE
+            if (window.GameConfig.DEBUG && window.NotificationManager) {
+                window.NotificationManager.error(`Erreur JS: ${e.message || 'Erreur inconnue'}`);
+            }
         });
 
         window.addEventListener('unhandledrejection', function(e) {
-            // SEULEMENT log dans la console, AUCUNE notification  
-            console.error('🔥 Promesse rejetée:', e.reason);
-            // PAS DE NOTIFICATION DU TOUT
+            console.error('🔥 === PROMESSE REJETÉE GLOBALE ===');
+            console.error('🔥 Raison:', e.reason);
+            console.error('🔥 Promise:', e.promise);
+            
+            if (e.reason && e.reason.stack) {
+                console.error('🔥 Stack trace:', e.reason.stack);
+            }
+            
+            // ✅ AFFICHER AUSSI EN NOTIFICATION SI CRITIQUE
+            if (window.GameConfig.DEBUG && window.NotificationManager) {
+                const message = e.reason?.message || String(e.reason) || 'Promesse rejetée';
+                window.NotificationManager.error(`Promise rejected: ${message}`);
+            }
         });
+
+        // 🔍 === LOGS RÉSEAU POUR DEBUG COLYSEUS ===
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            console.log('🌐 FETCH REQUEST:', args[0], args[1]);
+            
+            return originalFetch.apply(this, args)
+                .then(response => {
+                    console.log('🌐 FETCH RESPONSE:', response.status, response.statusText, 'pour', args[0]);
+                    return response;
+                })
+                .catch(error => {
+                    console.error('🌐 FETCH ERROR:', error, 'pour', args[0]);
+                    throw error;
+                });
+        };
+
+        // 🔍 === OVERRIDE WEBSOCKET POUR DEBUG COLYSEUS ===
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+            console.log('🔌 WEBSOCKET CRÉATION:', url, protocols);
+            
+            const ws = new OriginalWebSocket(url, protocols);
+            
+            ws.addEventListener('open', function(event) {
+                console.log('🔌 WEBSOCKET OUVERT:', url);
+            });
+            
+            ws.addEventListener('message', function(event) {
+                console.log('🔌 WEBSOCKET MESSAGE:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
+            });
+            
+            ws.addEventListener('close', function(event) {
+                console.log('🔌 WEBSOCKET FERMÉ:', event.code, event.reason, 'pour', url);
+            });
+            
+            ws.addEventListener('error', function(event) {
+                console.error('🔌 WEBSOCKET ERREUR:', event, 'pour', url);
+            });
+            
+            return ws;
+        };
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
 
         // Gestion de la déconnexion réseau
         window.addEventListener('online', function() {
+            console.log('🌐 CONNEXION RÉSEAU RÉTABLIE');
             window.NotificationManager.success('Connexion rétablie');
         });
 
         window.addEventListener('offline', function() {
+            console.log('🌐 CONNEXION RÉSEAU PERDUE');
             window.NotificationManager.error('Connexion perdue');
         });
 
-        // Log de démarrage
-        console.log(`🎮 ChimArena v${window.GameConfig.VERSION} - Mode Portrait ${window.GameConfig.MOBILE_OPTIMIZED ? 'Mobile' : 'PC'}`);
-        console.log(`🔧 Debug activé: ${window.GameConfig.DEBUG}`);
+        // 🔍 === INITIALISATION DEBUG ===
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM CHARGÉ - SETUP DEBUG CONSOLE...');
+            setupDebugConsole();
+            console.log('✅ DEBUG CONSOLE CONFIGURÉ');
+        });
+
+        // Log de démarrage avec informations détaillées
+        console.log(`🎮 === CHIMARENA DEBUG MODE ===`);
+        console.log(`🎮 Version: ${window.GameConfig.VERSION}`);
+        console.log(`🎮 Mode: ${window.GameConfig.MOBILE_OPTIMIZED ? 'Mobile' : 'PC'} Portrait`);
+        console.log(`🎮 Debug: ${window.GameConfig.DEBUG}`);
+        console.log(`🎮 API URL: ${window.GameConfig.API_URL}`);
+        console.log(`🎮 Colyseus URL: ${window.GameConfig.COLYSEUS_URL}`);
+        console.log(`🎮 User Agent: ${navigator.userAgent}`);
+        console.log(`🎮 Screen: ${screen.width}x${screen.height}`);
+        console.log(`🎮 Window: ${window.innerWidth}x${window.innerHeight}`);
+        console.log(`🎮 Timestamp: ${new Date().toISOString()}`);
+        console.log(`🎮 === LOGS MAXIMAUX ACTIVÉS ===`);
     </script>
 
     <!-- Point d'entrée Vite -->
