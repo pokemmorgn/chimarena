@@ -1,4 +1,4 @@
-// client/src/api.js - VERSION DEBUG POUR COLYSEUS
+// client/src/api.js - VERSION FINALE PROPRE SANS BOUCLE
 
 // 🔄 Configuration API avec variables d'environnement Vite
 const API_URL = import.meta.env.VITE_API_URL || 'https://chimarena.cloud/api';
@@ -25,42 +25,25 @@ class SecureTokenManager {
     this.accessToken = token;
     this.isAuthenticated = !!token;
     
-    console.log('🔍 setToken appelé avec:', token ? 'TOKEN_PRESENT' : 'NO_TOKEN');
-    
     // Décoder le token pour connaître l'expiration (sans validation côté client)
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         this.tokenExpiry = payload.exp * 1000; // Convertir en millisecondes
         
-        console.log('🔍 Token décodé avec succès:', {
-          userId: payload.id,
-          username: payload.username,
-          exp: payload.exp,
-          expiry: new Date(this.tokenExpiry),
-          timeUntilExpiry: this.tokenExpiry - Date.now(),
-          isCurrentlyExpired: Date.now() >= this.tokenExpiry
-        });
-        
-        // Vérifier si le token est déjà expiré
+        // Vérification basique d'expiration
         if (Date.now() >= this.tokenExpiry) {
-          console.warn('⚠️ TOKEN DÉJÀ EXPIRÉ lors du setToken !');
+          console.warn('⚠️ Token déjà expiré lors du setToken');
           this.isAuthenticated = false;
         }
         
       } catch (e) {
-        console.error('❌ Erreur décodage token:', e);
+        console.warn('⚠️ Impossible de décoder le token:', e.message);
         this.tokenExpiry = Date.now() + (14 * 60 * 1000); // Assumer 14min
       }
     } else {
       this.tokenExpiry = null;
     }
-    
-    console.log('🔍 État après setToken:', {
-      hasToken: !!this.accessToken,
-      isAuthenticated: this.isAuthenticated,
-      tokenExpiry: this.tokenExpiry ? new Date(this.tokenExpiry) : null
-    });
   }
 
   getToken() {
@@ -68,7 +51,6 @@ class SecureTokenManager {
   }
 
   clearToken() {
-    console.log('🧹 clearToken appelé');
     this.accessToken = null;
     this.isAuthenticated = false;
     this.tokenExpiry = null;
@@ -83,20 +65,8 @@ class SecureTokenManager {
   }
 
   isTokenExpired() {
-    if (!this.tokenExpiry) {
-      console.log('🔍 isTokenExpired: Pas de tokenExpiry défini');
-      return true;
-    }
-    
-    const expired = Date.now() >= this.tokenExpiry;
-    console.log('🔍 isTokenExpired check:', {
-      expiry: new Date(this.tokenExpiry),
-      now: new Date(),
-      expired: expired,
-      timeRemaining: this.tokenExpiry - Date.now()
-    });
-    
-    return expired;
+    if (!this.tokenExpiry) return true;
+    return Date.now() >= this.tokenExpiry;
   }
 
   setupCleanup() {
@@ -159,7 +129,6 @@ class RefreshManager {
       });
 
       if (!response.ok) {
-        // ✅ AMÉLIORATION : Différencier les erreurs 401
         if (response.status === 401) {
           console.log('ℹ️ Pas de session active (normal au démarrage)');
           throw new Error('No active session');
@@ -170,7 +139,6 @@ class RefreshManager {
       }
 
       const data = await response.json();
-      console.log('📦 Data refresh:', data);
       
       if (data.success && data.token) {
         tokenManager.setToken(data.token);
@@ -185,16 +153,14 @@ class RefreshManager {
         throw new Error('Refresh response invalid');
       }
     } catch (error) {
-      // ✅ AMÉLIORATION : Logger différemment selon le type d'erreur
       if (error.message === 'No active session') {
-        console.log('ℹ️ Session refresh: aucune session active (normal)');
+        console.log('ℹ️ Session refresh: aucune session active');
       } else {
-        console.log('❌ Erreur refresh:', error);
+        console.log('❌ Erreur refresh:', error.message);
       }
       
       tokenManager.clearToken();
       
-      // ✅ AMÉLIORATION : Ne pas déclencher onAuthenticationLost si pas de session
       if (tokenManager.onAuthenticationLost && error.message !== 'No active session') {
         tokenManager.onAuthenticationLost('Session expirée');
       }
@@ -401,20 +367,15 @@ export const auth = {
     return refreshManager.refreshToken();
   },
 
-  // ✅ MÉTHODE ISAUTH AVEC DEBUG DÉTAILLÉ
+  // ✅ MÉTHODE ISAUTH PROPRE - SANS LOGS EXCESSIFS
   isAuthenticated() {
     const hasToken = tokenManager.isAuthenticated && !!tokenManager.getToken();
     const notExpired = !tokenManager.isTokenExpired();
     
-    console.log('🔍 === AUTH CHECK DÉTAILLÉ ===');
-    console.log('  hasToken:', hasToken);
-    console.log('  tokenManager.isAuthenticated:', tokenManager.isAuthenticated);
-    console.log('  tokenManager.getToken():', !!tokenManager.getToken());
-    console.log('  tokenExpiry:', tokenManager.tokenExpiry ? new Date(tokenManager.tokenExpiry) : 'NOT_SET');
-    console.log('  isTokenExpired():', tokenManager.isTokenExpired());
-    console.log('  notExpired:', notExpired);
-    console.log('  RÉSULTAT FINAL:', hasToken && notExpired);
-    console.log('================================');
+    // ✅ LOG SIMPLE UNIQUEMENT SI PROBLÈME DÉTECTÉ
+    if (hasToken && !notExpired) {
+      console.warn('⚠️ Token présent mais expiré');
+    }
     
     return hasToken && notExpired;
   },
@@ -427,7 +388,7 @@ export const auth = {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       return {
-        token: token, // AJOUT DU TOKEN LUI-MÊME
+        token: token,
         userId: payload.id,
         username: payload.username,
         email: payload.email,
@@ -435,6 +396,7 @@ export const auth = {
         iat: payload.iat,
       };
     } catch (e) {
+      console.warn('⚠️ Erreur décodage token pour getTokenInfo');
       return null;
     }
   }
@@ -582,7 +544,7 @@ export const config = {
     tokenManager.onAuthenticationLost = callback;
   },
 
-  // Debug info (development only) - 🔄 Utilise Vite env
+  // Debug info (development only)
   getDebugInfo() {
     if (import.meta.env.DEV) {
       return {
