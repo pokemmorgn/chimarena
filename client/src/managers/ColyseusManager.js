@@ -279,7 +279,9 @@ class ColyseusManager {
       
       // ✅ LOG SEULEMENT SI CHANGEMENT SIGNIFICATIF
       if (Math.abs(this.worldPlayers.size - oldSize) > 0) {
-        console.log(`👥 ${this.worldPlayers.size} joueurs (${this.worldPlayers.size - oldSize:+d})`);
+        const diff = this.worldPlayers.size - oldSize;
+        const sign = diff >= 0 ? '+' : '';
+        console.log(`👥 ${this.worldPlayers.size} joueurs (${sign}${diff})`);
       }
       
       this.triggerCallback('playersUpdated', this.worldPlayers);
