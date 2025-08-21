@@ -6,8 +6,8 @@ import ClashMenuScene from './scenes/ClashMenuScene';
 import { auth, config } from './api';
 import { LoadingManager } from './utils/LoadingManager.js';
 // 🔍 IMPORT COLYSEUS TÔT POUR DEBUG
-import colyseusManager from './managers/ColyseusManager.js';
-
+import * as ColyseusManagerModule from '../managers/ColyseusManager.js';
+const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
 window.GameConfig.DEBUG = import.meta.env.DEV;
 
 // 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
