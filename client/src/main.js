@@ -9,6 +9,7 @@ import { LoadingManager } from './utils/LoadingManager.js';
 import * as ColyseusManagerModule from './managers/ColyseusManager.js';
 const colyseusManager = ColyseusManagerModule.default || ColyseusManagerModule;
 window.GameConfig.DEBUG = import.meta.env.DEV;
+console.log(">>> MAIN.JS START");
 
 // 🔍 === EXPOSITION PRÉCOCE DES FONCTIONS DEBUG ===
 console.log('🔍 EXPOSITION FONCTIONS DEBUG COLYSEUS...');
