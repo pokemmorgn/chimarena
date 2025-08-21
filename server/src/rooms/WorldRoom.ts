@@ -631,4 +631,19 @@ export class WorldRoom extends Room<WorldState> {
       });
     }
   }
+  
+  /**
+   * Envoyer les statistiques du matchmaking au client
+   */
+  private handleGetMatchmakingStats(client: Client): void {
+    const stats = this.matchmakingService.getStats();
+    const config = this.matchmakingService.getConfig();
+    
+    client.send("matchmaking_stats", {
+      stats,
+      config,
+      activeMatches: this.matchmakingService.getActiveMatchesCount(),
+      timestamp: Date.now()
+    });
+  }
 }
