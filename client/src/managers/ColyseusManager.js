@@ -1,5 +1,6 @@
 // client/src/managers/ColyseusManager.js - VERSION FINALE SANS BOUCLE
 import { WorldState } from "../schemas/WorldState.js";
+import { Client } from 'colyseus.js';
 
 class ColyseusManager {
   constructor() {
