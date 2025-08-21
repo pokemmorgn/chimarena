@@ -72,7 +72,7 @@ export default class BattlePanel extends BasePanel {
     refresh() {
         super.refresh();
         
-        this.log('Rafraîchissement données bataille...');
+        this.log('Rafraîchissement données bataille... hihihihi');
         
         // Mettre à jour les infos d'arène
         this.updateArenaInfo();
