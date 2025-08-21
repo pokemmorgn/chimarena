@@ -5,657 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ChimArena - Jeu de stratégie en temps réel</title>
     
-    <!-- Meta tags pour SEO et réseaux sociaux -->
+    <!-- Meta tags -->
     <meta name="description" content="ChimArena - Affrontez des joueurs du monde entier dans des combats stratégiques en temps réel inspirés de Clash Royale">
     <meta name="keywords" content="jeu, stratégie, temps réel, multijoueur, cartes, combat">
     <meta name="author" content="ChimArena Team">
     
-    <!-- Open Graph / Facebook -->
+    <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://chimarena.com/">
     <meta property="og:title" content="ChimArena - Jeu de stratégie en temps réel">
     <meta property="og:description" content="Affrontez des joueurs du monde entier dans des combats stratégiques">
 
-    <!-- Preconnect pour les performances -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 
     <style>
-        /* Reset et styles de base */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Roboto', sans-serif; overflow: hidden; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
 
-        html, body {
-            height: 100%;
-            font-family: 'Roboto', sans-serif;
-            overflow: hidden;
-        }
-
-        /* 📱 STYLES UNIVERSELS PORTRAIT */
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            min-height: 100vh;
-        }
-
-        /* Container principal du jeu - TOUJOURS PORTRAIT */
         #game-container {
             position: relative;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
             overflow: hidden;
             background: #000;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            max-width: 100vw;
-            max-height: 100vh;
+            max-width: 100vw; max-height: 100vh;
         }
 
-        /* 📱 STYLES MOBILE */
         @media (max-width: 768px) {
-            body {
-                padding: 0;
-                margin: 0;
-                position: fixed;
-                width: 100%;
-                height: 100%;
-                background: #000; /* Fond noir sur mobile pour économie batterie */
-            }
-            
-            #game-container {
-                width: 100vw !important;
-                height: 100vh !important;
-                border-radius: 0;
-                border: none;
-                box-shadow: none;
-            }
+            body { background: #000; }
+            #game-container { width: 100vw !important; height: 100vh !important; border-radius: 0; box-shadow: none; }
         }
 
-        /* 💻 STYLES PC - Format portrait centré */
         @media (min-width: 769px) {
-            body {
-                padding: 20px;
-            }
-            
-            #game-container {
-                width: 400px !important;
-                height: 700px !important;
-            }
-            
-            /* Effet de profondeur pour PC */
+            #game-container { width: 400px !important; height: 700px !important; }
             #game-container::before {
-                content: '';
-                position: absolute;
-                top: -5px;
-                left: -5px;
-                right: -5px;
-                bottom: -5px;
+                content: ''; position: absolute; inset: -5px;
                 background: linear-gradient(45deg, #3498db, #9b59b6, #e74c3c, #f39c12);
-                border-radius: 20px;
-                z-index: -1;
+                border-radius: 20px; z-index: -1;
                 animation: glow 2s ease-in-out infinite alternate;
             }
-            
-            @keyframes glow {
-                0% { opacity: 0.5; transform: scale(1); }
-                100% { opacity: 0.8; transform: scale(1.02); }
-            }
+            @keyframes glow { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0.8; transform: scale(1.02); } }
         }
 
-        /* Écran de chargement */
         #loading-screen {
-            position: absolute;
-            inset: 0;
+            position: absolute; inset: 0;
             background: #000 url("/background/loadingscreen.png") center center / cover no-repeat;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            color: white;
-            font-family: 'Orbitron', sans-serif;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 1000; color: white; font-family: 'Orbitron', sans-serif;
         }
+        #loading-screen.hidden { opacity: 0; pointer-events: none; transition: opacity 0.5s ease-out; }
 
-        #loading-screen.hidden {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s ease-out;
-        }
+        .logo { font-size: clamp(2rem, 8vw, 3rem); font-weight: 900; margin-bottom: 2rem; text-shadow: 0 4px 8px rgba(0,0,0,0.3); background: linear-gradient(45deg,#fff,#f0f0f0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .loading-text { font-size: clamp(1rem, 4vw, 1.2rem); margin-bottom: 2rem; text-align: center; }
 
-        .logo {
-            font-size: clamp(2rem, 8vw, 3rem); /* Responsive */
-            font-weight: 900;
-            margin-bottom: 2rem;
-            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            background: linear-gradient(45deg, #fff, #f0f0f0);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+        .progress-container { width: min(300px, 80vw); height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; margin-bottom: 1rem; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg,#4facfe 0%,#00f2fe 100%); width: 0%; transition: width 0.3s ease; }
+        .progress-text { font-size: clamp(0.8rem, 3vw, 0.9rem); }
 
-        .loading-text {
-            font-size: clamp(1rem, 4vw, 1.2rem);
-            margin-bottom: 2rem;
-            opacity: 0.9;
-            text-align: center;
-            padding: 0 20px;
-        }
-
-        /* Barre de progression */
-        .progress-container {
-            width: min(300px, 80vw);
-            height: 6px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-            overflow: hidden;
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
-            width: 0%;
-            transition: width 0.3s ease;
-            border-radius: 3px;
-        }
-
-        .progress-text {
-            font-size: clamp(0.8rem, 3vw, 0.9rem);
-            opacity: 0.8;
-        }
-
-        /* Spinner de chargement */
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 1rem;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Messages d'erreur et succès */
-        .error-message, .success-message {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            z-index: 2000;
-            transform: translateX(400px);
-            transition: transform 0.3s ease;
-            font-size: clamp(0.8rem, 3vw, 1rem);
-            max-width: calc(100vw - 40px);
-        }
-
-        .error-message {
-            background: #ff6b6b;
-            color: white;
-            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-        }
-
-        .success-message {
-            background: #51cf66;
-            color: white;
-            box-shadow: 0 4px 12px rgba(81, 207, 102, 0.3);
-        }
-
-        .error-message.show, .success-message.show {
-            transform: translateX(0);
-        }
-
-        /* 📱 Optimisations tactiles */
-        @media (hover: none) and (pointer: coarse) {
-            /* Styles pour appareils tactiles */
-            * {
-                -webkit-tap-highlight-color: transparent;
-            }
-            
-            body {
-                -webkit-touch-callout: none;
-                -webkit-user-select: none;
-                user-select: none;
-            }
-        }
-
-        /* Orientations */
-        @media screen and (orientation: landscape) and (max-width: 768px) {
-            /* Message d'orientation pour mobile en paysage */
-            body::before {
-                content: "🔄 Veuillez orienter votre appareil en mode portrait pour une meilleure expérience";
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.9);
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 9999;
-                font-size: 1.2rem;
-                text-align: center;
-                padding: 20px;
-            }
-        }
-
-        /* Préchargement des fonts */
-        .font-preload {
-            font-family: 'Orbitron', sans-serif;
-            font-family: 'Roboto', sans-serif;
-            position: absolute;
-            left: -9999px;
-            visibility: hidden;
-        }
-
-        /* Accessibilité - mode sombre forcé sur mobile */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                color-scheme: dark;
-            }
-        }
-
-        /* 🔍 CONSOLE DEBUG OVERLAY POUR MOBILE */
-        #debug-console {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 200px;
-            background: rgba(0, 0, 0, 0.9);
-            color: #00ff00;
-            font-family: monospace;
-            font-size: 10px;
-            padding: 10px;
-            overflow-y: auto;
-            z-index: 9998;
-            display: none;
-            border-top: 2px solid #00ff00;
-        }
-
-        #debug-console.visible {
-            display: block;
-        }
-
-        #debug-toggle {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 255, 0, 0.8);
-            color: black;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            z-index: 9999;
-            cursor: pointer;
-        }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
+        @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
     </style>
 </head>
 <body>
-    <!-- 🔍 DEBUG TOGGLE BUTTON -->
-    <button id="debug-toggle">🔍 DEBUG</button>
-    
-    <!-- 🔍 DEBUG CONSOLE OVERLAY -->
-    <div id="debug-console"></div>
-
-    <!-- Préchargement invisible des fonts -->
-    <div class="font-preload">.</div>
-
-    <!-- Container principal du jeu -->
+    <!-- Container principal -->
     <div id="game-container">
         <!-- Écran de chargement -->
         <div id="loading-screen">
             <div class="logo">ChimArena</div>
-            <div class="loading-text">Chargement du jeu en mode portrait...</div>
+            <div class="loading-text">Chargement du jeu...</div>
             <div class="spinner"></div>
-            <div class="progress-container">
-                <div class="progress-bar" id="progress-bar"></div>
-            </div>
+            <div class="progress-container"><div class="progress-bar" id="progress-bar"></div></div>
             <div class="progress-text" id="progress-text">0%</div>
         </div>
     </div>
 
     <script>
-        // 🔍 === SYSTÈME DE LOGS DEBUG RENFORCÉ ===
-        
-        // Sauvegarde des fonctions console originales
-        const originalConsole = {
-            log: console.log.bind(console),
-            warn: console.warn.bind(console),
-            error: console.error.bind(console),
-            info: console.info.bind(console),
-            debug: console.debug.bind(console)
-        };
-
-        // Buffer des logs pour affichage
-        const logBuffer = [];
-        const maxLogBuffer = 100;
-
-        // 🔍 FONCTION D'OVERRIDE CONSOLE POUR DEBUG
-        function setupDebugConsole() {
-            const debugConsole = document.getElementById('debug-console');
-            const debugToggle = document.getElementById('debug-toggle');
-            
-            let debugVisible = false;
-            
-            // Toggle debug console
-            debugToggle.addEventListener('click', () => {
-                debugVisible = !debugVisible;
-                debugConsole.classList.toggle('visible', debugVisible);
-                debugToggle.textContent = debugVisible ? '❌ DEBUG' : '🔍 DEBUG';
-                
-                if (debugVisible) {
-                    // Afficher les logs existants
-                    debugConsole.innerHTML = logBuffer.join('<br>');
-                    debugConsole.scrollTop = debugConsole.scrollHeight;
-                }
-            });
-            
-            // Override des fonctions console
-            function createLogFunction(level, color) {
-                return function(...args) {
-                    // Appeler la fonction originale
-                    originalConsole[level](...args);
-                    
-                    // Ajouter au buffer avec timestamp
-                    const timestamp = new Date().toLocaleTimeString();
-                    const message = args.map(arg => 
-                        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-                    ).join(' ');
-                    
-                    const logEntry = `<span style="color: ${color}">[${timestamp}] ${level.toUpperCase()}: ${message}</span>`;
-                    logBuffer.push(logEntry);
-                    
-                    // Limiter le buffer
-                    if (logBuffer.length > maxLogBuffer) {
-                        logBuffer.shift();
-                    }
-                    
-                    // Mettre à jour l'affichage si visible
-                    if (debugVisible) {
-                        debugConsole.innerHTML = logBuffer.join('<br>');
-                        debugConsole.scrollTop = debugConsole.scrollHeight;
-                    }
-                };
-            }
-            
-           
-            
-            console.log('🔍 DEBUG CONSOLE ACTIVÉ - TOUS LES LOGS CAPTURÉS');
-        }
-
-        // Configuration globale du jeu PORTRAIT
+        // Configuration simple
         window.GameConfig = {
             SERVER_URL: 'https://chimarena.cloud',
             API_URL: 'https://chimarena.cloud/api',
             COLYSEUS_URL: 'wss://chimarena.cloud/ws',
             VERSION: '0.1.0',
-            DEBUG: true, // ✅ FORCE DEBUG TRUE
             PORTRAIT_MODE: true,
-            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
-            VERBOSE_LOGS: true // ✅ NOUVEAU FLAG
+            MOBILE_OPTIMIZED: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
         };
 
-        // Gestionnaire de chargement
+        // Gestionnaire de chargement simple
         window.LoadingManager = {
-            totalAssets: 0,
-            loadedAssets: 0,
-            
             updateProgress: function(loaded, total) {
-                this.loadedAssets = loaded;
-                this.totalAssets = total;
-                
                 const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
-                
                 const progressBar = document.getElementById('progress-bar');
                 const progressText = document.getElementById('progress-text');
-                
-                if (progressBar) {
-                    progressBar.style.width = percentage + '%';
-                }
-                
-                if (progressText) {
-                    progressText.textContent = percentage + '%';
-                }
-                
-                console.log(`📊 Progression: ${percentage}% (${loaded}/${total})`);
-                
-                if (percentage >= 100) {
-                    setTimeout(() => {
-                        this.hideLoadingScreen();
-                    }, 500);
-                }
+                if (progressBar) progressBar.style.width = percentage + '%';
+                if (progressText) progressText.textContent = percentage + '%';
+                if (percentage >= 100) setTimeout(() => this.hideLoadingScreen(), 500);
             },
-            
             hideLoadingScreen: function() {
                 const loadingScreen = document.getElementById('loading-screen');
                 if (loadingScreen) {
                     loadingScreen.classList.add('hidden');
-                    setTimeout(() => {
-                        loadingScreen.style.display = 'none';
-                    }, 500);
+                    setTimeout(() => loadingScreen.style.display = 'none', 500);
                 }
-                console.log('✅ Écran de chargement masqué');
-            },
-            
-            showError: function(message) {
-                console.error('❌ Erreur de chargement:', message);
-                document.getElementById('loading-screen').innerHTML = `
-                    <div class="logo">ChimArena</div>
-                    <div style="color: #ff6b6b; font-size: 1.2rem; margin-bottom: 1rem;">
-                        Erreur de chargement
-                    </div>
-                    <div style="color: #fff; opacity: 0.8; margin-bottom: 2rem; text-align: center; padding: 0 20px;">
-                        ${message}
-                    </div>
-                    <button onclick="location.reload()" style="
-                        background: #4facfe;
-                        color: white;
-                        border: none;
-                        padding: 12px 24px;
-                        border-radius: 6px;
-                        cursor: pointer;
-                        font-size: 1rem;
-                        font-weight: 500;
-                        touch-action: manipulation;
-                    ">
-                        Réessayer
-                    </button>
-                `;
             }
         };
-
-        // Gestionnaire de notifications OPTIMISÉ PORTRAIT (SIMPLIFIÉ POUR DEBUG)
-        window.NotificationManager = {
-            show: function(message, type = 'info', duration = 3000) {
-                // ✅ AUSSI LOGGER EN CONSOLE
-                console.log(`🔔 NOTIFICATION [${type}]: ${message}`);
-                
-                const notification = document.createElement('div');
-                notification.className = type + '-message';
-                notification.textContent = message;
-                
-                // Position adaptée pour portrait
-                if (window.innerWidth <= 768) {
-                    notification.style.position = 'fixed';
-                    notification.style.top = '60px';
-                    notification.style.left = '20px';
-                    notification.style.right = '20px';
-                    notification.style.transform = 'translateY(-100px)';
-                }
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.classList.add('show');
-                    if (window.innerWidth <= 768) {
-                        notification.style.transform = 'translateY(0)';
-                    }
-                }, 100);
-                
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                    if (window.innerWidth <= 768) {
-                        notification.style.transform = 'translateY(-100px)';
-                    }
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 300);
-                }, duration);
-            },
-            
-            error: function(message, duration = 5000) {
-                this.show(message, 'error', duration);
-            },
-            
-            success: function(message, duration = 3000) {
-                this.show(message, 'success', duration);
-            }
-        };
-
-        // Gestion spéciale de l'orientation
-        window.addEventListener('orientationchange', function() {
-            setTimeout(() => {
-                if (window.GameConfig.MOBILE_OPTIMIZED) {
-                    window.scrollTo(0, 1);
-                }
-            }, 500);
-        });
-
-        // 🔍 === GESTIONNAIRE D'ERREURS DEBUG MAXIMAL ===
-        window.addEventListener('error', function(e) {
-            console.error('🔥 === ERREUR JAVASCRIPT GLOBALE ===');
-            console.error('🔥 Fichier:', e.filename || 'Inconnu');
-            console.error('🔥 Ligne:', e.lineno || 'Inconnue');
-            console.error('🔥 Colonne:', e.colno || 'Inconnue');
-            console.error('🔥 Message:', e.message || 'Aucun message');
-            console.error('🔥 Error object:', e.error);
-            
-            if (e.error && e.error.stack) {
-                console.error('🔥 Stack trace complète:', e.error.stack);
-            }
-            
-            // ✅ AFFICHER AUSSI EN NOTIFICATION SI CRITIQUE
-            if (window.GameConfig.DEBUG && window.NotificationManager) {
-                window.NotificationManager.error(`Erreur JS: ${e.message || 'Erreur inconnue'}`);
-            }
-        });
-
-        window.addEventListener('unhandledrejection', function(e) {
-            console.error('🔥 === PROMESSE REJETÉE GLOBALE ===');
-            console.error('🔥 Raison:', e.reason);
-            console.error('🔥 Promise:', e.promise);
-            
-            if (e.reason && e.reason.stack) {
-                console.error('🔥 Stack trace:', e.reason.stack);
-            }
-            
-            // ✅ AFFICHER AUSSI EN NOTIFICATION SI CRITIQUE
-            if (window.GameConfig.DEBUG && window.NotificationManager) {
-                const message = e.reason?.message || String(e.reason) || 'Promesse rejetée';
-                window.NotificationManager.error(`Promise rejected: ${message}`);
-            }
-        });
-
-        // 🔍 === LOGS RÉSEAU POUR DEBUG COLYSEUS ===
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-            console.log('🌐 FETCH REQUEST:', args[0], args[1]);
-            
-            return originalFetch.apply(this, args)
-                .then(response => {
-                    console.log('🌐 FETCH RESPONSE:', response.status, response.statusText, 'pour', args[0]);
-                    return response;
-                })
-                .catch(error => {
-                    console.error('🌐 FETCH ERROR:', error, 'pour', args[0]);
-                    throw error;
-                });
-        };
-
-        // 🔍 === OVERRIDE WEBSOCKET POUR DEBUG COLYSEUS ===
-        const OriginalWebSocket = window.WebSocket;
-        window.WebSocket = function(url, protocols) {
-            console.log('🔌 WEBSOCKET CRÉATION:', url, protocols);
-            
-            const ws = new OriginalWebSocket(url, protocols);
-            
-            ws.addEventListener('open', function(event) {
-                console.log('🔌 WEBSOCKET OUVERT:', url);
-            });
-            
-            ws.addEventListener('message', function(event) {
-                console.log('🔌 WEBSOCKET MESSAGE:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
-            });
-            
-            ws.addEventListener('close', function(event) {
-                console.log('🔌 WEBSOCKET FERMÉ:', event.code, event.reason, 'pour', url);
-            });
-            
-            ws.addEventListener('error', function(event) {
-                console.error('🔌 WEBSOCKET ERREUR:', event, 'pour', url);
-            });
-            
-            return ws;
-        };
-        window.WebSocket.prototype = OriginalWebSocket.prototype;
-        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
-        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
-        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
-        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
-
-        // Gestion de la déconnexion réseau
-        window.addEventListener('online', function() {
-            console.log('🌐 CONNEXION RÉSEAU RÉTABLIE');
-            window.NotificationManager.success('Connexion rétablie');
-        });
-
-        window.addEventListener('offline', function() {
-            console.log('🌐 CONNEXION RÉSEAU PERDUE');
-            window.NotificationManager.error('Connexion perdue');
-        });
-
-        // 🔍 === INITIALISATION DEBUG ===
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 DOM CHARGÉ - SETUP DEBUG CONSOLE...');
-            setupDebugConsole();
-            console.log('✅ DEBUG CONSOLE CONFIGURÉ');
-        });
-
-        // Log de démarrage avec informations détaillées
-        console.log(`🎮 === CHIMARENA DEBUG MODE ===`);
-        console.log(`🎮 Version: ${window.GameConfig.VERSION}`);
-        console.log(`🎮 Mode: ${window.GameConfig.MOBILE_OPTIMIZED ? 'Mobile' : 'PC'} Portrait`);
-        console.log(`🎮 Debug: ${window.GameConfig.DEBUG}`);
-        console.log(`🎮 API URL: ${window.GameConfig.API_URL}`);
-        console.log(`🎮 Colyseus URL: ${window.GameConfig.COLYSEUS_URL}`);
-        console.log(`🎮 User Agent: ${navigator.userAgent}`);
-        console.log(`🎮 Screen: ${screen.width}x${screen.height}`);
-        console.log(`🎮 Window: ${window.innerWidth}x${window.innerHeight}`);
-        console.log(`🎮 Timestamp: ${new Date().toISOString()}`);
-        console.log(`🎮 === LOGS MAXIMAUX ACTIVÉS ===`);
     </script>
 
-    <!-- Point d'entrée Vite -->
+    <!-- Entrées -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/colyseus.js/0.15.19/colyseus.min.js"></script>
     <script type="module" src="/src/main.js"></script>
 </body>
