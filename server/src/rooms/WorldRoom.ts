@@ -46,6 +46,8 @@ export class WorldRoom extends Room<WorldState> {
   onCreate(options: any) {
     console.log('🌍 WorldRoom créée avec options:', options);
     this.setState(new WorldState());
+
+    this.matchmakingService = new MatchmakingService();
     
     // Vérifier la configuration JWT
     if (!this.JWT_ACCESS_SECRET) {
