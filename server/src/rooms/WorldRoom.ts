@@ -6,48 +6,30 @@ import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
 
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
+import { Schema, type, MapSchema } from "@colyseus/schema";
+
 export class WorldPlayer extends Schema {
-  userId: string = "";
-  username: string = "";
-  level: number = 1;
-  trophies: number = 0;
-  currentArenaId: number = 0;
-  status: string = "idle"; // idle, searching, in_battle
-  lastSeen: number = Date.now();
-  
+  @type("string") userId: string = "";
+  @type("string") username: string = "";
+  @type("number") level: number = 1;
+  @type("number") trophies: number = 0;
+  @type("number") currentArenaId: number = 0;
+  @type("string") status: string = "idle"; // idle, searching, in_battle
+  @type("number") lastSeen: number = Date.now();
+
   // Stats rapides pour l'affichage
-  wins: number = 0;
-  losses: number = 0;
-  winRate: number = 0;
+  @type("number") wins: number = 0;
+  @type("number") losses: number = 0;
+  @type("number") winRate: number = 0;
 }
 
-defineTypes(WorldPlayer, {
-  userId: "string",
-  username: "string", 
-  level: "number",
-  trophies: "number",
-  currentArenaId: "number",
-  status: "string",
-  lastSeen: "number",
-  wins: "number",
-  losses: "number",
-  winRate: "number"
-});
-
-// 🌍 ÉTAT DE LA WORLD ROOM - CORRIGÉ
 export class WorldState extends Schema {
-  players = new MapSchema<WorldPlayer>();
-  totalPlayers: number = 0;
-  playersOnline: number = 0;
-  playersSearching: number = 0;
+  @type({ map: WorldPlayer }) players = new MapSchema<WorldPlayer>();
+  @type("number") totalPlayers: number = 0;
+  @type("number") playersOnline: number = 0;
+  @type("number") playersSearching: number = 0;
 }
 
-defineTypes(WorldState, {
-  players: { map: WorldPlayer },
-  totalPlayers: "number",
-  playersOnline: "number", 
-  playersSearching: "number"
-});
 
 // 🌍 WORLD ROOM - Hub central de tous les joueurs
 export class WorldRoom extends Room<WorldState> {
