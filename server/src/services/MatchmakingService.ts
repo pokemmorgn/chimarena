@@ -1,4 +1,4 @@
-// server/src/services/MatchmakingService.ts - SERVICE DE MATCHMAKING AVANCÉ
+// server/src/services/MatchmakingService.ts - SERVICE DE MATCHMAKING AVANCÉ CORRIGÉ
 import { EventEmitter } from 'events';
 import { ArenaManager, Arena } from '../config/arenas';
 
@@ -473,19 +473,18 @@ export class MatchmakingService extends EventEmitter {
    * Valider qu'un joueur est valide pour le matchmaking
    */
   private isValidPlayer(player: MatchmakingPlayer): boolean {
-    return (
-      player.sessionId &&
-      player.userId &&
-      player.username &&
-      player.level >= 1 &&
-      player.trophies >= 0 &&
-      player.arenaId >= 0 &&
-      player.winRate >= 0 &&
-      player.winRate <= 100 &&
-      player.deck &&
-      player.deck.length > 0 &&
-      ['ranked', 'casual', 'tournament'].includes(player.preferredGameMode)
-    );
+    // ✅ CORRECTION: Vérifications explicites avec types corrects
+    if (!player.sessionId || typeof player.sessionId !== 'string') return false;
+    if (!player.userId || typeof player.userId !== 'string') return false;
+    if (!player.username || typeof player.username !== 'string') return false;
+    if (typeof player.level !== 'number' || player.level < 1) return false;
+    if (typeof player.trophies !== 'number' || player.trophies < 0) return false;
+    if (typeof player.arenaId !== 'number' || player.arenaId < 0) return false;
+    if (typeof player.winRate !== 'number' || player.winRate < 0 || player.winRate > 100) return false;
+    if (!Array.isArray(player.deck) || player.deck.length === 0) return false;
+    if (!['ranked', 'casual', 'tournament'].includes(player.preferredGameMode)) return false;
+    
+    return true;
   }
   
   /**
