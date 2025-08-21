@@ -1,4 +1,4 @@
-// client/src/clashmenu/core/BasePanel.js - CLASSE DE BASE POUR TOUS LES PANELS
+// client/src/clashmenu/core/BasePanel.js - CLASSE DE BASE CORRIGÉE
 export default class BasePanel {
     constructor(scene, config = {}) {
         this.scene = scene;
@@ -42,6 +42,9 @@ export default class BasePanel {
         };
         
         console.log(`📄 BasePanel créé: ${this.config.name}`);
+        
+        // 🔧 CORRECTION CRITIQUE: Initialiser automatiquement
+        this.init();
     }
 
     // === MÉTHODES VIRTUELLES (À OVERRIDE) ===
@@ -88,48 +91,65 @@ export default class BasePanel {
     // === MÉTHODES DE CYCLE DE VIE ===
     
     /**
-     * Initialiser le panel (appelé une seule fois)
+     * Initialiser le panel (appelé automatiquement au constructor)
      */
     init() {
         if (this.isInitialized) return;
         
         console.log(`🏗️ Initialisation ${this.config.name}...`);
         
-        // Container principal
-        this.container = this.scene.add.container(0, 0);
-        this.container.setVisible(false);
-        
-        // Créer les éléments de base
-        if (this.config.enableBackground) {
-            this.createBackground();
-        }
-        
-        if (this.config.enableTitle) {
-            this.createTitle();
-        }
-        
-        // Container pour le contenu spécifique
-        this.elements.content = this.scene.add.container(0, this.config.contentStartY);
-        this.container.add(this.elements.content);
-        
-        // Créer le contenu spécifique (implémenté par les classes filles)
         try {
-            this.createContent();
+            // 🔧 CORRECTION: Vérifications avant création container
+            if (!this.scene || !this.scene.add) {
+                throw new Error('Scène Phaser invalide');
+            }
+            
+            // Container principal
+            this.container = this.scene.add.container(0, 0);
+            this.container.setVisible(false);
+            console.log(`✅ Container créé pour ${this.config.name}`);
+            
+            // Créer les éléments de base
+            if (this.config.enableBackground) {
+                this.createBackground();
+            }
+            
+            if (this.config.enableTitle) {
+                this.createTitle();
+            }
+            
+            // Container pour le contenu spécifique
+            this.elements.content = this.scene.add.container(0, this.config.contentStartY);
+            this.container.add(this.elements.content);
+            console.log(`✅ Container contenu créé pour ${this.config.name}`);
+            
+            // Créer le contenu spécifique (implémenté par les classes filles)
+            try {
+                this.createContent();
+                console.log(`✅ Contenu créé pour ${this.config.name}`);
+            } catch (error) {
+                console.error(`❌ Erreur création contenu ${this.config.name}:`, error);
+                this.showError('Erreur lors du chargement du contenu');
+            }
+            
+            this.isInitialized = true;
+            console.log(`✅ ${this.config.name} initialisé avec succès`);
+            
         } catch (error) {
-            console.error(`❌ Erreur création contenu ${this.config.name}:`, error);
-            this.showError('Erreur lors du chargement du contenu');
+            console.error(`❌ Erreur fatale init ${this.config.name}:`, error);
+            this.container = null;
+            throw error; // Remonter l'erreur pour que PanelManager puisse gérer
         }
-        
-        this.isInitialized = true;
-        console.log(`✅ ${this.config.name} initialisé`);
     }
     
     /**
      * Afficher le panel avec animation
      */
     show(animate = true) {
-        if (!this.isInitialized) {
-            this.init();
+        // 🔧 CORRECTION: Plus besoin de vérifier isInitialized car init() est automatique
+        if (!this.container) {
+            console.error(`❌ Pas de container pour ${this.config.name}`);
+            return;
         }
         
         this.container.setVisible(true);
@@ -148,13 +168,15 @@ export default class BasePanel {
      * Masquer le panel avec animation
      */
     hide(animate = true) {
-        if (!this.isVisible) return;
+        if (!this.isVisible || !this.container) return;
         
         this.isVisible = false;
         
         if (animate) {
             this.playHideAnimation(() => {
-                this.container.setVisible(false);
+                if (this.container) {
+                    this.container.setVisible(false);
+                }
             });
         } else {
             this.container.setVisible(false);
@@ -269,25 +291,29 @@ export default class BasePanel {
         
         buttonContainer.add([shadow, bg, shine, buttonText]);
         
-        // Interactivité
-        bg.setInteractive(new Phaser.Geom.Rectangle(-width/2, -height/2, width, height), 
-            Phaser.Geom.Rectangle.Contains);
-        
-        bg.on('pointerdown', () => {
-            buttonContainer.setScale(0.95);
-            this.scene.time.delayedCall(100, () => {
-                buttonContainer.setScale(1);
-                if (callback) callback();
+        // Interactivité avec gestion d'erreur
+        try {
+            bg.setInteractive(new Phaser.Geom.Rectangle(-width/2, -height/2, width, height), 
+                Phaser.Geom.Rectangle.Contains);
+            
+            bg.on('pointerdown', () => {
+                buttonContainer.setScale(0.95);
+                this.scene.time.delayedCall(100, () => {
+                    buttonContainer.setScale(1);
+                    if (callback) callback();
+                });
             });
-        });
-        
-        bg.on('pointerover', () => {
-            buttonContainer.setScale(1.05);
-        });
-        
-        bg.on('pointerout', () => {
-            buttonContainer.setScale(1);
-        });
+            
+            bg.on('pointerover', () => {
+                buttonContainer.setScale(1.05);
+            });
+            
+            bg.on('pointerout', () => {
+                buttonContainer.setScale(1);
+            });
+        } catch (interactiveError) {
+            console.warn(`⚠️ Erreur interactivité bouton:`, interactiveError);
+        }
         
         // Ajouter au container spécifié ou au contenu
         const targetContainer = container || this.elements.content;
@@ -356,6 +382,8 @@ export default class BasePanel {
      * Animation d'apparition
      */
     playShowAnimation() {
+        if (!this.container) return;
+        
         this.container.setAlpha(0);
         this.container.setScale(0.9);
         
@@ -373,6 +401,8 @@ export default class BasePanel {
      * Animation de disparition
      */
     playHideAnimation(onComplete = null) {
+        if (!this.container) return;
+        
         this.scene.tweens.add({
             targets: this.container,
             alpha: 0,
@@ -389,6 +419,7 @@ export default class BasePanel {
      */
     pulse(target = null, duration = 500) {
         const element = target || this.container;
+        if (!element) return;
         
         this.scene.tweens.add({
             targets: element,
@@ -405,6 +436,8 @@ export default class BasePanel {
      */
     shake(target = null) {
         const element = target || this.container;
+        if (!element) return;
+        
         const originalX = element.x;
         
         this.scene.tweens.add({
@@ -426,6 +459,8 @@ export default class BasePanel {
      * Afficher un état de chargement
      */
     showLoading(message = 'Chargement...') {
+        if (!this.container) return;
+        
         this.state.loading = true;
         
         // Créer overlay de chargement
@@ -474,6 +509,8 @@ export default class BasePanel {
      * Afficher une erreur
      */
     showError(message, duration = 3000) {
+        if (!this.container) return;
+        
         this.state.error = message;
         
         const errorBg = this.scene.add.graphics();
@@ -517,7 +554,13 @@ export default class BasePanel {
 
     // === GETTERS ===
     
+    /**
+     * 🔧 CORRECTION CRITIQUE: Vérifier container avant retour
+     */
     getContainer() {
+        if (!this.container) {
+            console.warn(`⚠️ getContainer() appelé sur ${this.config.name} sans container valide`);
+        }
         return this.container;
     }
     
@@ -584,5 +627,22 @@ export default class BasePanel {
             default:
                 console.log(`ℹ️ ${prefix} ${message}`);
         }
+    }
+    
+    // === MÉTHODES DE DEBUG ===
+    
+    /**
+     * Diagnostic du panel
+     */
+    getDiagnostic() {
+        return {
+            name: this.config.name,
+            isInitialized: this.isInitialized,
+            isVisible: this.isVisible,
+            hasContainer: !!this.container,
+            containerVisible: this.container ? this.container.visible : false,
+            sceneValid: !!(this.scene && this.scene.add),
+            elementsCount: this.elements.content ? this.elements.content.list.length : 0
+        };
     }
 }
