@@ -7,7 +7,7 @@ constructor(scene, config = {}) {
         name: 'DeckPanel',
         title: 'DECK',
         icon: '🛡️',
-        contentStartY: 120,
+contentStartY: scene.clashHeader?.getHeight() + 20 || 150,
         enableTitle: false, // On va créer un titre custom avec sous-onglets
         ...config
     });
