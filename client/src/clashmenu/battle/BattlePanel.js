@@ -12,6 +12,8 @@ export default class BattlePanel {
         this.width = scene.scale.width;
         this.height = scene.scale.height;
         this.isMobile = scene.isMobile || false;
+         // Composants de bataille
+        this.battleField = null;
          // Écouter les événements de matchmaking
         this.setupMatchmakingListeners();
         
