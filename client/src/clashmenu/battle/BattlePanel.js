@@ -146,16 +146,276 @@ setupMatchmakingListeners() {
         });
     }
     
-    onMatchFound(matchData) {
-        console.log('🎉 MATCH TROUVÉ !', matchData);
-        
-        // Afficher une notification de match trouvé
+async onMatchFound(matchData) {
+    console.log('🎉 MATCH TROUVÉ !', matchData);
+    
+    try {
+        // Afficher notification initiale
         this.showSimpleNotification(`🎉 Adversaire trouvé: ${matchData.opponent?.username || 'Inconnu'}`);
         
-        // Ici tu peux ajouter la logique pour démarrer le combat
-        // Par exemple, changer de scène ou afficher l'interface de combat
+        // Récupérer les données nécessaires
+        const battleRoomId = matchData.battleRoomId;
+        const playerData = matchData.playerData;
+        
+        if (!battleRoomId || !playerData) {
+            throw new Error('Données de combat incomplètes');
+        }
+        
+        console.log('⚔️ Connexion au combat...', {
+            battleRoomId,
+            playerUsername: playerData.username
+        });
+        
+        // Se connecter à la BattleRoom
+        const colyseusManager = window.colyseusManager;
+        const battleRoom = await colyseusManager.joinBattleRoom(battleRoomId, playerData);
+        
+        if (battleRoom) {
+            console.log('✅ Connecté au combat !');
+            this.showSimpleNotification('⚔️ Connexion au combat réussie !');
+            
+            // Configurer les listeners de combat
+            this.setupBattleListeners();
+            
+            // Afficher l'interface de combat
+            this.showBattleInterface();
+            
+        } else {
+            throw new Error('Échec connexion BattleRoom');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erreur onMatchFound:', error);
+        this.showSimpleNotification(`❌ Erreur: ${error.message}`);
     }
+}
+
+    setupBattleListeners() {
+    console.log('🎧 Setup listeners de combat...');
     
+    const colyseusManager = window.colyseusManager;
+    
+    // Écouter les événements de combat
+    colyseusManager.on('battleInfo', (data) => {
+        console.log('📨 Battle Info reçue:', data);
+        this.onBattleInfo(data);
+    });
+    
+    colyseusManager.on('battleStarted', (data) => {
+        console.log('📨 Combat démarré !');
+        this.onBattleStarted(data);
+    });
+    
+    colyseusManager.on('cardPlaced', (data) => {
+        console.log('📨 Carte placée:', data.cardId);
+        this.onCardPlaced(data);
+    });
+    
+    colyseusManager.on('battleEnded', (data) => {
+        console.log('📨 Combat terminé !');
+        this.onBattleEnded(data);
+    });
+    
+    colyseusManager.on('battleRoomError', (error) => {
+        console.error('📨 Erreur combat:', error);
+        this.showSimpleNotification(`❌ Erreur combat: ${error}`);
+    });
+}
+
+showBattleInterface() {
+    console.log('🎮 Affichage interface de combat...');
+    
+    // Cacher l'interface de matchmaking
+    this.hideLobbyInterface();
+    
+    // Créer l'interface de combat simple
+    this.createBattleInterface();
+}
+
+hideLobbyInterface() {
+    // Cacher tous les éléments du lobby
+    if (this.container) {
+        this.container.getAll().forEach(child => {
+            if (child.setVisible) {
+                child.setVisible(false);
+            }
+        });
+    }
+}
+
+createBattleInterface() {
+    console.log('🎨 Création interface de combat...');
+    
+    try {
+        // Titre du combat
+        const battleTitle = this.scene.add.text(
+            this.width / 2, 100,
+            '⚔️ COMBAT EN COURS',
+            {
+                fontSize: '24px',
+                fontWeight: 'bold',
+                fill: '#FF4500',
+                align: 'center'
+            }
+        );
+        battleTitle.setOrigin(0.5);
+        this.container.add(battleTitle);
+        
+        // Zone d'état
+        this.battleStatusText = this.scene.add.text(
+            this.width / 2, 150,
+            'Connexion au combat...',
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                align: 'center'
+            }
+        );
+        this.battleStatusText.setOrigin(0.5);
+        this.container.add(this.battleStatusText);
+        
+        // Bouton "Prêt"
+        const readyBg = this.scene.add.graphics();
+        readyBg.fillStyle(0x32CD32);
+        readyBg.fillRoundedRect(
+            this.width / 2 - 100, 200,
+            200, 50, 10
+        );
+        
+        const readyText = this.scene.add.text(
+            this.width / 2, 225,
+            '✅ PRÊT',
+            {
+                fontSize: '16px',
+                fontWeight: 'bold',
+                fill: '#FFFFFF'
+            }
+        );
+        readyText.setOrigin(0.5);
+        
+        const readyZone = this.scene.add.zone(
+            this.width / 2, 225,
+            200, 50
+        ).setInteractive();
+        
+        readyZone.on('pointerdown', () => {
+            this.handlePlayerReady();
+        });
+        
+        this.container.add([readyBg, readyText, readyZone]);
+        
+        // Bouton Abandon
+        const forfeitBg = this.scene.add.graphics();
+        forfeitBg.fillStyle(0xDC143C);
+        forfeitBg.fillRoundedRect(
+            this.width / 2 - 80, 270,
+            160, 40, 8
+        );
+        
+        const forfeitText = this.scene.add.text(
+            this.width / 2, 290,
+            '🏳️ ABANDONNER',
+            {
+                fontSize: '14px',
+                fontWeight: 'bold',
+                fill: '#FFFFFF'
+            }
+        );
+        forfeitText.setOrigin(0.5);
+        
+        const forfeitZone = this.scene.add.zone(
+            this.width / 2, 290,
+            160, 40
+        ).setInteractive();
+        
+        forfeitZone.on('pointerdown', () => {
+            this.handleForfeit();
+        });
+        
+        this.container.add([forfeitBg, forfeitText, forfeitZone]);
+        
+        console.log('✅ Interface de combat créée');
+        
+    } catch (error) {
+        console.error('❌ Erreur création interface combat:', error);
+    }
+}
+
+// Handlers des événements de combat
+onBattleInfo(data) {
+    console.log('⚔️ Info combat reçue:', data.players?.length, 'joueurs');
+    this.updateBattleStatus('Combat préparé - 2 joueurs connectés');
+}
+
+onBattleStarted(data) {
+    console.log('🚀 Combat démarré !');
+    this.updateBattleStatus('⚔️ COMBAT EN COURS !');
+    this.showSimpleNotification('🚀 Le combat commence !');
+}
+
+onCardPlaced(data) {
+    const isOwnCard = data.playerId === window.colyseusManager.battleRoom?.sessionId;
+    const playerName = isOwnCard ? 'Vous' : 'Adversaire';
+    
+    this.updateBattleStatus(`${playerName} a placé ${data.cardId}`);
+    console.log(`🃏 ${playerName} place ${data.cardId} en (${data.x}, ${data.y})`);
+}
+
+onBattleEnded(data) {
+    const isWinner = data.winner === window.colyseusManager.battleRoom?.sessionId;
+    const result = data.winner === 'draw' ? 'Égalité' : (isWinner ? 'VICTOIRE !' : 'Défaite');
+    
+    this.updateBattleStatus(`🏁 ${result}`);
+    this.showSimpleNotification(`🏁 Combat terminé - ${result}`);
+    
+    // Retourner au lobby après 5 secondes
+    setTimeout(() => {
+        this.returnToLobby();
+    }, 5000);
+}
+
+// Actions de combat
+handlePlayerReady() {
+    console.log('✅ Joueur prêt !');
+    const success = window.colyseusManager.playerReady();
+    
+    if (success) {
+        this.updateBattleStatus('✅ Vous êtes prêt - En attente de l\'adversaire...');
+        this.showSimpleNotification('✅ Prêt pour le combat !');
+    }
+}
+
+handleForfeit() {
+    const confirm = window.confirm('Abandonner le combat ?');
+    if (!confirm) return;
+    
+    console.log('🏳️ Abandon !');
+    const success = window.colyseusManager.forfeitBattle();
+    
+    if (success) {
+        this.updateBattleStatus('🏳️ Abandon en cours...');
+    }
+}
+
+// Utilitaires
+updateBattleStatus(text) {
+    if (this.battleStatusText) {
+        this.battleStatusText.setText(text);
+    }
+}
+
+returnToLobby() {
+    console.log('🏠 Retour au lobby...');
+    
+    // Quitter la BattleRoom
+    window.colyseusManager.leaveBattleRoom();
+    
+    // Recréer l'interface lobby
+    this.container.removeAll(true);
+    this.createSimpleContent();
+    
+    this.showSimpleNotification('🏠 Retour au lobby');
+}
 handleMatchmaking() {
         console.log('🎯 Matchmaking lancé !');
         
