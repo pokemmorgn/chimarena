@@ -8,7 +8,8 @@ class ColyseusManager {
     this.worldRoom = null;
     this.isConnected = false;
     this.isConnecting = false;
-    
+    this.battleRoom = null;
+    this.isBattleConnected = false;
     // Configuration
     this.serverUrl = window.GameConfig?.COLYSEUS_URL || 'wss://chimarena.cloud/ws';
     
@@ -384,6 +385,156 @@ class ColyseusManager {
     return true;
   }
 
+  // ⚔️ MÉTHODES BATTLEROOM
+async joinBattleRoom(battleRoomId, playerData) {
+  console.log('⚔️ === CONNEXION BATTLEROOM ===');
+  console.log('🔗 Room ID:', battleRoomId);
+  console.log('👤 Player data:', playerData?.username);
+  
+  try {
+    if (this.battleRoom) {
+      console.log('🧹 Nettoyage BattleRoom existante...');
+      await this.leaveBattleRoom();
+    }
+    
+    console.log('🔌 Connexion à la BattleRoom...');
+    this.battleRoom = await this.client.joinById(battleRoomId, playerData);
+    
+    console.log('✅ Connecté à la BattleRoom:', {
+      sessionId: this.battleRoom.sessionId,
+      roomId: this.battleRoom.id
+    });
+    
+    this.isBattleConnected = true;
+    this.setupBattleRoomHandlers();
+    
+    this.triggerCallback('battleRoomJoined', { roomId: battleRoomId });
+    
+    return this.battleRoom;
+    
+  } catch (error) {
+    console.error('❌ Erreur connexion BattleRoom:', error);
+    this.isBattleConnected = false;
+    this.battleRoom = null;
+    this.triggerCallback('battleRoomError', error.message);
+    return null;
+  }
+}
+
+setupBattleRoomHandlers() {
+  if (!this.battleRoom) return;
+  
+  console.log('🔧 Setup handlers BattleRoom...');
+  
+  // Événements de combat
+  this.battleRoom.onMessage("battle_info", (data) => {
+    console.log('📨 BATTLE INFO:', data.players?.length, 'joueurs');
+    this.triggerCallback('battleInfo', data);
+  });
+  
+  this.battleRoom.onMessage("battle_started", (data) => {
+    console.log('📨 BATTLE STARTED !');
+    this.triggerCallback('battleStarted', data);
+  });
+  
+  this.battleRoom.onMessage("card_placed", (data) => {
+    console.log('📨 CARD PLACED:', data.cardId, 'par', data.playerId);
+    this.triggerCallback('cardPlaced', data);
+  });
+  
+  this.battleRoom.onMessage("unit_destroyed", (data) => {
+    console.log('📨 UNIT DESTROYED:', data.unitId);
+    this.triggerCallback('unitDestroyed', data);
+  });
+  
+  this.battleRoom.onMessage("battle_ended", (data) => {
+    console.log('📨 BATTLE ENDED - Gagnant:', data.winner || 'Égalité');
+    this.triggerCallback('battleEnded', data);
+  });
+  
+  this.battleRoom.onMessage("card_error", (data) => {
+    console.error('📨 CARD ERROR:', data.message);
+    this.triggerCallback('cardError', data);
+  });
+  
+  // État de la bataille
+  this.battleRoom.onStateChange.once((state) => {
+    console.log('📊 Premier état bataille reçu');
+    this.triggerCallback('battleStateChanged', state);
+  });
+  
+  this.battleRoom.onStateChange((state) => {
+    this.triggerCallback('battleStateChanged', state);
+  });
+  
+  // Déconnexion
+  this.battleRoom.onLeave((code) => {
+    console.log(`🔌 DÉCONNECTÉ BATTLEROOM (code: ${code})`);
+    this.isBattleConnected = false;
+    this.battleRoom = null;
+    this.triggerCallback('battleRoomLeft', code);
+  });
+  
+  this.battleRoom.onError((code, message) => {
+    console.error(`🔧 ERREUR BATTLEROOM: ${code} - ${message}`);
+    this.triggerCallback('battleRoomError', `Erreur: ${message}`);
+  });
+  
+  console.log('✅ Handlers BattleRoom configurés');
+}
+
+async leaveBattleRoom() {
+  if (!this.battleRoom) return;
+  
+  console.log('🚪 Quitter BattleRoom...');
+  
+  try {
+    await this.battleRoom.leave();
+  } catch (error) {
+    console.warn('⚠️ Erreur leave BattleRoom:', error.message);
+  }
+  
+  this.battleRoom = null;
+  this.isBattleConnected = false;
+  console.log('✅ BattleRoom quittée');
+}
+
+// Actions de combat
+placeCard(cardId, x, y) {
+  if (!this.isBattleConnected || !this.battleRoom) {
+    console.warn('⚠️ Pas connecté à BattleRoom pour placer carte');
+    return false;
+  }
+  
+  console.log(`🃏 Place carte: ${cardId} en (${x}, ${y})`);
+  this.battleRoom.send("place_card", { cardId, x, y });
+  return true;
+}
+
+playerReady() {
+  if (!this.isBattleConnected || !this.battleRoom) return false;
+  
+  console.log('✅ Joueur prêt pour le combat');
+  this.battleRoom.send("player_ready");
+  return true;
+}
+
+forfeitBattle() {
+  if (!this.isBattleConnected || !this.battleRoom) return false;
+  
+  console.log('🏳️ Abandon du combat');
+  this.battleRoom.send("forfeit");
+  return true;
+}
+
+sendEmote(emote) {
+  if (!this.isBattleConnected || !this.battleRoom) return false;
+  
+  console.log('😀 Émote:', emote);
+  this.battleRoom.send("emote", { emote });
+  return true;
+}
+  
   // ✅ SYSTÈME DE CALLBACKS
   on(event, callback) {
     this.callbacks.set(event, callback);
