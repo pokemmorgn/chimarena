@@ -289,42 +289,99 @@ export class WorldRoom extends Room<WorldState> {
   }
 
     // ⚔️ RECHERCHE DE BATAILLE
-   private async handleSearchBattle(client: Client, player: WorldPlayer) {
-        console.log(`⚔️ ${player.username} recherche une bataille !!!`);
-        
-        if (player.status !== "idle") {
-          client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
-          return;
-        }
-        
+// server/src/rooms/WorldRoom.ts - AJOUT FALLBACK DECK PAR DÉFAUT
+
+// ⚔️ RECHERCHE DE BATAILLE - VERSION CORRIGÉE AVEC FALLBACK
+private async handleSearchBattle(client: Client, player: WorldPlayer) {
+  console.log(`⚔️ ${player.username} recherche une bataille`);
+  
+  if (player.status !== "idle") {
+    client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
+    return;
+  }
+  
+  try {
     // Récupérer et valider le deck de l'utilisateur
-    const user = await User.findById(player.userId).select('deck currentArenaId');
-    if (!user || !user.deck || user.deck.length !== 8) {
-      client.send("search_error", { 
-        message: "Deck invalide ou incomplet. Configurez votre deck avant de jouer.",
-        code: "INVALID_DECK"
-      });
+    const user = await User.findById(player.userId).select('deck currentArenaId cards');
+    if (!user) {
+      client.send("search_error", { message: "Utilisateur non trouvé" });
       return;
+    }
+    
+    // 🎴 DECK PAR DÉFAUT SI MANQUANT
+    const DEFAULT_DECK = ['knight', 'archers', 'goblins', 'giant', 'fireball', 'arrows', 'minions', 'musketeer'];
+    
+    let userDeck = user.deck;
+    let needsSave = false;
+    
+    // Vérifier si le deck existe et est valide
+    if (!userDeck || !Array.isArray(userDeck) || userDeck.length !== 8) {
+      console.log(`🎴 Attribution deck par défaut à ${player.username}`);
+      userDeck = [...DEFAULT_DECK];
+      user.deck = userDeck;
+      needsSave = true;
+      
+      // S'assurer que l'utilisateur possède ces cartes
+      const existingCards = user.cards || [];
+      const existingCardIds = existingCards.map(c => c.cardId);
+      
+      for (const cardId of DEFAULT_DECK) {
+        if (!existingCardIds.includes(cardId)) {
+          user.cards.push({
+            cardId: cardId,
+            level: 1,
+            count: 10 // Assez de cartes pour jouer
+          });
+          needsSave = true;
+        }
+      }
+    }
+    
+    // Sauvegarder si des modifications ont été apportées
+    if (needsSave) {
+      await user.save();
+      console.log(`✅ Deck configuré automatiquement pour ${player.username}: ${userDeck.join(', ')}`);
     }
     
     // Valider le deck avec le CardManager
-    console.log(`🎮 Validation deck pour ${player.username}: ${user.deck.join(', ')}`);
-    const deckValidation = await cardManager.validateDeck(user.deck, user.currentArenaId);
+    console.log(`🎮 Validation deck pour ${player.username}: ${userDeck.join(', ')}`);
+    const deckValidation = await cardManager.validateDeck(userDeck, user.currentArenaId);
     
     if (!deckValidation.isValid) {
       console.log(`❌ Deck invalide pour ${player.username}: ${deckValidation.errors.join(', ')}`);
-      client.send("search_error", { 
-        message: `Deck invalide: ${deckValidation.errors.join(', ')}`,
-        code: "DECK_VALIDATION_FAILED",
-        errors: deckValidation.errors,
-        warnings: deckValidation.warnings
-      });
-      return;
+      
+      // Si même le deck par défaut est invalide, il y a un problème avec CardManager
+      if (JSON.stringify(userDeck) === JSON.stringify(DEFAULT_DECK)) {
+        console.error('🚨 ERREUR CRITIQUE: Le deck par défaut est considéré comme invalide !');
+        console.error('Deck:', userDeck);
+        console.error('Erreurs:', deckValidation.errors);
+        
+        // Essayer de continuer quand même en mode développement
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🚧 MODE DÉVELOPPEMENT: Bypass validation pour test');
+        } else {
+          client.send("search_error", { 
+            message: `Deck invalide: ${deckValidation.errors.join(', ')}`,
+            code: "DECK_VALIDATION_FAILED",
+            errors: deckValidation.errors,
+            warnings: deckValidation.warnings
+          });
+          return;
+        }
+      } else {
+        client.send("search_error", { 
+          message: `Deck invalide: ${deckValidation.errors.join(', ')}`,
+          code: "DECK_VALIDATION_FAILED",
+          errors: deckValidation.errors,
+          warnings: deckValidation.warnings
+        });
+        return;
+      }
     }
     
-    console.log(`✅ Deck valide pour ${player.username} - Coût moyen: ${deckValidation.stats.averageElixirCost}`);
+    console.log(`✅ Deck valide pour ${player.username} - Coût moyen: ${deckValidation.stats?.averageElixirCost || 'N/A'}`);
     
-    // Créer le joueur pour le matchmaking avec le vrai deck
+    // Créer le joueur pour le matchmaking avec le deck validé
     const matchmakingPlayer: MatchmakingPlayer = {
       sessionId: client.sessionId,
       userId: player.userId,
@@ -333,7 +390,7 @@ export class WorldRoom extends Room<WorldState> {
       trophies: player.trophies,
       arenaId: player.currentArenaId,
       winRate: player.winRate,
-      deck: user.deck, // ✅ Vrai deck de l'utilisateur
+      deck: userDeck, // ✅ Deck validé ou par défaut
       preferredGameMode: 'ranked',
       region: 'EU',
       joinedAt: 0,
@@ -343,23 +400,30 @@ export class WorldRoom extends Room<WorldState> {
     
     // Ajouter au service de matchmaking
     const added = this.matchmakingService.addPlayer(matchmakingPlayer);
-    // 🔍 LOGS DEBUG TEMPORAIRES
-    console.log(`🎯 [DEBUG] Joueur ajouté au matchmaking: ${added}`);
-    console.log(`🎯 [DEBUG] Queue size après ajout: ${this.matchmakingService.getAllPlayers().length}`);
-    console.log(`🎯 [DEBUG] Joueurs en queue:`, this.matchmakingService.getAllPlayers().map(p => p.username));
-
+    
     if (added) {
       player.status = "searching";
       this.updateGlobalStats();
       
       client.send("search_started", { 
         message: "Recherche d'adversaire en cours...",
-        estimatedTime: matchmakingPlayer.estimatedWaitTime / 1000 
+        estimatedTime: matchmakingPlayer.estimatedWaitTime / 1000,
+        deck: userDeck
       });
+      
+      console.log(`🎯 ${player.username} ajouté au matchmaking avec deck: ${userDeck.join(', ')}`);
     } else {
       client.send("search_error", { message: "Impossible de rejoindre la file de matchmaking" });
     }
+    
+  } catch (error) {
+    console.error(`❌ Erreur handleSearchBattle pour ${player.username}:`, error);
+    client.send("search_error", { 
+      message: "Erreur serveur lors de la recherche de bataille",
+      code: "INTERNAL_ERROR"
+    });
   }
+}
 
   // 🎯 SIMULATION MATCH TROUVÉ
 private simulateMatchFound(client: Client, player: WorldPlayer) {
