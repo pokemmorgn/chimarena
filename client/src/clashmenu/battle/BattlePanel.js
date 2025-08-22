@@ -282,103 +282,86 @@ hideLobbyInterface() {
 }
 
 createBattleInterface() {
-    console.log('🎨 Création interface de combat...');
+    console.log('🎨 Création interface de combat avec BattleField...');
     
     try {
-        // Titre du combat
-        const battleTitle = this.scene.add.text(
-            this.width / 2, 100,
-            '⚔️ COMBAT EN COURS',
-            {
-                fontSize: '24px',
-                fontWeight: 'bold',
-                fill: '#FF4500',
-                align: 'center'
+        // Créer le terrain de combat
+        this.battleField = new BattleField(this.scene, {
+            x: 50,
+            y: 50,
+            width: this.width - 100,
+            height: this.height - 200,
+            playerSide: 'blue',
+            onDeploy: (x, y) => {
+                console.log('🎯 Déploiement demandé:', x, y);
+                // TODO: Placer une carte
             }
-        );
-        battleTitle.setOrigin(0.5);
-        this.container.add(battleTitle);
-        
-        // Zone d'état
-        this.battleStatusText = this.scene.add.text(
-            this.width / 2, 150,
-            'Connexion au combat...',
-            {
-                fontSize: '16px',
-                fill: '#FFFFFF',
-                align: 'center'
-            }
-        );
-        this.battleStatusText.setOrigin(0.5);
-        this.container.add(this.battleStatusText);
-        
-        // Bouton "Prêt"
-        const readyBg = this.scene.add.graphics();
-        readyBg.fillStyle(0x32CD32);
-        readyBg.fillRoundedRect(
-            this.width / 2 - 100, 200,
-            200, 50, 10
-        );
-        
-        const readyText = this.scene.add.text(
-            this.width / 2, 225,
-            '✅ PRÊT',
-            {
-                fontSize: '16px',
-                fontWeight: 'bold',
-                fill: '#FFFFFF'
-            }
-        );
-        readyText.setOrigin(0.5);
-        
-        const readyZone = this.scene.add.zone(
-            this.width / 2, 225,
-            200, 50
-        ).setInteractive();
-        
-        readyZone.on('pointerdown', () => {
-            this.handlePlayerReady();
         });
         
-        this.container.add([readyBg, readyText, readyZone]);
+        if (!this.battleField.init()) {
+            throw new Error('Échec initialisation BattleField');
+        }
         
-        // Bouton Abandon
-        const forfeitBg = this.scene.add.graphics();
-        forfeitBg.fillStyle(0xDC143C);
-        forfeitBg.fillRoundedRect(
-            this.width / 2 - 80, 270,
-            160, 40, 8
-        );
+        this.container.add(this.battleField.getContainer());
         
-        const forfeitText = this.scene.add.text(
-            this.width / 2, 290,
-            '🏳️ ABANDONNER',
-            {
-                fontSize: '14px',
-                fontWeight: 'bold',
-                fill: '#FFFFFF'
-            }
-        );
-        forfeitText.setOrigin(0.5);
+        // HUD simple en bas
+        this.createSimpleHUD();
         
-        const forfeitZone = this.scene.add.zone(
-            this.width / 2, 290,
-            160, 40
-        ).setInteractive();
-        
-        forfeitZone.on('pointerdown', () => {
-            this.handleForfeit();
-        });
-        
-        this.container.add([forfeitBg, forfeitText, forfeitZone]);
-        
-        console.log('✅ Interface de combat créée');
+        console.log('✅ Interface de combat avec terrain créée');
         
     } catch (error) {
         console.error('❌ Erreur création interface combat:', error);
+        
+        // Fallback vers l'ancienne interface
+        this.createOldBattleInterface();
     }
 }
 
+    createSimpleHUD() {
+    // HUD en bas de l'écran
+    const hudY = this.height - 100;
+    
+    // Bouton "Prêt"
+    const readyBg = this.scene.add.graphics();
+    readyBg.fillStyle(0x32CD32);
+    readyBg.fillRoundedRect(50, hudY, 120, 40, 8);
+    
+    const readyText = this.scene.add.text(110, hudY + 20, '✅ PRÊT', {
+        fontSize: '14px',
+        fontWeight: 'bold',
+        fill: '#FFFFFF'
+    });
+    readyText.setOrigin(0.5);
+    
+    const readyZone = this.scene.add.zone(110, hudY + 20, 120, 40).setInteractive();
+    readyZone.on('pointerdown', () => this.handlePlayerReady());
+    
+    // Bouton Abandon
+    const forfeitBg = this.scene.add.graphics();
+    forfeitBg.fillStyle(0xDC143C);
+    forfeitBg.fillRoundedRect(this.width - 170, hudY, 120, 40, 8);
+    
+    const forfeitText = this.scene.add.text(this.width - 110, hudY + 20, '🏳️ ABANDON', {
+        fontSize: '14px',
+        fontWeight: 'bold',
+        fill: '#FFFFFF'
+    });
+    forfeitText.setOrigin(0.5);
+    
+    const forfeitZone = this.scene.add.zone(this.width - 110, hudY + 20, 120, 40).setInteractive();
+    forfeitZone.on('pointerdown', () => this.handleForfeit());
+    
+    // Statut au centre
+    this.battleStatusText = this.scene.add.text(this.width / 2, hudY + 20, 'Connexion au combat...', {
+        fontSize: '14px',
+        fill: '#FFFFFF',
+        align: 'center'
+    });
+    this.battleStatusText.setOrigin(0.5);
+    
+    this.container.add([readyBg, readyText, readyZone, forfeitBg, forfeitText, forfeitZone, this.battleStatusText]);
+}
+    
 // Handlers des événements de combat
 onBattleInfo(data) {
     console.log('⚔️ Info combat reçue:', data.players?.length, 'joueurs');
