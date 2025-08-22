@@ -1,304 +1,344 @@
-// server/src/services/BotService.ts - SERVICE DE GESTION DES BOTS IA
-
-import { cardManager } from './CardManager';
-import { ArenaManager } from '../config/arenas';
+// server/src/services/BotService.ts - SERVICE DE GESTION DES BOTS
+import { MatchmakingPlayer } from './MatchmakingService';
 
 // 🤖 TYPES POUR LES BOTS
-export interface BotProfile {
-  id: string;
-  username: string;
-  level: number;
-  trophies: number;
-  arenaId: number;
-  winRate: number;
-  deck: string[];
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
-  personality: 'aggressive' | 'defensive' | 'balanced' | 'rusher';
-  avatar?: string;
+export interface BotPlayer extends MatchmakingPlayer {
+  botType: 'easy' | 'medium' | 'hard' | 'adaptive';
+  difficulty: number; // 1-10
+  personality: BotPersonality;
+  strategy: BotStrategy;
 }
 
-export interface BotDeckStrategy {
+export interface BotPersonality {
+  aggression: number;      // 0-100 : Tendance à attaquer
+  patience: number;        // 0-100 : Tendance à attendre
+  riskTaking: number;      // 0-100 : Prise de risques
+  adaptability: number;    // 0-100 : Capacité d'adaptation
+  cardPreference: string[]; // Cartes préférées
+}
+
+export interface BotStrategy {
   name: string;
-  cards: string[];
-  strategy: string;
-  elixirCost: number;
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  description: string;
+  playstyle: 'rush' | 'control' | 'beatdown' | 'cycle' | 'siege';
+  preferredElixirCost: number; // Coût élixir moyen préféré
+  defensiveRatio: number;      // % de jeu défensif vs offensif
 }
 
-// 🎯 SERVICE PRINCIPAL DES BOTS
+// 🎯 STRATÉGIES PRÉDÉFINIES
+const BOT_STRATEGIES: BotStrategy[] = [
+  {
+    name: 'Rusher',
+    description: 'Attaque rapide et constante',
+    playstyle: 'rush',
+    preferredElixirCost: 3.2,
+    defensiveRatio: 20
+  },
+  {
+    name: 'Contrôleur',
+    description: 'Jeu défensif et contre-attaques',
+    playstyle: 'control',
+    preferredElixirCost: 3.8,
+    defensiveRatio: 70
+  },
+  {
+    name: 'Beatdown',
+    description: 'Grosses poussées avec tanks',
+    playstyle: 'beatdown',
+    preferredElixirCost: 4.2,
+    defensiveRatio: 40
+  },
+  {
+    name: 'Cycleur',
+    description: 'Cycle rapide de cartes',
+    playstyle: 'cycle',
+    preferredElixirCost: 2.8,
+    defensiveRatio: 30
+  }
+];
+
+// 🎴 DECKS PRÉDÉFINIS PAR STRATÉGIE
+const BOT_DECKS = {
+  rush: [
+    ['goblin_barrel', 'skeleton_army', 'knight', 'archers', 'goblins', 'spear_goblins', 'arrows', 'fireball'],
+    ['hog_rider', 'goblins', 'spear_goblins', 'archers', 'knight', 'cannon', 'arrows', 'fireball'],
+    ['prince', 'goblins', 'skeleton_army', 'archers', 'knight', 'baby_dragon', 'arrows', 'lightning']
+  ],
+  control: [
+    ['giant', 'musketeer', 'knight', 'archers', 'minions', 'cannon', 'arrows', 'fireball'],
+    ['golem', 'night_witch', 'baby_dragon', 'mega_minion', 'knight', 'tornado', 'lightning', 'pump'],
+    ['x_bow', 'knight', 'archers', 'skeletons', 'ice_spirit', 'cannon', 'arrows', 'fireball']
+  ],
+  beatdown: [
+    ['golem', 'baby_dragon', 'night_witch', 'mega_minion', 'knight', 'tornado', 'lightning', 'pump'],
+    ['giant', 'wizard', 'musketeer', 'knight', 'minions', 'cannon', 'arrows', 'fireball'],
+    ['lava_hound', 'balloon', 'baby_dragon', 'mega_minion', 'knight', 'tornado', 'arrows', 'lightning']
+  ],
+  cycle: [
+    ['hog_rider', 'ice_spirit', 'skeletons', 'cannon', 'musketeer', 'knight', 'arrows', 'fireball'],
+    ['miner', 'poison', 'knight', 'archers', 'minions', 'skeletons', 'ice_spirit', 'cannon'],
+    ['x_bow', 'knight', 'archers', 'skeletons', 'ice_spirit', 'cannon', 'arrows', 'log']
+  ]
+};
+
+// 🤖 SERVICE PRINCIPAL DES BOTS
 export class BotService {
   private static instance: BotService;
+  private bots: Map<string, BotPlayer> = new Map();
   
-  // Decks prédéfinis par difficulté
-  private botDecks: { [difficulty: string]: BotDeckStrategy[] } = {
-    easy: [
-      {
-        name: "Débutant Classique",
-        cards: ['knight', 'archers', 'goblins', 'giant', 'fireball', 'arrows', 'minions', 'musketeer'],
-        strategy: "Deck équilibré pour débutants",
-        elixirCost: 3.5,
-        difficulty: 'easy'
-      },
-      {
-        name: "Swarm Basic",
-        cards: ['goblins', 'minions', 'archers', 'knight', 'arrows', 'fireball', 'giant', 'musketeer'],
-        strategy: "Nombreuses petites unités",
-        elixirCost: 3.4,
-        difficulty: 'easy'
-      }
-    ],
-    medium: [
-      {
-        name: "Équilibré Pro",
-        cards: ['knight', 'musketeer', 'giant', 'wizard', 'fireball', 'arrows', 'minions', 'goblins'],
-        strategy: "Contrôle et push",
-        elixirCost: 3.8,
-        difficulty: 'medium'
-      },
-      {
-        name: "Beat-down",
-        cards: ['giant', 'wizard', 'musketeer', 'knight', 'minions', 'arrows', 'fireball', 'goblins'],
-        strategy: "Gros push avec tank",
-        elixirCost: 4.1,
-        difficulty: 'medium'
-      }
-    ],
-    hard: [
-      {
-        name: "Cycle Rapide",
-        cards: ['knight', 'archers', 'goblins', 'musketeer', 'fireball', 'arrows', 'minions', 'giant'],
-        strategy: "Cycle rapide et contrôle",
-        elixirCost: 3.3,
-        difficulty: 'hard'
-      },
-      {
-        name: "Contrôle Lourd",
-        cards: ['giant', 'wizard', 'musketeer', 'knight', 'fireball', 'arrows', 'minions', 'goblins'],
-        strategy: "Contrôle puis gros push",
-        elixirCost: 4.2,
-        difficulty: 'hard'
-      }
-    ],
-    expert: [
-      {
-        name: "Meta Pro",
-        cards: ['knight', 'musketeer', 'giant', 'wizard', 'fireball', 'arrows', 'minions', 'goblins'],
-        strategy: "Deck meta optimisé",
-        elixirCost: 3.9,
-        difficulty: 'expert'
-      }
-    ]
-  };
-
-  // Noms de bots prédéfinis
-  private botNames = [
-    'BotArcher', 'KnightBot', 'GiantSlayer', 'WizardAI', 'GoblinMaster',
-    'FireballExpert', 'MinionsCommander', 'MusketeerPro', 'TowerDefender',
-    'ElixirMaster', 'ClashBot', 'ArenaWarrior', 'CrownTaker', 'BattleAI',
-    'StrategyBot', 'CycleKing', 'PushMaster', 'DefenseBot', 'RushCommander'
-  ];
-
-  private constructor() {}
-
+  constructor() {
+    console.log('🤖 BotService initialisé');
+  }
+  
   static getInstance(): BotService {
     if (!BotService.instance) {
       BotService.instance = new BotService();
     }
     return BotService.instance;
   }
-
-  // === CRÉATION DE BOTS ===
-
+  
   /**
    * Créer un bot adapté au niveau du joueur
    */
-  createBotForPlayer(playerTrophies: number, playerLevel: number): BotProfile {
-    const difficulty = this.getDifficultyForTrophies(playerTrophies);
-    const botTrophies = this.generateBotTrophies(playerTrophies);
-    const botLevel = this.generateBotLevel(playerLevel, difficulty);
-    const arenaId = ArenaManager.getArenaByTrophies(botTrophies)?.id || 0;
+  createBotOpponent(humanPlayer: MatchmakingPlayer): BotPlayer {
+    console.log(`🤖 Création bot pour ${humanPlayer.username} (${humanPlayer.trophies} trophées)`);
     
-    // Choisir un deck selon la difficulté
-    const availableDecks = this.botDecks[difficulty] || this.botDecks.easy;
-    const selectedDeck = availableDecks[Math.floor(Math.random() * availableDecks.length)];
+    // Déterminer la difficulté basée sur les trophées
+    const difficulty = this.calculateDifficulty(humanPlayer.trophies);
+    const botType = this.getBotType(difficulty);
     
-    // Générer le profil bot
-    const bot: BotProfile = {
-      id: `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      username: this.generateBotName(),
-      level: botLevel,
-      trophies: botTrophies,
-      arenaId: arenaId,
-      winRate: this.generateWinRate(difficulty),
-      deck: [...selectedDeck.cards],
-      difficulty: difficulty,
-      personality: this.generatePersonality(difficulty),
-      avatar: `bot_avatar_${Math.floor(Math.random() * 10) + 1}`
+    // Choisir une stratégie
+    const strategy = this.selectStrategy(humanPlayer, difficulty);
+    
+    // Créer la personnalité
+    const personality = this.generatePersonality(difficulty, strategy);
+    
+    // Choisir un deck adapté
+    const deck = this.selectDeck(strategy, difficulty);
+    
+    // Générer un nom de bot
+    const botName = this.generateBotName(strategy.playstyle);
+    
+    const bot: BotPlayer = {
+      sessionId: `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: `bot_user_${Date.now()}`,
+      username: botName,
+      level: this.calculateBotLevel(humanPlayer.level, difficulty),
+      trophies: this.calculateBotTrophies(humanPlayer.trophies, difficulty),
+      arenaId: humanPlayer.arenaId,
+      winRate: this.calculateBotWinRate(difficulty),
+      deck: deck,
+      preferredGameMode: 'ranked',
+      region: humanPlayer.region,
+      joinedAt: Date.now(),
+      estimatedWaitTime: 0,
+      searchAttempts: 0,
+      // Propriétés bot spécifiques
+      botType,
+      difficulty,
+      personality,
+      strategy
     };
-
-    console.log(`🤖 Bot créé: ${bot.username} (${bot.trophies} trophées, ${bot.difficulty})`);
+    
+    this.bots.set(bot.sessionId, bot);
+    
+    console.log(`✅ Bot créé: ${bot.username} (${bot.strategy.name}, difficulté ${difficulty})`);
+    console.log(`   Deck: ${bot.deck.join(', ')}`);
+    
     return bot;
   }
-
+  
   /**
-   * Créer un bot avec des paramètres spécifiques
+   * Calculer la difficulté du bot (1-10)
    */
-  createCustomBot(options: Partial<BotProfile>): BotProfile {
-    const defaults = this.createBotForPlayer(1000, 5); // Bot par défaut
+  private calculateDifficulty(playerTrophies: number): number {
+    if (playerTrophies < 300) return Math.random() < 0.7 ? 2 : 3;      // Facile pour débutants
+    if (playerTrophies < 600) return Math.floor(Math.random() * 2) + 3; // 3-4
+    if (playerTrophies < 1000) return Math.floor(Math.random() * 2) + 4; // 4-5
+    if (playerTrophies < 2000) return Math.floor(Math.random() * 3) + 5; // 5-7
+    if (playerTrophies < 4000) return Math.floor(Math.random() * 2) + 7; // 7-8
+    return Math.floor(Math.random() * 2) + 8; // 8-9 pour les pros
+  }
+  
+  /**
+   * Déterminer le type de bot
+   */
+  private getBotType(difficulty: number): 'easy' | 'medium' | 'hard' | 'adaptive' {
+    if (difficulty <= 3) return 'easy';
+    if (difficulty <= 6) return 'medium';
+    if (difficulty <= 8) return 'hard';
+    return 'adaptive';
+  }
+  
+  /**
+   * Sélectionner une stratégie pour le bot
+   */
+  private selectStrategy(humanPlayer: MatchmakingPlayer, difficulty: number): BotStrategy {
+    // Pour les débutants, stratégies plus simples
+    if (difficulty <= 3) {
+      return BOT_STRATEGIES.find(s => s.playstyle === 'rush') || BOT_STRATEGIES[0];
+    }
     
-    return {
-      ...defaults,
-      ...options,
-      id: options.id || `custom_bot_${Date.now()}`,
-      deck: options.deck || defaults.deck
+    // Pour les niveaux moyens, varier
+    if (difficulty <= 6) {
+      const simpleStrategies = BOT_STRATEGIES.filter(s => 
+        ['rush', 'beatdown'].includes(s.playstyle)
+      );
+      return simpleStrategies[Math.floor(Math.random() * simpleStrategies.length)];
+    }
+    
+    // Pour les niveaux élevés, toutes les stratégies
+    return BOT_STRATEGIES[Math.floor(Math.random() * BOT_STRATEGIES.length)];
+  }
+  
+  /**
+   * Générer une personnalité pour le bot
+   */
+  private generatePersonality(difficulty: number, strategy: BotStrategy): BotPersonality {
+    const basePersonality = {
+      aggression: 50,
+      patience: 50,
+      riskTaking: 50,
+      adaptability: difficulty * 10,
+      cardPreference: []
     };
+    
+    // Ajuster selon la stratégie
+    switch (strategy.playstyle) {
+      case 'rush':
+        basePersonality.aggression = 70 + Math.random() * 20;
+        basePersonality.patience = 20 + Math.random() * 20;
+        basePersonality.riskTaking = 60 + Math.random() * 30;
+        break;
+      case 'control':
+        basePersonality.aggression = 20 + Math.random() * 30;
+        basePersonality.patience = 70 + Math.random() * 20;
+        basePersonality.riskTaking = 30 + Math.random() * 20;
+        break;
+      case 'beatdown':
+        basePersonality.aggression = 40 + Math.random() * 30;
+        basePersonality.patience = 60 + Math.random() * 20;
+        basePersonality.riskTaking = 40 + Math.random() * 30;
+        break;
+      case 'cycle':
+        basePersonality.aggression = 60 + Math.random() * 20;
+        basePersonality.patience = 40 + Math.random() * 30;
+        basePersonality.riskTaking = 50 + Math.random() * 30;
+        break;
+    }
+    
+    return basePersonality;
   }
-
-  // === LOGIQUE DE GÉNÉRATION ===
-
+  
   /**
-   * Déterminer la difficulté selon les trophées
+   * Sélectionner un deck pour le bot
    */
-  private getDifficultyForTrophies(trophies: number): 'easy' | 'medium' | 'hard' | 'expert' {
-    if (trophies < 300) return 'easy';
-    if (trophies < 1000) return 'medium';
-    if (trophies < 2000) return 'hard';
-    return 'expert';
+  private selectDeck(strategy: BotStrategy, difficulty: number): string[] {
+    const availableDecks = BOT_DECKS[strategy.playstyle] || BOT_DECKS.rush;
+    let selectedDeck = availableDecks[Math.floor(Math.random() * availableDecks.length)];
+    
+    // Pour les bots faciles, utiliser le deck de base
+    if (difficulty <= 3) {
+      selectedDeck = ['knight', 'archers', 'goblins', 'giant', 'fireball', 'arrows', 'minions', 'musketeer'];
+    }
+    
+    return [...selectedDeck];
   }
-
+  
   /**
-   * Générer des trophées pour le bot (proche du joueur)
+   * Calculer le niveau du bot
    */
-  private generateBotTrophies(playerTrophies: number): number {
-    const variation = Math.floor(playerTrophies * 0.2); // ±20%
-    const minTrophies = Math.max(0, playerTrophies - variation);
-    const maxTrophies = playerTrophies + variation;
+  private calculateBotLevel(playerLevel: number, difficulty: number): number {
+    const variation = difficulty <= 3 ? 1 : 2;
+    const minLevel = Math.max(1, playerLevel - variation);
+    const maxLevel = playerLevel + variation;
+    return Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
+  }
+  
+  /**
+   * Calculer les trophées du bot
+   */
+  private calculateBotTrophies(playerTrophies: number, difficulty: number): number {
+    const variation = Math.max(50, playerTrophies * 0.15); // 15% de variation
+    const adjustment = (difficulty - 5) * 20; // Ajustement selon difficulté
+    
+    const minTrophies = Math.max(0, playerTrophies - variation + adjustment);
+    const maxTrophies = playerTrophies + variation + adjustment;
     
     return Math.floor(Math.random() * (maxTrophies - minTrophies + 1)) + minTrophies;
   }
-
+  
   /**
-   * Générer un niveau pour le bot
+   * Calculer le winrate du bot
    */
-  private generateBotLevel(playerLevel: number, difficulty: string): number {
-    let levelVariation = 1;
-    
-    switch (difficulty) {
-      case 'easy': levelVariation = Math.max(1, playerLevel - 1); break;
-      case 'medium': levelVariation = playerLevel; break;
-      case 'hard': levelVariation = playerLevel + 1; break;
-      case 'expert': levelVariation = playerLevel + 2; break;
-    }
-    
-    return Math.max(1, Math.min(14, levelVariation));
+  private calculateBotWinRate(difficulty: number): number {
+    const baseWinRate = 40 + (difficulty * 5); // 45-85%
+    const variation = 10;
+    return Math.min(95, Math.max(20, baseWinRate + (Math.random() * variation * 2 - variation)));
   }
-
+  
   /**
-   * Générer un taux de victoire réaliste
+   * Générer un nom de bot
    */
-  private generateWinRate(difficulty: string): number {
-    const baseRates = {
-      easy: 35,    // 35-45%
-      medium: 45,  // 45-55%
-      hard: 55,    // 55-65%
-      expert: 65   // 65-75%
+  private generateBotName(playstyle: string): string {
+    const prefixes = {
+      rush: ['Swift', 'Fast', 'Quick', 'Rapid', 'Speedy'],
+      control: ['Wise', 'Calm', 'Strategic', 'Patient', 'Tactical'],
+      beatdown: ['Mighty', 'Strong', 'Heavy', 'Powerful', 'Crushing'],
+      cycle: ['Clever', 'Smart', 'Agile', 'Nimble', 'Sharp'],
+      siege: ['Steady', 'Fortress', 'Siege', 'Tower', 'Defense']
     };
     
-    const base = baseRates[difficulty] || 50;
-    return base + Math.floor(Math.random() * 10);
-  }
-
-  /**
-   * Générer une personnalité de bot
-   */
-  private generatePersonality(difficulty: string): 'aggressive' | 'defensive' | 'balanced' | 'rusher' {
-    const personalities = {
-      easy: ['defensive', 'balanced'],
-      medium: ['balanced', 'aggressive', 'defensive'],
-      hard: ['aggressive', 'balanced', 'rusher'],
-      expert: ['aggressive', 'rusher', 'balanced']
-    };
+    const suffixes = ['Bot', 'AI', 'Master', 'Player', 'Warrior', 'Champion'];
     
-    const options = personalities[difficulty] || ['balanced'];
-    return options[Math.floor(Math.random() * options.length)] as any;
+    const stylePrefix = prefixes[playstyle] || prefixes.rush;
+    const prefix = stylePrefix[Math.floor(Math.random() * stylePrefix.length)];
+    const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
+    
+    return `${prefix}${suffix}${Math.floor(Math.random() * 100)}`;
   }
-
+  
   /**
-   * Générer un nom de bot unique
+   * Obtenir un bot par sessionId
    */
-  private generateBotName(): string {
-    const baseName = this.botNames[Math.floor(Math.random() * this.botNames.length)];
-    const suffix = Math.floor(Math.random() * 999) + 1;
-    return `${baseName}${suffix}`;
+  getBot(sessionId: string): BotPlayer | null {
+    return this.bots.get(sessionId) || null;
   }
-
-  // === GESTION DES DECKS ===
-
+  
   /**
-   * Obtenir tous les decks disponibles pour une difficulté
+   * Supprimer un bot
    */
-  getDecksForDifficulty(difficulty: string): BotDeckStrategy[] {
-    return this.botDecks[difficulty] || this.botDecks.easy;
+  removeBot(sessionId: string): boolean {
+    return this.bots.delete(sessionId);
   }
-
-  /**
-   * Ajouter un nouveau deck de bot
-   */
-  addBotDeck(difficulty: string, deck: BotDeckStrategy): void {
-    if (!this.botDecks[difficulty]) {
-      this.botDecks[difficulty] = [];
-    }
-    this.botDecks[difficulty].push(deck);
-  }
-
-  /**
-   * Valider qu'un deck de bot est utilisable
-   */
-  async validateBotDeck(deck: string[], arenaId: number = 0): Promise<boolean> {
-    try {
-      const validation = await cardManager.validateDeck(deck, arenaId);
-      return validation.isValid;
-    } catch (error) {
-      console.error('❌ Erreur validation deck bot:', error);
-      return false;
-    }
-  }
-
-  // === UTILITAIRES ===
-
+  
   /**
    * Obtenir les statistiques des bots
    */
-  getBotStats(): object {
-    const totalDecks = Object.values(this.botDecks).reduce((sum, decks) => sum + decks.length, 0);
-    
+  getStats() {
     return {
-      totalBotDecks: totalDecks,
-      difficulties: Object.keys(this.botDecks),
-      decksByDifficulty: Object.fromEntries(
-        Object.entries(this.botDecks).map(([diff, decks]) => [diff, decks.length])
-      ),
-      availableBotNames: this.botNames.length
+      totalBots: this.bots.size,
+      botsByType: this.getBotsByType(),
+      botsByDifficulty: this.getBotsByDifficulty()
     };
   }
-
-  /**
-   * Mode debug : créer un bot spécifique pour les tests
-   */
-  createDebugBot(difficulty: 'easy' | 'medium' | 'hard' | 'expert' = 'medium'): BotProfile {
-    return {
-      id: 'debug_bot_001',
-      username: 'DebugBot',
-      level: 8,
-      trophies: 500,
-      arenaId: 1,
-      winRate: 50,
-      deck: this.botDecks[difficulty][0]?.cards || this.botDecks.easy[0].cards,
-      difficulty: difficulty,
-      personality: 'balanced'
-    };
+  
+  private getBotsByType() {
+    const stats = { easy: 0, medium: 0, hard: 0, adaptive: 0 };
+    for (const bot of this.bots.values()) {
+      stats[bot.botType]++;
+    }
+    return stats;
+  }
+  
+  private getBotsByDifficulty() {
+    const stats: { [key: number]: number } = {};
+    for (const bot of this.bots.values()) {
+      stats[bot.difficulty] = (stats[bot.difficulty] || 0) + 1;
+    }
+    return stats;
   }
 }
 
-// Export singleton
+// Export du service singleton
 export const botService = BotService.getInstance();
