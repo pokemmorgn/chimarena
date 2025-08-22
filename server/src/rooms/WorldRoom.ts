@@ -459,7 +459,7 @@ private async createBotMatch(humanPlayer: MatchmakingPlayer): Promise<void> {
       if (player) player.status = "in_battle";
       
       // Récupérer les vraies données utilisateur
-      const user = await User.findById(humanPlayer.userId).select('username playerStats deck');
+      const user = await UserModel.findById(humanPlayer.userId).select('username playerStats deck');
       
       humanClient.send("match_found", {
         battleRoomId: battleRoom.roomId,
