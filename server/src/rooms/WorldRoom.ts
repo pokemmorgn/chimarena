@@ -34,7 +34,7 @@ export class WorldState extends Schema {
 // 🌍 WORLD ROOM - Hub central de tous les joueurs
 export class WorldRoom extends Room<WorldState> {
   maxClients = 1000;
-  
+  private developmentMode = true;  //// DESACTIVER EN PRODUCTION !!!
   private matchmakingService!: MatchmakingService;
   
   // Cache des utilisateurs
@@ -57,6 +57,16 @@ export class WorldRoom extends Room<WorldState> {
     
     this.matchmakingService.on('playerJoined', (player: MatchmakingPlayer) => {
       console.log(`🎯 ${player.username} rejoint la file de matchmaking`);
+      
+      // 🤖 MODE DÉVELOPPEMENT : Si un seul joueur et mode dev activé
+      if (this.developmentMode && this.matchmakingService.getAllPlayers().length === 1) {
+        console.log('🤖 MODE DEV : Création d\'un match bot après 5 secondes...');
+        setTimeout(() => {
+          if (this.matchmakingService.getPlayer(player.sessionId)) {
+            this.createBotMatch(player);
+          }
+        }, 5000); // 5 secondes d'attente pour tester le vrai matchmaking
+      }
     });
     
     this.matchmakingService.on('playerLeft', (data: { player: MatchmakingPlayer; waitTime: number }) => {
