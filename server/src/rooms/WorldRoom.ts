@@ -290,7 +290,7 @@ export class WorldRoom extends Room<WorldState> {
 
     // ⚔️ RECHERCHE DE BATAILLE
    private async handleSearchBattle(client: Client, player: WorldPlayer) {
-        console.log(`⚔️ ${player.username} recherche une bataille`);
+        console.log(`⚔️ ${player.username} recherche une bataille !!!`);
         
         if (player.status !== "idle") {
           client.send("search_error", { message: "Vous êtes déjà en recherche ou en combat" });
