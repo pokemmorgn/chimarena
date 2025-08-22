@@ -1,5 +1,5 @@
 // server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE
-
+import { Schema, type, MapSchema } from "@colyseus/schema";
 import { Room, Client, matchMaker } from "@colyseus/core";
 import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
@@ -7,7 +7,6 @@ import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/
 import { cardManager } from '../services/CardManager';
 import { botService, BotPlayer } from '../services/BotService';
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
-import { Schema, type, MapSchema } from "@colyseus/schema";
 
 export class WorldPlayer extends Schema {
   @type("string") userId: string = "";
