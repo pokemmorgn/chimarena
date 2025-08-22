@@ -58,7 +58,7 @@ const BOT_STRATEGIES: BotStrategy[] = [
 ];
 
 // 🎴 DECKS PRÉDÉFINIS PAR STRATÉGIE
-const BOT_DECKS = {
+const BOT_DECKS: Record<string, string[][]> = {
   rush: [
     ['goblin_barrel', 'skeleton_army', 'knight', 'archers', 'goblins', 'spear_goblins', 'arrows', 'fireball'],
     ['hog_rider', 'goblins', 'spear_goblins', 'archers', 'knight', 'cannon', 'arrows', 'fireball'],
@@ -233,8 +233,8 @@ export class BotService {
   /**
    * Sélectionner un deck pour le bot
    */
-  private selectDeck(strategy: BotStrategy, difficulty: number): string[] {
-    const availableDecks = BOT_DECKS[strategy.playstyle] || BOT_DECKS.rush;
+private selectDeck(strategy: BotStrategy, difficulty: number): string[] {
+    const availableDecks = BOT_DECKS[strategy.playstyle] || BOT_DECKS['rush'];
     let selectedDeck = availableDecks[Math.floor(Math.random() * availableDecks.length)];
     
     // Pour les bots faciles, utiliser le deck de base
@@ -281,7 +281,7 @@ export class BotService {
    * Générer un nom de bot
    */
   private generateBotName(playstyle: string): string {
-    const prefixes = {
+    const prefixes: Record<string, string[]> = {
       rush: ['Swift', 'Fast', 'Quick', 'Rapid', 'Speedy'],
       control: ['Wise', 'Calm', 'Strategic', 'Patient', 'Tactical'],
       beatdown: ['Mighty', 'Strong', 'Heavy', 'Powerful', 'Crushing'],
