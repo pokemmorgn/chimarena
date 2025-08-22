@@ -659,48 +659,54 @@ private async handleMatchFound(match: MatchResult): Promise<void> {
       const player1 = this.state.players.get(client1.sessionId);
       if (player1) player1.status = "in_battle";
       
-    client1.send("match_found", {
-      battleRoomId: battleRoom.roomId,
-      opponent: {
-        username: match.player2.username,
-        level: match.player2.level,
-        trophies: match.player2.trophies,
-        arenaId: match.player2.arenaId
-      },
-      playerData: {
-        userId: match.player1.userId,
-        username: match.player1.username,
-        level: match.player1.level,
-        trophies: match.player1.trophies,
-        deck: match.player1.deck
-      },
-      arena: match.arena,
-      matchQuality: match.matchQuality
-    });
+      // Récupérer les vraies données utilisateur validées
+      const user1 = await User.findById(match.player1.userId).select('username playerStats deck');
+      
+      client1.send("match_found", {
+        battleRoomId: battleRoom.roomId,
+        opponent: {
+          username: match.player2.username,
+          level: match.player2.level,
+          trophies: match.player2.trophies,
+          arenaId: match.player2.arenaId
+        },
+        playerData: {
+          userId: match.player1.userId,
+          username: user1?.username || match.player1.username,
+          level: user1?.playerStats?.level || match.player1.level,
+          trophies: user1?.playerStats?.trophies || match.player1.trophies,
+          deck: user1?.deck || match.player1.deck
+        },
+        arena: match.arena,
+        matchQuality: match.matchQuality
+      });
     }
 
     if (client2) {
       const player2 = this.state.players.get(client2.sessionId);
       if (player2) player2.status = "in_battle";
       
-    client2.send("match_found", {
-      battleRoomId: battleRoom.roomId,
-      opponent: {
-        username: match.player1.username,
-        level: match.player1.level,
-        trophies: match.player1.trophies,
-        arenaId: match.player1.arenaId
-      },
-      playerData: {
-        userId: match.player2.userId,
-        username: match.player2.username,
-        level: match.player2.level,
-        trophies: match.player2.trophies,
-        deck: match.player2.deck
-      },
-      arena: match.arena,
-      matchQuality: match.matchQuality
-    });
+      // Récupérer les vraies données utilisateur validées
+      const user2 = await User.findById(match.player2.userId).select('username playerStats deck');
+      
+      client2.send("match_found", {
+        battleRoomId: battleRoom.roomId,
+        opponent: {
+          username: match.player1.username,
+          level: match.player1.level,
+          trophies: match.player1.trophies,
+          arenaId: match.player1.arenaId
+        },
+        playerData: {
+          userId: match.player2.userId,
+          username: user2?.username || match.player2.username,
+          level: user2?.playerStats?.level || match.player2.level,
+          trophies: user2?.playerStats?.trophies || match.player2.trophies,
+          deck: user2?.deck || match.player2.deck
+        },
+        arena: match.arena,
+        matchQuality: match.matchQuality
+      });
     }
 
   } catch (error) {
