@@ -343,7 +343,11 @@ export class WorldRoom extends Room<WorldState> {
     
     // Ajouter au service de matchmaking
     const added = this.matchmakingService.addPlayer(matchmakingPlayer);
-    
+    // 🔍 LOGS DEBUG TEMPORAIRES
+    console.log(`🎯 [DEBUG] Joueur ajouté au matchmaking: ${added}`);
+    console.log(`🎯 [DEBUG] Queue size après ajout: ${this.matchmakingService.getAllPlayers().length}`);
+    console.log(`🎯 [DEBUG] Joueurs en queue:`, this.matchmakingService.getAllPlayers().map(p => p.username));
+
     if (added) {
       player.status = "searching";
       this.updateGlobalStats();
@@ -358,8 +362,10 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // 🎯 SIMULATION MATCH TROUVÉ
-  private simulateMatchFound(client: Client, player: WorldPlayer) {
-    console.log(`🎯 Match simulé trouvé pour ${player.username}`);
+private simulateMatchFound(client: Client, player: WorldPlayer) {
+  console.log(`🚫 simulateMatchFound() appelé pour ${player.username} - DÉSACTIVÉ POUR DEBUG`);
+  console.trace(); // Affiche la stack trace pour voir qui appelle cette méthode
+  return; // Sortir immédiatement sans rien faire
     
     player.status = "in_battle";
     
