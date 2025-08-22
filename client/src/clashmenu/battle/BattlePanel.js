@@ -154,12 +154,46 @@ async onMatchFound(matchData) {
         this.showSimpleNotification(`🎉 Adversaire trouvé: ${matchData.opponent?.username || 'Inconnu'}`);
         
         // Récupérer les données nécessaires
+        // Diagnostic complet des données reçues
+        console.log('🔍 DIAGNOSTIC COMPLET matchData:', JSON.stringify(matchData, null, 2));
+        
+        // Récupérer les données nécessaires
         const battleRoomId = matchData.battleRoomId;
         const playerData = matchData.playerData;
+        const opponent = matchData.opponent;
         
-        if (!battleRoomId || !playerData) {
-            throw new Error('Données de combat incomplètes');
+        // Diagnostic détaillé
+        const diagnostic = {
+            hasBattleRoomId: !!battleRoomId,
+            hasPlayerData: !!playerData,
+            hasOpponent: !!opponent,
+            battleRoomId: battleRoomId,
+            playerDataKeys: playerData ? Object.keys(playerData) : 'MANQUANT',
+            opponentKeys: opponent ? Object.keys(opponent) : 'MANQUANT',
+            allKeys: Object.keys(matchData)
+        };
+        
+        console.log('🔍 DIAGNOSTIC DÉTAILLÉ:', diagnostic);
+        
+        // Vérifications spécifiques
+        const errors = [];
+        if (!battleRoomId) errors.push('battleRoomId manquant');
+        if (!playerData) errors.push('playerData manquant');
+        if (!opponent) errors.push('opponent manquant');
+        
+        if (playerData) {
+            if (!playerData.userId) errors.push('playerData.userId manquant');
+            if (!playerData.username) errors.push('playerData.username manquant');
+            if (!playerData.deck || !Array.isArray(playerData.deck)) errors.push('playerData.deck manquant ou invalide');
         }
+        
+        if (errors.length > 0) {
+            const errorMsg = `Données de combat incomplètes: ${errors.join(', ')}`;
+            console.error('❌ ERREURS DÉTAILLÉES:', errors);
+            throw new Error(errorMsg);
+        }
+        
+        console.log('✅ Toutes les données requises sont présentes');
         
         console.log('⚔️ Connexion au combat...', {
             battleRoomId,
