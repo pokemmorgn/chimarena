@@ -679,6 +679,6 @@ userSchema.methods.banWallet = async function (reason: string) {
 };
 
 // Export du modèle
-const UserDB: Model<IUser> = mongoose.model<IUser>("User", userSchema);
+const User: Model<IUser> = mongoose.model<IUser>("User", userSchema);
 
-export default UserDB;
+export default User;
