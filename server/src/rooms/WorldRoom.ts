@@ -1,4 +1,5 @@
 // server/src/rooms/WorldRoom.ts - VERSION CORRIGÉE
+
 import { Schema, type, MapSchema } from "@colyseus/schema";
 import { Room, Client, matchMaker } from "@colyseus/core";
 import * as jwt from 'jsonwebtoken';
@@ -6,8 +7,8 @@ import UserModel from "../models/User";
 import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/MatchmakingService";
 import { cardManager } from '../services/CardManager';
 import { botService, BotPlayer } from '../services/BotService';
-// 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
 
+// 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
 export class WorldPlayer extends Schema {
   @type("string") userId: string = "";
   @type("string") username: string = "";
@@ -145,25 +146,25 @@ export class WorldRoom extends Room<WorldState> {
       }
       
       // Vérifier si l'utilisateur est banni
-      if (UserModel.accountInfo?.isBanned) {
-        const banMessage = UserModel.accountInfo.banReason || 'Compte banni';
-        console.log(`🚫 Utilisateur banni: ${UserModel.username} - ${banMessage}`);
+      if (user.accountInfo?.isBanned) {
+        const banMessage = user.accountInfo.banReason || 'Compte banni';
+        console.log(`🚫 Utilisateur banni: ${user.username} - ${banMessage}`);
         throw new Error(`Compte banni: ${banMessage}`);
       }
       
       // ✅ CRÉER LE JOUEUR CORRECTEMENT
       const worldPlayer = new WorldPlayer();
-      worldPlayer.userId = UserModel._id.toString();
-      worldPlayer.username = UserModel.username;
-      worldPlayer.level = UserModel.playerStats.level;
-      worldPlayer.trophies = UserModel.playerStats.trophies;
-      worldPlayer.currentArenaId = UserModel.currentArenaId || 0;
+      worldPlayer.userId = user._id.toString();
+      worldPlayer.username = user.username;
+      worldPlayer.level = user.playerStats.level;
+      worldPlayer.trophies = user.playerStats.trophies;
+      worldPlayer.currentArenaId = user.currentArenaId || 0;
       worldPlayer.status = "idle";
       worldPlayer.lastSeen = Date.now();
-      worldPlayer.wins = UserModel.gameStats.wins;
-      worldPlayer.losses = UserModel.gameStats.losses;
-      worldPlayer.winRate = UserModel.gameStats.totalGames > 0 
-        ? Math.round((UserModel.gameStats.wins / UserModel.gameStats.totalGames) * 100) 
+      worldPlayer.wins = user.gameStats.wins;
+      worldPlayer.losses = user.gameStats.losses;
+      worldPlayer.winRate = user.gameStats.totalGames > 0 
+        ? Math.round((user.gameStats.wins / user.gameStats.totalGames) * 100) 
         : 0;
       
       // ✅ AJOUTER À L'ÉTAT CORRECTEMENT
@@ -178,20 +179,20 @@ export class WorldRoom extends Room<WorldState> {
       // Envoyer les données personnelles au client
       client.send("player_profile", {
         profile: {
-          userId: UserModel._id.toString(),
-          username: UserModel.username,
-          level: UserModel.playerStats.level,
-          experience: UserModel.playerStats.experience,
-          trophies: UserModel.playerStats.trophies,
-          highestTrophies: UserModel.playerStats.highestTrophies,
-          currentArena: this.getCurrentArenaInfo(UserModel.playerStats.trophies),
-          resources: UserModel.resources,
-          gameStats: UserModel.gameStats,
-          seasonStats: UserModel.seasonStats
+          userId: user._id.toString(),
+          username: user.username,
+          level: user.playerStats.level,
+          experience: user.playerStats.experience,
+          trophies: user.playerStats.trophies,
+          highestTrophies: user.playerStats.highestTrophies,
+          currentArena: this.getCurrentArenaInfo(user.playerStats.trophies),
+          resources: user.resources,
+          gameStats: user.gameStats,
+          seasonStats: user.seasonStats
         }
       });
       
-      console.log(`✅ ${UserModel.username} connecté à la WorldRoom (${UserModel.playerStats.trophies} trophées)`);
+      console.log(`✅ ${user.username} connecté à la WorldRoom (${user.playerStats.trophies} trophées)`);
       
     } catch (error) {
       console.error(`❌ Erreur connexion WorldRoom:`, error);
@@ -311,23 +312,23 @@ private async handleSearchBattle(client: Client, player: WorldPlayer) {
     // 🎴 DECK PAR DÉFAUT SI MANQUANT
     const DEFAULT_DECK = ['knight', 'archers', 'goblins', 'giant', 'fireball', 'arrows', 'minions', 'musketeer'];
     
-    let userDeck = UserModel.deck;
+    let userDeck = user.deck;
     let needsSave = false;
     
     // Vérifier si le deck existe et est valide
     if (!userDeck || !Array.isArray(userDeck) || userDeck.length !== 8) {
       console.log(`🎴 Attribution deck par défaut à ${player.username}`);
       userDeck = [...DEFAULT_DECK];
-      UserModel.deck = userDeck;
+      user.deck = userDeck;
       needsSave = true;
       
       // S'assurer que l'utilisateur possède ces cartes
-      const existingCards = UserModel.cards || [];
-      const existingCardIds = existingCards.map(c => c.cardId);
+      const existingCards = user.cards || [];
+      const existingCardIds = existingCards.map((c: any) => c.cardId);
       
       for (const cardId of DEFAULT_DECK) {
         if (!existingCardIds.includes(cardId)) {
-          UserModel.cards.push({
+          user.cards.push({
             cardId: cardId,
             level: 1,
             count: 10 // Assez de cartes pour jouer
@@ -339,13 +340,13 @@ private async handleSearchBattle(client: Client, player: WorldPlayer) {
     
     // Sauvegarder si des modifications ont été apportées
     if (needsSave) {
-      await UserModel.save();
+      await user.save();
       console.log(`✅ Deck configuré automatiquement pour ${player.username}: ${userDeck.join(', ')}`);
     }
     
     // Valider le deck avec le CardManager
     console.log(`🎮 Validation deck pour ${player.username}: ${userDeck.join(', ')}`);
-    const deckValidation = await cardManager.validateDeck(userDeck, UserModel.currentArenaId);
+    const deckValidation = await cardManager.validateDeck(userDeck, user.currentArenaId);
     
     if (!deckValidation.isValid) {
       console.log(`❌ Deck invalide pour ${player.username}: ${deckValidation.errors.join(', ')}`);
@@ -424,82 +425,7 @@ private async handleSearchBattle(client: Client, player: WorldPlayer) {
     });
   }
 }
-// 🤖 CRÉATION D'UN MATCH CONTRE BOT
-private async createBotMatch(humanPlayer: MatchmakingPlayer): Promise<void> {
-  console.log(`🤖 Création match bot pour ${humanPlayer.username}`);
-  
-  try {
-    // Retirer le joueur du matchmaking
-    this.matchmakingService.removePlayer(humanPlayer.sessionId);
-    
-    // Créer le bot adversaire
-    const botOpponent = botService.createBotOpponent(humanPlayer);
-    
-    // Créer un ID de BattleRoom
-    const battleRoomId = `battle_bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    console.log(`🤖 Bot créé: ${botOpponent.username} (${botOpponent.strategy.name})`);
-    
-    // Créer la BattleRoom
-    const battleRoom = await matchMaker.createRoom("battle", {
-      matchId: battleRoomId,
-      arena: this.getCurrentArenaInfo(humanPlayer.trophies),
-      isVsBot: true,
-      botPlayer: botOpponent
-    });
-    
-    console.log(`⚔️ BattleRoom bot créée: ${battleRoom.roomId}`);
-    
-    // Trouver le client humain
-    const humanClient = Array.from(this.clients).find(client => client.sessionId === humanPlayer.sessionId);
-    
-    if (humanClient) {
-      const player = this.state.players.get(humanClient.sessionId);
-      if (player) player.status = "in_battle";
-      
-      // Récupérer les vraies données utilisateur
-      const user = await UserModel.findById(humanPlayer.userId).select('username playerStats deck');
-      
-      humanClient.send("match_found", {
-        battleRoomId: battleRoom.roomId,
-        opponent: {
-          username: botOpponent.username,
-          level: botOpponent.level,
-          trophies: botOpponent.trophies,
-          arenaId: botOpponent.arenaId,
-          isBot: true,
-          botType: botOpponent.botType,
-          strategy: botOpponent.strategy.name
-        },
-        playerData: {
-          userId: humanPlayer.userId,
-          username: user?.username || humanPlayer.username,
-          level: user?.playerStats?.level || humanPlayer.level,
-          trophies: user?.playerStats?.trophies || humanPlayer.trophies,
-          deck: user?.deck || humanPlayer.deck
-        },
-        arena: this.getCurrentArenaInfo(humanPlayer.trophies),
-        isVsBot: true
-      });
-      
-      console.log(`✅ Match bot envoyé à ${humanPlayer.username}`);
-    }
-    
-  } catch (error) {
-    console.error('❌ Erreur création match bot:', error);
-    
-    // En cas d'erreur, remettre le joueur en idle
-    const humanClient = Array.from(this.clients).find(client => client.sessionId === humanPlayer.sessionId);
-    if (humanClient) {
-      const player = this.state.players.get(humanClient.sessionId);
-      if (player) player.status = "idle";
-      
-      humanClient.send("search_error", { 
-        message: "Erreur lors de la création du match bot" 
-      });
-    }
-  }
-}
+
   // 🎯 SIMULATION MATCH TROUVÉ
 private simulateMatchFound(client: Client, player: WorldPlayer) {
   console.log(`🚫 simulateMatchFound() appelé pour ${player.username} - DÉSACTIVÉ POUR DEBUG`);
@@ -700,22 +626,22 @@ private simulateMatchFound(client: Client, player: WorldPlayer) {
       if (!user) return;
       
       if (updates.trophies !== undefined) {
-        UserModel.playerStats.trophies = updates.trophies;
-        if (updates.trophies > UserModel.playerStats.highestTrophies) {
-          UserModel.playerStats.highestTrophies = updates.trophies;
+        user.playerStats.trophies = updates.trophies;
+        if (updates.trophies > user.playerStats.highestTrophies) {
+          user.playerStats.highestTrophies = updates.trophies;
         }
       }
       
       if (updates.isWin !== undefined) {
         if (updates.isWin) {
-          UserModel.gameStats.wins++;
+          user.gameStats.wins++;
         } else {
-          UserModel.gameStats.losses++;
+          user.gameStats.losses++;
         }
-        UserModel.gameStats.totalGames++;
+        user.gameStats.totalGames++;
       }
       
-      await UserModel.save();
+      await user.save();
       
     } catch (error) {
       console.error(`❌ Erreur mise à jour profil ${userId}:`, error);
@@ -894,7 +820,7 @@ private async handleGetDeckInfo(client: Client, player: WorldPlayer) {
       return client.send("deck_info_error", { message: "Utilisateur non trouvé" });
     }
 
-    if (!UserModel.deck || UserModel.deck.length === 0) {
+    if (!user.deck || user.deck.length === 0) {
       return client.send("deck_info", {
         hasDeck: false,
         message: "Aucun deck configuré"
@@ -902,11 +828,11 @@ private async handleGetDeckInfo(client: Client, player: WorldPlayer) {
     }
 
     // Valider le deck avec le CardManager
-    const deckValidation = await cardManager.validateDeck(UserModel.deck, UserModel.currentArenaId);
+    const deckValidation = await cardManager.validateDeck(user.deck, user.currentArenaId);
     
     client.send("deck_info", {
       hasDeck: true,
-      deck: UserModel.deck,
+      deck: user.deck,
       isValid: deckValidation.isValid,
       deckStats: deckValidation.stats,
       errors: deckValidation.errors,
