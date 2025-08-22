@@ -5,6 +5,7 @@ import * as jwt from 'jsonwebtoken';
 import User from "../models/User";
 import MatchmakingService, { MatchmakingPlayer, MatchResult } from "../services/MatchmakingService";
 import { cardManager } from '../services/CardManager';
+import { botService, BotPlayer } from '../services/BotService';
 // 🌍 ÉTAT DU JOUEUR DANS LE MONDE - CORRIGÉ
 import { Schema, type, MapSchema } from "@colyseus/schema";
 
