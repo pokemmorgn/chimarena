@@ -424,7 +424,82 @@ private async handleSearchBattle(client: Client, player: WorldPlayer) {
     });
   }
 }
-
+// 🤖 CRÉATION D'UN MATCH CONTRE BOT
+private async createBotMatch(humanPlayer: MatchmakingPlayer): Promise<void> {
+  console.log(`🤖 Création match bot pour ${humanPlayer.username}`);
+  
+  try {
+    // Retirer le joueur du matchmaking
+    this.matchmakingService.removePlayer(humanPlayer.sessionId);
+    
+    // Créer le bot adversaire
+    const botOpponent = botService.createBotOpponent(humanPlayer);
+    
+    // Créer un ID de BattleRoom
+    const battleRoomId = `battle_bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log(`🤖 Bot créé: ${botOpponent.username} (${botOpponent.strategy.name})`);
+    
+    // Créer la BattleRoom
+    const battleRoom = await matchMaker.createRoom("battle", {
+      matchId: battleRoomId,
+      arena: this.getCurrentArenaInfo(humanPlayer.trophies),
+      isVsBot: true,
+      botPlayer: botOpponent
+    });
+    
+    console.log(`⚔️ BattleRoom bot créée: ${battleRoom.roomId}`);
+    
+    // Trouver le client humain
+    const humanClient = Array.from(this.clients).find(client => client.sessionId === humanPlayer.sessionId);
+    
+    if (humanClient) {
+      const player = this.state.players.get(humanClient.sessionId);
+      if (player) player.status = "in_battle";
+      
+      // Récupérer les vraies données utilisateur
+      const user = await User.findById(humanPlayer.userId).select('username playerStats deck');
+      
+      humanClient.send("match_found", {
+        battleRoomId: battleRoom.roomId,
+        opponent: {
+          username: botOpponent.username,
+          level: botOpponent.level,
+          trophies: botOpponent.trophies,
+          arenaId: botOpponent.arenaId,
+          isBot: true,
+          botType: botOpponent.botType,
+          strategy: botOpponent.strategy.name
+        },
+        playerData: {
+          userId: humanPlayer.userId,
+          username: user?.username || humanPlayer.username,
+          level: user?.playerStats?.level || humanPlayer.level,
+          trophies: user?.playerStats?.trophies || humanPlayer.trophies,
+          deck: user?.deck || humanPlayer.deck
+        },
+        arena: this.getCurrentArenaInfo(humanPlayer.trophies),
+        isVsBot: true
+      });
+      
+      console.log(`✅ Match bot envoyé à ${humanPlayer.username}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur création match bot:', error);
+    
+    // En cas d'erreur, remettre le joueur en idle
+    const humanClient = Array.from(this.clients).find(client => client.sessionId === humanPlayer.sessionId);
+    if (humanClient) {
+      const player = this.state.players.get(humanClient.sessionId);
+      if (player) player.status = "idle";
+      
+      humanClient.send("search_error", { 
+        message: "Erreur lors de la création du match bot" 
+      });
+    }
+  }
+}
   // 🎯 SIMULATION MATCH TROUVÉ
 private simulateMatchFound(client: Client, player: WorldPlayer) {
   console.log(`🚫 simulateMatchFound() appelé pour ${player.username} - DÉSACTIVÉ POUR DEBUG`);
