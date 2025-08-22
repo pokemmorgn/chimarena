@@ -1,4 +1,6 @@
 // client/src/clashmenu/battle/BattlePanel.js - VERSION DIAGNOSTIC SIMPLE
+import BattleField from './BattleField.js';
+
 export default class BattlePanel {
     constructor(scene, config = {}) {
         this.scene = scene;
